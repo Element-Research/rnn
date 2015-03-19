@@ -305,6 +305,15 @@ function rnntest.Recurrent()
    for i=1,#params do
       mytester:assertTensorEq(params[i], params5[i], 0.000001, 'backwardUpdateThroughTime error ' .. i)
    end
+   
+   mlp:forget()
+   local rnn = mlp:float(true)
+   local outputs2 = {}
+   for step=1,nSteps do
+      rnn:forward(inputSequence[step]:float())
+      rnn:backward(inputSequence[step]:float(), gradOutputs[step]:float())
+   end
+   local gradInput2 = rnn:backwardThroughTime()
 end
 
 function rnntest.Recurrent_TestTable()

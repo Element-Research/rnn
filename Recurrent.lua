@@ -265,6 +265,19 @@ function Recurrent:forget()
    parent.forget(self, 1)
 end
 
+function Recurrent:sharedType(type, castmap)
+   local modules = self.modules
+   self.modules = {}
+   for i,modules in ipairs{modules, self.sharedClones, {self.initialModule}} do
+      for j, module in pairs(modules) do
+         table.insert(self.modules, module)
+      end
+   end
+   parent.sharedType(self, type, castmap)
+   self.modules = modules
+   return self
+end
+
 function Recurrent:__tostring__()
    local tab = '  '
    local line = '\n'

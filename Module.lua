@@ -74,7 +74,7 @@ end
 
 -- for preserving shared params created with sharedClones
 function Module:sharedType(type, castmap)
-   assert(type, 'Module: must provide a type to convert to')
+   assert(type, 'Module:sharedType must provide a type to convert to')
    -- key: pointer to old storage 
    -- value : new storage
    castmap = castmap or {} --contains torch.Storage instances
