@@ -3,45 +3,29 @@ local rnntest = {}
 local precision = 1e-5
 local mytester
 
-function rnntest.Module_listModules()
-   local batchSize = 4
-   local inputSize, outputSize = 7, 6
-   local linear = nn.Linear(inputSize, outputSize)
-   local tanh = nn.Tanh()
-   local reshape = nn.Reshape(outputSize/2, 2)
-   local mlp3 = nn.Sequential()
-   mlp3:add(linear)
-   mlp3:add(tanh)
-   mlp3:add(reshape)
+function nnxtest.Module_sharedClone()
    
-   local mlp2 = nn.Sequential()
-   local view = nn.View(outputSize)
-   local linear2 = nn.Linear(outputSize, inputSize)
-   local tanh2 = nn.Tanh()
-   mlp2:add(mlp3)
-   mlp2:add(view)
-   mlp2:add(linear2)
-   mlp2:add(tanh2)
+   local mlp = nn.Linear(3,4)
+   local clone = mlp:clone()
+   clone:share(mlp,"weight","bias","gradWeight","gradBias")
    
-   local concat = nn.ConcatTable()
-   local id = nn.Identity()
-   concat:add(mlp2)
-   concat:add(id)
-   local mlp = nn.Sequential()
-   local add = nn.CAddTable()
-   mlp:add(concat)
-   mlp:add(add)
+   local mlp2 = mlp:clone()
+   local clone2 = mlp2:sharedClone(true, true)
    
-   local modules2 = {mlp, concat, mlp2, mlp3, linear, tanh, reshape, view, linear2, tanh2, id, add}
-   local modules = mlp:listModules()
+   local input = torch.randn(2,3)
+   local gradOutput = torch.randn(2,4)
    
-   mytester:assert(#modules2 == #modules, 'missing modules error')
+   local output = mlp:forward(input)
+   local gradInput = mlp:backward(input, gradOutput)
    
-   for i,module in ipairs(modules) do
-      mytester:assert(torch.type(module) == torch.type(modules2[i]), 'module error')
-   end
+   local output2 = clone2:forward(input)
+   local gradInput2 = clone2:backward(input, gradOutput)
+   
+   mytester:assertTensorEq(output, output2, 0.00001, "updateOutput")
+   mytester:assertTensorEq(gradInput, gradInput2, 0.00001, "updateGradInput")
    
 end
+
 
 function rnntest.Recurrent()
    local batchSize = 4
