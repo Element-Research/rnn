@@ -5,6 +5,9 @@ Module.__gradParameters__ = {'gradWeight', 'gradBias'}
 
 -- TODO make this recursive (for table params)
 function Module:sharedClone(shareParams, shareGradParams)
+   shareParams = (shareParams == nil) and true or shareParams
+   shareGradParams = (shareGradParams == nil) and true or shareGradParams
+   
    local moduleClones, modules
    if self.modules then
       moduleClones = {}
@@ -12,7 +15,7 @@ function Module:sharedClone(shareParams, shareGradParams)
          moduleClones[i] = module:sharedClone(shareParams, shareGradParams)
       end
       modules = self.modules
-      self.modules = nil
+      self.modules = nil -- to prevent recloning
    end
    
    local params, pointers = {}, {}
@@ -28,9 +31,10 @@ function Module:sharedClone(shareParams, shareGradParams)
          end
       end
    end
+   
    if shareGradParams then
       for i,paramName in ipairs(self.__gradParameters__) do
-         local gradparam = self[paramName]
+         local gradParam = self[paramName]
          if gradParam then
             params[paramName] = gradParam
             self[paramName] = nil
@@ -55,11 +59,13 @@ function Module:sharedClone(shareParams, shareGradParams)
    local clone = self:clone()
    
    for paramName, param in pairs(params) do
+      assert(self[paramName] == nil)
       self[paramName] = param
       clone[paramName] = param.new():set(param)
    end
    
    if moduleClones then
+      assert(self.modules == nil)
       self.modules = modules
       clone.modules = moduleClones
    end
