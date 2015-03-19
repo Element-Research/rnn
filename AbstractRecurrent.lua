@@ -17,8 +17,7 @@ function AbstractRecurrent:__init(rho)
    self.step = 1
    
    -- stores internal states of Modules at different time-steps
-   self.recurrentOutputs = {}
-   self.recurrentGradInputs = {}
+   self.sharedClones = {}
    
    self:reset()
 end
@@ -155,15 +154,14 @@ function AbstractRecurrent:updateParameters(learningRate)
 end
 
 -- goes hand in hand with the next method : forget()
-function AbstractRecurrent:recycle()
-   -- +1 is to skip initialModule
-   if self.step > self.rho + 1 then
-      assert(self.recurrentOutputs[self.step] == nil)
-      assert(self.recurrentOutputs[self.step-self.rho] ~= nil)
-      self.recurrentOutputs[self.step] = self.recurrentOutputs[self.step-self.rho]
-      self.recurrentGradInputs[self.step] = self.recurrentGradInputs[self.step-self.rho]
-      self.recurrentOutputs[self.step-self.rho] = nil
-      self.recurrentGradInputs[self.step-self.rho] = nil
+function AbstractRecurrent:recycle(offset)
+   offset = offset or 0
+   -- offset can be used to skip initialModule (if any)
+   if self.step > self.rho + offset then
+      assert(self.sharedClones[self.step] == nil)
+      assert(self.sharedClones[self.step-self.rho] ~= nil)
+      self.sharedClones[self.step] = self.sharedClones[self.step-self.rho]
+      self.sharedClones[self.step-self.rho] = nil
       -- need to keep rho+1 of these
       self.outputs[self.step] = self.outputs[self.step-self.rho-1] 
       self.outputs[self.step-self.rho-1] = nil
@@ -188,10 +186,8 @@ function AbstractRecurrent:forget(offset)
       if lastStep > self.rho + offset then
          local i = 1 + offset
          for step = lastStep-self.rho+offset,lastStep do
-            self.recurrentOutputs[i] = self.recurrentOutputs[step]
-            self.recurrentGradInputs[i] = self.recurrentGradInputs[step]
-            self.recurrentOutputs[step] = nil
-            self.recurrentGradInputs[step] = nil
+            self.sharedClone[i] = self.sharedClone[step]
+            self.sharedClone[step] = nil
             -- we keep rho+1 of these : outputs[k]=outputs[k+rho+1]
             self.outputs[i-1] = self.outputs[step]
             self.outputs[step] = nil
@@ -216,66 +212,4 @@ function AbstractRecurrent:forget(offset)
    
    -- forget the past inputs; restart from first step
    self.step = 1
-end
-
--- tests whether or not the mlp can be used internally for recursion.
--- forward A, backward A, forward B, forward A should be consistent with
--- forward B, backward B, backward A where A and B each 
--- have their own gradInputs/outputs.
-function AbstractRecurrent.isRecursable(mlp, input)
-   local output = recursiveCopy(nil, mlp:forward(input)) --forward A
-   local gradOutput = recursiveNormal(recursiveCopy(nil, output))
-   mlp:zeroGradParameters()
-   local gradInput = recursiveCopy(nil, mlp:backward(input, gradOutput)) --backward A
-   local params, gradParams = mlp:parameters()
-   gradParams = recursiveCopy(nil, gradParams)
-   
-   -- output/gradInput are the only internal module states that we track
-   local recurrentOutputs = {}
-   local recurrentGradInputs = {}
-   
-   local modules = mlp:listModules()
-   
-   -- save the output/gradInput states of A
-   for i,modula in ipairs(modules) do
-      recurrentOutputs[i]  = modula.output
-      recurrentGradInputs[i] = modula.gradInput
-   end
-   -- set the output/gradInput states for B
-   local recurrentOutputs2 = {}
-   local recurrentGradInputs2 = {}
-   for i,modula in ipairs(modules) do
-      modula.output = recursiveResizeAs(recurrentOutputs2[i], modula.output)
-      modula.gradInput = recursiveResizeAs(recurrentGradInputs2[i], modula.gradInput)
-   end
-   
-   local input2 = recursiveNormal(recursiveCopy(nil, input))
-   local gradOutput2 = recursiveNormal(recursiveCopy(nil, gradOutput))
-   local output2 = mlp:forward(input2) --forward B
-   mlp:zeroGradParameters()
-   local gradInput2 = mlp:backward(input2, gradOutput2) --backward B
-   
-   -- save the output/gradInput state of B
-   for i,modula in ipairs(modules) do
-      recurrentOutputs2[i]  = modula.output
-      recurrentGradInputs2[i] = modula.gradInput
-   end
-   
-   -- set the output/gradInput states for A
-   for i,modula in ipairs(modules) do
-      modula.output = recursiveResizeAs(recurrentOutputs[i], modula.output)
-      modula.gradInput = recursiveResizeAs(recurrentGradInputs[i], modula.gradInput)
-   end
-   
-   mlp:zeroGradParameters()
-   local gradInput3 = mlp:backward(input, gradOutput) --forward A
-   local gradInputTest = recursiveTensorEq(gradInput, gradInput3)
-   local params3, gradParams3 = mlp:parameters()
-   local nEq = 0
-   for i,gradParam in ipairs(gradParams) do
-      nEq = nEq + (recursiveTensorEq(gradParam, gradParams3[i]) and 1 or 0)
-   end
-   local gradParamsTest = (nEq == #gradParams3)
-   mlp:zeroGradParameters()
-   return gradParamsTest and gradInputTest, gradParamsTest, gradInputTest
 end

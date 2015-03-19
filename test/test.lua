@@ -3,27 +3,69 @@ local rnntest = {}
 local precision = 1e-5
 local mytester
 
-function nnxtest.Module_sharedClone()
+function rnntest.Module_sharedClone()
+
+   local function test(mlp, name)
+      mlp:zeroGradParameters()
+      local clone = mlp:clone()
+      clone:share(mlp,"weight","bias","gradWeight","gradBias")
+      
+      local mlp2 = mlp:clone() -- not shared with mlp
+      local clone2 = mlp2:sharedClone(true, true)
+      
+      local input = torch.randn(2,3)
+      local gradOutput = torch.randn(2,4)
+      
+      local output = mlp:forward(input)
+      local gradInput = mlp:backward(input, gradOutput)
+      local output4 = clone:forward(input)
+      local gradInput4 = clone:backward(input, gradOutput)
+      
+      mytester:assertTensorEq(output, output4, 0.00001, name.." updateOutput")
+      mytester:assertTensorEq(gradInput, gradInput4, 0.00001, name.." updateGradInput")
+      
+      local output2 = clone2:forward(input)
+      local gradInput2 = clone2:backward(input, gradOutput)
+      
+      mytester:assertTensorEq(output, output2, 0.00001, name.." updateOutput")
+      mytester:assertTensorEq(gradInput, gradInput2, 0.00001, name.." updateGradInput")
+      
+      local output3 = mlp2:forward(input)
+      local gradInput3 = mlp2:backward(input, gradOutput)
+      
+      mlp:updateParameters(0.1)
+      mlp2:updateParameters(0.1)
+      
+      mytester:assertTensorEq(output3, output2, 0.00001, name.." updateOutput")
+      mytester:assertTensorEq(gradInput3, gradInput2, 0.00001, name.." updateGradInput")
+      
+      local params, gradParams = mlp:parameters()
+      local params4, gradParams4 = clone:parameters()
+      local params2, gradParams2 = clone2:parameters()
+      local params3, gradParams3 = mlp2:parameters()
+      
+      mytester:assert(#params == #params2, name.." num params err")
+      mytester:assert(#params3 == #params2, name.." num params err")
+      mytester:assert(#gradParams == #gradParams2, name.." num gradParams err")
+      mytester:assert(#gradParams == #gradParams3, name.." num gradParams err")
+      
+      for i,param in ipairs(params) do
+         mytester:assertTensorEq(param, params2[i], 0.00001, name.." params2 err "..i)
+         mytester:assertTensorEq(param, params4[i], 0.00001, name.." params4 err "..i)
+         mytester:assertTensorEq(param, params3[i], 0.00001, name.." params3 err "..i)
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00001, name.." gradParams2 err "..i)
+         mytester:assertTensorEq(gradParams[i], gradParams4[i], 0.00001, name.." gradParams4 err "..i)
+         mytester:assertTensorEq(gradParams[i], gradParams3[i], 0.00001, name.." gradParams3 err "..i)
+      end
+   end
    
-   local mlp = nn.Linear(3,4)
-   local clone = mlp:clone()
-   clone:share(mlp,"weight","bias","gradWeight","gradBias")
-   
-   local mlp2 = mlp:clone()
-   local clone2 = mlp2:sharedClone(true, true)
-   
-   local input = torch.randn(2,3)
-   local gradOutput = torch.randn(2,4)
-   
-   local output = mlp:forward(input)
-   local gradInput = mlp:backward(input, gradOutput)
-   
-   local output2 = clone2:forward(input)
-   local gradInput2 = clone2:backward(input, gradOutput)
-   
-   mytester:assertTensorEq(output, output2, 0.00001, "updateOutput")
-   mytester:assertTensorEq(gradInput, gradInput2, 0.00001, "updateGradInput")
-   
+   test(nn.Linear(3,4), 'linear')
+   local mlp = nn.Sequential()
+   mlp:add(nn.Linear(3,7))
+   mlp:add(nn.Tanh())
+   mlp:add(nn.Euclidean(7,4))
+   mlp:add(nn.LogSoftMax())
+   test(mlp, 'sequential')
 end
 
 
@@ -42,16 +84,7 @@ function rnntest.Recurrent()
    feedbackModule:add(nn.Linear(hiddenSize, outputSize))
    -- rho = nSteps
    local mlp = nn.Recurrent(outputSize, inputModule, feedbackModule, transferModule:clone(), nSteps)
-   
-   -- test that the internal mlps are recursable :
-   local isRecursable = nn.AbstractRecurrent.isRecursable
-   mytester:assert(isRecursable(mlp.initialModule, torch.randn(inputSize)), "Recurrent isRecursable() initial error")
-   mytester:assert(isRecursable(mlp.recurrentModule, {torch.randn(inputSize), torch.randn(outputSize)}), "Recurrent isRecursable() recurrent error")
-   
-   -- test that the above test actually works
-   local euclidean = nn.Euclidean(inputSize, outputSize)
-   mytester:assert(not isRecursable(euclidean, torch.randn(batchSize, inputSize)), "AbstractRecurrent.isRecursable error")
-   
+ 
    local gradOutputs, outputs = {}, {}
    -- inputs = {inputN, {inputN-1, {inputN-2, ...}}}}}
    local inputs
@@ -98,7 +131,9 @@ function rnntest.Recurrent()
       end
    end
    local mlp4 = mlp:clone()
+   assert(mlp.inputModule.addBuffer)
    local mlp5 = mlp:clone()
+   assert(mlp5.inputModule.addBuffer)
    
    -- backward propagate through time (BPTT)
    local gradInput = mlp:backwardThroughTime():clone()
@@ -122,7 +157,7 @@ function rnntest.Recurrent()
    mytester:assert(#mlp10.inputs == 4, 'forget inputs error')
    mytester:assert(#mlp10.outputs == 5, 'forget outputs error')
    local i = 0
-   for k,v in pairs(mlp10.recurrentOutputs) do
+   for k,v in pairs(mlp10.sharedClones) do
       i = i + 1
    end
    mytester:assert(i == 4, 'forget recurrentOutputs error')
@@ -305,10 +340,6 @@ function rnntest.LSTM()
       end
    end
    local lstm = nn.LSTM(inputSize, outputSize)
-   
-   local isRecursable = nn.AbstractRecurrent.isRecursable
-   local inputTable = {torch.randn(batchSize, inputSize), torch.randn(batchSize, outputSize), torch.randn(batchSize, outputSize)}
-   mytester:assert(isRecursable(lstm.recurrentModule, inputTable), "LSTM isRecursable() error")
    
    -- we will use this to build an LSTM step by step (with shared params)
    local lstmStep = lstm.recurrentModule:clone()
