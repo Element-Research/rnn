@@ -48,6 +48,7 @@ function Sequencer:updateOutput(inputTable)
    if self.isRecurrent then
       self.module:forget()
       for step, input in ipairs(inputTable) do
+         --TODO copy outputs
          self.output[step] = self.module:updateOutput(input)
       end
    else

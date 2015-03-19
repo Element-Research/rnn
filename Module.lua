@@ -70,4 +70,76 @@ function Module:sharedClone(shareParams, shareGradParams)
       clone.modules = moduleClones
    end
    return clone
+end            
+
+-- for preserving shared params created with sharedClones
+function Module:sharedType(type, castmap)
+   assert(type, 'Module: must provide a type to convert to')
+   -- key: pointer to old storage 
+   -- value : new storage
+   castmap = castmap or {} --contains torch.Storage instances
+   
+   local function recursiveType(param, type_str)
+      if torch.type(param) == 'table' then
+         for i = 1, #param do
+            param[i] = recursiveType(param[i], type_str)
+         end
+      else
+         if torch.isTensor(param) then
+            if param:storage() then
+               local pointer = torch.pointer(param:storage():data())
+               local storage = castmap[pointer]
+               if not storage then
+                  local _param = param
+                  -- cast entire storage
+                  param = param.new(param:storage()):type(type_str)
+                  param:set(param:storage(), _param:storageOffset(), _param:size(), _param:stride())
+                  castmap[pointer] = param:storage()
+               else
+                  -- set to point to existing storage
+                  local _param = param
+                  param = torch.getmetatable(type_str).new()
+                  param:set(storage, _param:storageOffset(), _param:size(), _param:stride())
+               end
+            else
+               param = param:type(type_str)
+            end
+         end
+      end
+      return param
+   end
+   
+   -- find all tensors and convert them
+   for key,param in pairs(self) do
+      -- Many modules (like CDivTable) have output or gradInput fields which
+      -- are table's of tensors.  To be general we need to recursively
+      -- cast fields that may be nested tables.
+      if key ~= 'modules' then
+        self[key] = recursiveType(self[key], type)
+      end
+   end
+   -- find submodules in classic containers 'modules'
+   if self.modules then
+      for _,module in ipairs(self.modules) do
+         module:sharedType(type, castmap)
+      end
+   end
+   return self
 end
+
+
+function Module:float(shared)
+   local type = 'torch.FloatTensor'
+   return shared and self:sharedType(type) or self:type(type)
+end
+
+function Module:double(shared)
+   local type = 'torch.DoubleTensor'
+   return shared and self:sharedType(type) or self:type(type)
+end
+
+function Module:cuda(shared)
+   local type = 'torch.CudaTensor'
+   return shared and self:sharedType(type) or self:type(type)
+end
+

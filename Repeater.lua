@@ -21,16 +21,17 @@ function Repeater:__init(rnn, nStep)
    self.output = {}
 end
 
+local recursiveAdd = nn.AbstractRecurrent.recursiveAdd
+local recursiveCopy = nn.AbstractRecurrent.recursiveCopy
+
 function Repeater:updateOutput(input)
    self.rnn:forget()
+   -- TODO make copy outputs optional
    for step=1,self.nStep do
-      self.output[step] = self.rnn:updateOutput(input)
+      self.output[step] = recursiveCopy(self.output[step], self.rnn:updateOutput(input))
    end
    return self.output
 end
-
-local recursiveAdd = nn.AbstractRecurrent.recursiveAdd
-local recursiveCopy = nn.AbstractRecurrent.recursiveCopy
 
 function Repeater:updateGradInput(input, gradOutput)
    assert(self.rnn.step - 1 == self.nStep, "inconsistent rnn steps")

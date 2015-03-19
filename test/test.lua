@@ -68,6 +68,36 @@ function rnntest.Module_sharedClone()
    test(mlp, 'sequential')
 end
 
+function rnntest.Module_sharedType()
+   local mlp = nn.Sequential()
+   mlp:add(nn.Linear(3,7))
+   mlp:add(nn.Tanh())
+   mlp:add(nn.Euclidean(7,4))
+   mlp:add(nn.LogSoftMax())
+   mlp:zeroGradParameters()
+   local mlp2 = mlp:sharedClone()
+   local concat = nn.ConcatTable()
+   concat:add(mlp):add(mlp2)
+   
+   concat:float(true) -- i.e. sharedType('torch.FloatTensor')
+   
+   local input = torch.randn(2,3):float()
+   local gradOutput = torch.randn(2,4):float()
+   
+   local output = mlp:forward(input)
+   local gradInput = mlp:backwardUpdate(input, gradOutput, 0.1)
+   
+   local params, gradParams = mlp:parameters()
+   local params2, gradParams2 = mlp2:parameters()
+   
+   mytester:assert(#params == #params2, "num params err")
+   mytester:assert(#gradParams == #gradParams2, "num gradParams err")
+   
+   for i,param in ipairs(params) do
+      mytester:assertTensorEq(param, params2[i], 0.00001, " params err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00001, " gradParams err "..i)
+   end
+end
 
 function rnntest.Recurrent()
    local batchSize = 4
@@ -130,6 +160,7 @@ function rnntest.Recurrent()
          inputs = input
       end
    end
+
    local mlp4 = mlp:clone()
    assert(mlp.inputModule.addBuffer)
    local mlp5 = mlp:clone()
