@@ -12,7 +12,7 @@ local function recursiveZero(t1,t2)
          t1[key], t2[key] = recursiveZero(t1[key], t2[key])
       end
    elseif torch.isTensor(t2) then
-      t1 = t1 or t2.new()
+      t1 = torch.isTensor(t1) and t1 or t2.new()
       t1:resizeAs(t2):zero()
    else
       error("expecting nested tensors or tables. Got "..
@@ -30,4 +30,5 @@ end
 -- useful when you don't want to backpropgate through certain paths.
 function ZeroGrad:updateGradInput(input, gradOutput)
    self.gradInput = recursiveZero(self.gradInput, gradOutput)
+   return self.gradInput
 end
