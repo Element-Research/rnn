@@ -8,7 +8,12 @@
 -- The sequences in a batch must have the same size.
 -- But the sequence length of each batch can vary.
 ------------------------------------------------------------------------
-local Sequencer, parent = torch.class("nn.Sequencer", "nn.Container")
+local Sequencer, parent
+if nn.Sequencer then -- prevent name conflicts with nnx
+   Sequencer, parent = nn.Sequencer, nn.Container
+else
+   Sequencer, parent = torch.class('nn.Sequencer', 'nn.Container')
+end
 
 function Sequencer:__init(module)
    parent.__init(self)

@@ -4,7 +4,12 @@
 -- presented with the same input for nStep time steps.
 -- The output is a table of nStep outputs of the rnn.
 ------------------------------------------------------------------------
-local Repeater, parent = torch.class("nn.Repeater", "nn.Container")
+local Repeater, parent
+if nn.Repeater then -- prevent name conflicts with nnx
+   Repeater, parent = nn.Repeater, nn.Container
+else
+   Repeater, parent = torch.class('nn.Repeater', 'nn.Container')
+end
 
 function Repeater:__init(rnn, nStep)
    parent.__init(self)

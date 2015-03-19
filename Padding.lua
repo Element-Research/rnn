@@ -1,4 +1,9 @@
-local Padding, parent = torch.class("nn.Padding", "nn.Module")
+local Padding, parent
+if nn.Padding then -- prevent name conflicts with nnx
+   Padding, parent = nn.Padding, nn.Module
+else
+   Padding, parent = torch.class('nn.Padding', 'nn.Module')
+end
 
 -- pad can be positive (right) negative (left)
 function Padding:__init(dim, pad, nInputDim, value)

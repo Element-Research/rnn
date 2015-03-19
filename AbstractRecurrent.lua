@@ -1,4 +1,9 @@
-local AbstractRecurrent, parent = torch.class('nn.AbstractRecurrent', 'nn.Container')
+local AbstractRecurrent, parent
+if nn.AbstractRecurrent then -- prevent name conflicts with nnx
+   AbstractRecurrent, parent = nn.AbstractRecurrent, nn.Container
+else
+   AbstractRecurrent, parent = torch.class('nn.AbstractRecurrent', 'nn.Container')
+end
 
 function AbstractRecurrent:__init(rho)
    parent.__init(self)

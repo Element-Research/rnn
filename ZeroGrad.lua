@@ -1,4 +1,9 @@
-local ZeroGrad, parent = torch.class("nn.ZeroGrad", "nn.Module")
+local ZeroGrad, parent
+if nn.ZeroGrad then -- prevent name conflicts with nnx
+   ZeroGrad, parent = nn.ZeroGrad, nn.Module
+else
+   ZeroGrad, parent = torch.class('nn.ZeroGrad', 'nn.Module')
+end
 
 local function recursiveZero(t1,t2)
    if torch.type(t2) == 'table' then

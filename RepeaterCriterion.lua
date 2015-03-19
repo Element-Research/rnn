@@ -4,7 +4,12 @@
 -- same target (the target is repeated). 
 -- Useful for nn.Repeater and nn.Sequencer.
 ------------------------------------------------------------------------
-local RepeaterCriterion, parent = torch.class("nn.RepeaterCriterion", "nn.Criterion")
+local RepeaterCriterion, parent
+if nn.RepeaterCriterion then -- prevent name conflicts with nnx
+   RepeaterCriterion, parent = nn.RepeaterCriterion, nn.Criterion
+else
+   RepeaterCriterion, parent = torch.class('nn.RepeaterCriterion', 'nn.Criterion')
+end
 
 function RepeaterCriterion:__init(criterion)
    parent.__init(self)

@@ -7,7 +7,12 @@
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
 ------------------------------------------------------------------------
-local LSTM, parent = torch.class('nn.LSTM', 'nn.AbstractRecurrent')
+local LSTM, parent
+if nn.LSTM then -- prevent name conflicts with nnx
+   LSTM, parent = nn.LSTM, nn.AbstractRecurrent
+else
+   LSTM, parent = torch.class('nn.LSTM', 'nn.AbstractRecurrent')
+end
 
 function LSTM:__init(inputSize, outputSize, rho)
    parent.__init(self, rho or 999999999999)
