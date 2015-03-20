@@ -520,6 +520,12 @@ function rnntest.Sequencer()
       mytester:assertTensorEq(outputs2[step], output, 0.00001, "Sequencer output "..step)
       mytester:assertTensorEq(gradInputs2[step], gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
    end
+   
+   mytester:assertError(function()
+      local mlp = nn.Sequential()
+      mlp:add(rnn)
+      local seq = nn.Sequencer(mlp)
+   end, "Sequencer non-recurrent mixed with recurrent error error")
 end
 
 function rnntest.Repeater()

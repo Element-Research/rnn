@@ -17,12 +17,32 @@ end
 
 function Sequencer:__init(module)
    parent.__init(self)
+   if not torch.isTypeOf(module, 'nn.Module') then
+      error"Sequencer: expecting nn.Module instance at arg 1"
+   end
    self.module = module
    self.isRecurrent = module.backwardThroughTime ~= nil
    self.modules[1] = module
    self.sharedClones = {}
    if not self.isRecurrent then
       self.sharedClones[1] = self.module
+      -- test that it doesn't contain a recurrent module :
+      local err = false
+      for i,modula in ipairs(module:listModules()) do
+         if modula.backwardThroughTime then
+            err = modula
+            break
+         end
+      end
+      
+      if err then
+         error("Sequencer: non-recurrent Module should not contain a "..
+         "nested recurrent Modules. Recurrent module is "..torch.type(err)..
+         ". Use a Sequencer instance for each recurrent module. "..
+         "And encapsulate the rest of the non-recurrent modules into "..
+         "one or many Sequencers. Yes you can encapsulate many non-recurrent"..
+         " modules in a single Sequencer (as long as they don't include recurrent modules.") 
+      end
    end
    self.output = {}
    self.step = 1
