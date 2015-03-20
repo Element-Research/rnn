@@ -471,6 +471,8 @@ function rnntest.Sequencer()
    local inputSize = 10
    local outputSize = 7
    local nSteps = 5 
+   
+   -- test with recurrent module
    local inputModule = nn.Linear(inputSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
@@ -496,6 +498,27 @@ function rnntest.Sequencer()
    for step,output in ipairs(outputs) do
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
       mytester:assertTensorEq(gradInputs3[step], rnn.gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
+   end
+   
+   -- test with non-recurrent module
+   local linear = nn.Linear(inputSize, outputSize)
+   local outputs, gradInputs = {}, {}
+   linear:zeroGradParameters()
+   local clone = linear:clone()
+   for step=1,nSteps do
+      outputs[step] = linear:forward(inputs[step]):clone()
+      gradInputs[step] = linear:backward(inputs[step], gradOutputs[step]):clone()
+   end
+   
+   local seq = nn.Sequencer(clone)
+   local outputs2 = seq:forward(inputs)
+   local gradInputs2 = seq:backward(inputs, gradOutputs)
+   
+   mytester:assert(#outputs2 == #outputs, "Sequencer output size err")
+   mytester:assert(#gradInputs2 == #gradInputs, "Sequencer gradInputs size err")
+   for step,output in ipairs(outputs) do
+      mytester:assertTensorEq(outputs2[step], output, 0.00001, "Sequencer output "..step)
+      mytester:assertTensorEq(gradInputs2[step], gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
    end
 end
 

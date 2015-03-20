@@ -20,25 +20,25 @@ function Sequencer:__init(module)
    self.module = module
    self.isRecurrent = module.backwardThroughTime ~= nil
    self.modules[1] = module
-   self.sequenceOutputs = {}
+   self.sharedClones = {}
+   if not self.isRecurrent then
+      self.sharedClones[1] = self.module
+   end
    self.output = {}
    self.step = 1
 end
 
-local function recursiveResizeAs(t1,t2)
-   if torch.type(t2) == 'table' then
-      t1 = (torch.type(t1) == 'table') and t1 or {t1}
-      for key,_ in pairs(t2) do
-         t1[key], t2[key] = recursiveResizeAs(t1[key], t2[key])
-      end
-   elseif torch.isTensor(t2) then
-      t1 = t1 or t2.new()
-      t1:resizeAs(t2)
-   else
-      error("expecting nested tensors or tables. Got "..
-            torch.type(t1).." and "..torch.type(t2).." instead")
+local recursiveResizeAs = nn.AbstractRecurrent.recursiveResizeAs
+local recursiveCopy = nn.AbstractRecurrent.recursiveCopy
+
+function Sequencer:getStepModule(step)
+   assert(step, "expecting step at arg 1")
+   local module = self.sharedClones[step]
+   if not module then
+      module = self.module:sharedClone()
+      self.sharedClones[step] = module
    end
-   return t1, t2
+   return module
 end
 
 
@@ -48,30 +48,21 @@ function Sequencer:updateOutput(inputTable)
    if self.isRecurrent then
       self.module:forget()
       for step, input in ipairs(inputTable) do
-         --TODO copy outputs
-         self.output[step] = self.module:updateOutput(input)
+         self.output[step] = recursiveCopy(
+            self.output[step], 
+            self.module:updateOutput(input)
+         )
       end
    else
       for step, input in ipairs(inputTable) do
          -- set output states for this step
-         local modules = self.module:listModules()
-         local sequenceOutputs = self.sequenceOutputs[step]
-         if not sequenceOutputs then
-            sequenceOutputs = {}
-            self.sequenceOutputs[step] = sequenceOutputs
-         end
-         for i,modula in ipairs(modules) do
-            local output_ = recursiveResizeAs(sequenceOutputs[i], modula.output)
-            modula.output = output_
-         end
+         local module = self:getStepModule(step)
          
          -- forward propagate this step
-         self.output[step] = self.module:updateOutput(input)
-         
-         -- save output state of this step
-         for i,modula in ipairs(modules) do
-            sequenceOutputs[i] = modula.output
-         end
+         self.output[step] = recursiveCopy(
+            self.output[step], 
+            module:updateOutput(input)
+         )
       end
    end
    return self.output
@@ -96,28 +87,13 @@ function Sequencer:updateGradInput(inputTable, gradOutputTable)
    else
       for step, input in ipairs(inputTable) do
          -- set the output/gradOutput states for this step
-         local modules = self.module:listModules()
-         local sequenceOutputs = self.sequenceOutputs[step]
-         local sequenceGradInputs = self.sequenceGradInputs[step]
-         if not sequenceGradInputs then
-            sequenceGradInputs = {}
-            self.sequenceGradInputs[step] = sequenceGradInputs
-         end
-         for i,modula in ipairs(modules) do
-            local output, gradInput = modula.output, modula.gradInput
-            local output_ = sequenceOutputs[i]
-            assert(output_, "updateGradInputThroughTime should be preceded by updateOutput")
-            modula.output = output_
-            modula.gradInput = recursiveResizeAs(sequenceGradInputs[i], gradInput)
-         end
+         local module = self:getStepModule(step)
          
          -- backward propagate this step
-         self.gradInput[step] = self.module:updateGradInput(input, gradOutputTable[step])
-         
-         -- save the output/gradOutput states of this step
-         for i,modula in ipairs(modules) do
-            sequenceGradInputs[i] = modula.gradInput
-         end
+         self.gradInput[step] = recursiveCopy(
+            self.gradInput[step], 
+            self.module:updateGradInput(input, gradOutputTable[step])
+         )
       end
    end
    return self.gradInput
@@ -136,19 +112,7 @@ function Sequencer:accGradParameters(inputTable, gradOutputTable, scale)
    else
       for step, input in ipairs(inputTable) do
          -- set the output/gradOutput states for this step
-         local modules = self.module:listModules()
-         local sequenceOutputs = self.sequenceOutputs[step]
-         local sequenceGradInputs = self.sequenceGradInputs[step]
-         if not sequenceGradInputs then
-            sequenceGradInputs = {}
-            self.sequenceGradInputs[step] = sequenceGradInputs
-         end
-         for i,modula in ipairs(modules) do
-            local output, gradInput = modula.output, modula.gradInput
-            local output_ = sequenceOutputs[i]
-            modula.output = output_
-            modula.gradInput = recursiveResizeAs(sequenceGradInputs[i], gradInput)
-         end
+         local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
          self.module:accGradParameters(input, gradOutputTable[step], scale)
@@ -169,19 +133,7 @@ function Sequencer:accUpdateGradParameters(input, gradOutput, lr)
    else
       for step, input in ipairs(inputTable) do
          -- set the output/gradOutput states for this step
-         local modules = self.module:listModules()
-         local sequenceOutputs = self.sequenceOutputs[step]
-         local sequenceGradInputs = self.sequenceGradInputs[step]
-         if not sequenceGradInputs then
-            sequenceGradInputs = {}
-            self.sequenceGradInputs[step] = sequenceGradInputs
-         end
-         for i,modula in ipairs(modules) do
-            local output, gradInput = modula.output, modula.gradInput
-            local output_ = sequenceOutputs[i]
-            modula.output = output_
-            modula.gradInput = recursiveResizeAs(sequenceGradInputs[i], gradInput)
-         end
+         local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
          self.module:accUpdateGradParameters(input, gradOutputTable[step], lr)
