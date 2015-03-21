@@ -16,7 +16,7 @@ else
 end
 
 function LSTM:__init(inputSize, outputSize, rho)
-   parent.__init(self, rho or 999999999999)
+   parent.__init(self, rho or 9999)
    self.inputSize = inputSize
    self.outputSize = outputSize   
    -- build the model

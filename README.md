@@ -1,10 +1,9 @@
-# rnn: recurrent 'nn' components
+# rnn: recurrent neural networks #
 
 This is a Recurrent Neural Network library that extends Torch's nn. 
 You can use it to build RNNs, LSTMs, BRNNs, BLSTMs, and so forth and so on.
+This library includes documentation for the following objects:
 
-## Library Documentation ##
-This section includes documentation for the following objects:
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : an abstract class inherited by Recurrent and LSTM;
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
@@ -13,7 +12,7 @@ This section includes documentation for the following objects:
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
  
 <a name='rnn.AbstractRecurrent'></a>
-### AbstractRecurrent ###
+## AbstractRecurrent ##
 An abstract class inherited by [Recurrent](#rnn.Recurrent) and [LSTM](#rnn.LSTM).
 The constructor takes a single argument :
 ```lua
@@ -104,7 +103,7 @@ such that evaluation can be performed using potentially infinite-length
 sequence.
  
 <a name='rnn.Recurrent'></a>
-### Recurrent ###
+## Recurrent ##
 References :
  * A. [Sutsekever Thesis Sec. 2.5 and 2.8](http://www.cs.utoronto.ca/~ilya/pubs/ilya_sutskever_phd_thesis.pdf)
  * B. [Mikolov Thesis Sec. 3.2 and 3.3](http://www.fit.vutbr.cz/~imikolov/rnnlm/thesis.pdf)
@@ -202,3 +201,47 @@ while true do
 end
 ```
 
+<a name='rnn.LSTM'></a>
+## LSTM ##
+References :
+ * A. [Speech Recognition with Deep Recurrent Neural Networks](http://arxiv.org/pdf/1303.5778v1.pdf)
+ * B. [Long-Short Term Memory](http://web.eecs.utk.edu/~itamar/courses/ECE-692/Bobby_paper1.pdf)
+ * C. [LSTM: A Search Space Odyssey](http://arxiv.org/pdf/1503.04069v1.pdf)
+ * D. [nngraph LSTM implementation on github](https://github.com/wojzaremba/lstm)
+
+This is an implementation of a vanilla Long-Short Term Memory module. 
+We used Ref. A's LSTM as a blueprint for this module as it was the most concise.
+Yet it is also the vanilla LSTM described in Ref. C. 
+
+The `nn.LSTM(inputSize, outputSize, [rho])` constructor takes 3 arguments:
+ * `inputSize` : a number specifying the size of the input;
+ * `outputSize` : a number specifying the size of the output;
+ * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999.
+
+The actual implementation corresponds to the following algorithm:
+```lua
+i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + W[c->i]c[t−1] + b[1->i])      (1)
+f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + W[c->f]c[t−1] + b[1->f])      (2)
+z[t] = tanh(W[x->c]x[t] + W[h->c]h[t−1] + b[1->c])                   (3)
+c[t] = f[t]c[t−1] + i[t]z(t)                                         (4)
+o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
+h[t] = o[t]tanh(c[t])                                                (6)
+```
+where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step,
+`b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input,
+`i[t]` is the input gate (eq. 1), `f[t]` is the forget gate (eq. 2), 
+`z[t]` is the input to the cell (which we call the hidden) (eq. 3), 
+`c[t]` is the cell (eq. 4), `o[t]` is the output gate (eq. 5), 
+and `h[t]` is the output of this module (eq. 6).
+
+As you can see, unlike [Recurrent](#rnn.Recurrent), this 
+implementation isn't generic enough that it can take arbitrary component Module
+definitions at construction. However, the LSTM module can easily be adapted 
+through inheritance by overriding the different factory methods :
+  * `buildGate` : builds generic gate that is used to implement the input, forget and output gates;
+  * `buildInputGate` : builds the input gate (eq. 1). Currently calls `buildGate`;
+  * `buildForgetGate` : builds the forget gate (eq. 2). Currently calls `buildGate`;
+  * `buildHidden` : builds the hidden (eq. 3);
+  * `buildCell` : builds the cell (eq. 4);
+  * `buildOutputGate` : builds the output gate (eq. 5). Currently calls `buildGate`;
+  * `buildModel` : builds the actual LSTM model which is used internally (eq. 6).
