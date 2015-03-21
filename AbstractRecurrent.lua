@@ -27,109 +27,6 @@ function AbstractRecurrent:__init(rho)
    self:reset()
 end
 
-local function recursiveResizeAs(t1,t2)
-   if torch.type(t2) == 'table' then
-      t1 = (torch.type(t1) == 'table') and t1 or {t1}
-      for key,_ in pairs(t2) do
-         t1[key], t2[key] = recursiveResizeAs(t1[key], t2[key])
-      end
-   elseif torch.isTensor(t2) then
-      t1 = torch.isTensor(t1) and t1 or t2.new()
-      t1:resizeAs(t2)
-   else
-      error("expecting nested tensors or tables. Got "..
-            torch.type(t1).." and "..torch.type(t2).." instead")
-   end
-   return t1, t2
-end
-AbstractRecurrent.recursiveResizeAs = recursiveResizeAs
-
-local function recursiveSet(t1,t2)
-   if torch.type(t2) == 'table' then
-      t1 = (torch.type(t1) == 'table') and t1 or {t1}
-      for key,_ in pairs(t2) do
-         t1[key], t2[key] = recursiveSet(t1[key], t2[key])
-      end
-   elseif torch.isTensor(t2) then
-      t1 = t1 or t2.new()
-      t1:set(t2)
-   else
-      error("expecting nested tensors or tables. Got "..
-            torch.type(t1).." and "..torch.type(t2).." instead")
-   end
-   return t1, t2
-end
-AbstractRecurrent.recursiveSet = recursiveSet
-
-local function recursiveCopy(t1,t2)
-   if torch.type(t2) == 'table' then
-      t1 = (torch.type(t1) == 'table') and t1 or {t1}
-      for key,_ in pairs(t2) do
-         t1[key], t2[key] = recursiveCopy(t1[key], t2[key])
-      end
-   elseif torch.isTensor(t2) then
-      t1 = torch.isTensor(t1) and t1 or t2.new()
-      t1:resizeAs(t2):copy(t2)
-   else
-      error("expecting nested tensors or tables. Got "..
-            torch.type(t1).." and "..torch.type(t2).." instead")
-   end
-   return t1, t2
-end
-AbstractRecurrent.recursiveCopy = recursiveCopy
-
-local function recursiveAdd(t1, t2)
-   if torch.type(t2) == 'table' then
-      t1 = (torch.type(t1) == 'table') and t1 or {t1}
-      for key,_ in pairs(t2) do
-         t1[key], t2[key] = recursiveAdd(t1[key], t2[key])
-      end
-   elseif torch.isTensor(t2) and torch.isTensor(t2) then
-      t1:add(t2)
-   else
-      error("expecting nested tensors or tables. Got "..
-            torch.type(t1).." and "..torch.type(t2).." instead")
-   end
-   return t1, t2
-end
-AbstractRecurrent.recursiveAdd = recursiveAdd
-
-local function recursiveTensorEq(t1, t2)
-   if torch.type(t2) == 'table' then
-      local isEqual = true
-      if torch.type(t1) ~= 'table' then
-         return false
-      end
-      for key,_ in pairs(t2) do
-          isEqual = isEqual and recursiveTensorEq(t1[key], t2[key])
-      end
-      return isEqual
-   elseif torch.isTensor(t2) and torch.isTensor(t2) then
-      local diff = t1-t2
-      local err = diff:abs():max()
-      return err < 0.00001
-   else
-      error("expecting nested tensors or tables. Got "..
-            torch.type(t1).." and "..torch.type(t2).." instead")
-   end
-end
-AbstractRecurrent.recursiveTensorEq = recursiveTensorEq
-
-local function recursiveNormal(t2)
-   if torch.type(t2) == 'table' then
-      for key,_ in pairs(t2) do
-         t2[key] = recursiveNormal(t2[key])
-      end
-   elseif torch.isTensor(t2) then
-      t2:normal()
-   else
-      error("expecting tensor or table thereof. Got "
-           ..torch.type(t2).." instead")
-   end
-   return t2
-end
-AbstractRecurrent.recursiveNormal = recursiveNormal
-
 function AbstractRecurrent:getStepModule(step)
    assert(step, "expecting step at arg 1")
    local recurrentModule = self.sharedClones[step]
@@ -143,7 +40,7 @@ end
 function AbstractRecurrent:updateGradInput(input, gradOutput)
    -- Back-Propagate Through Time (BPTT) happens in updateParameters()
    -- for now we just keep a list of the gradOutputs
-   self.gradOutputs[self.step-1] = self.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
+   self.gradOutputs[self.step-1] = rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
 end
 
 function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
@@ -228,3 +125,11 @@ function AbstractRecurrent:forget(offset)
    -- forget the past inputs; restart from first step
    self.step = 1
 end
+
+-- backwards compatibility
+AbstractRecurrent.recursiveResizeAs = rnn.recursiveResizeAs
+AbstractRecurrent.recursiveSet = rnn.recursiveSet
+AbstractRecurrent.recursiveCopy = rnn.recursiveCopy
+AbstractRecurrent.recursiveAdd = rnn.recursiveAdd
+AbstractRecurrent.recursiveTensorEq = rnn.recursiveTensorEq
+AbstractRecurrent.recursiveNormal = rnn.recursiveNormal

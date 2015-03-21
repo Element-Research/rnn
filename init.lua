@@ -30,6 +30,8 @@ require 'nn'
 -- create global rnn table:
 rnn = {}
 
+torch.include('rnn', 'recursiveUtils.lua')
+
 -- for testing:
 torch.include('rnn', 'test.lua')
 

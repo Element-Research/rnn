@@ -48,9 +48,6 @@ function Sequencer:__init(module)
    self.step = 1
 end
 
-local recursiveResizeAs = nn.AbstractRecurrent.recursiveResizeAs
-local recursiveCopy = nn.AbstractRecurrent.recursiveCopy
-
 function Sequencer:getStepModule(step)
    assert(step, "expecting step at arg 1")
    local module = self.sharedClones[step]
@@ -68,7 +65,7 @@ function Sequencer:updateOutput(inputTable)
    if self.isRecurrent then
       self.module:forget()
       for step, input in ipairs(inputTable) do
-         self.output[step] = recursiveCopy(
+         self.output[step] = rnn.recursiveCopy(
             self.output[step], 
             self.module:updateOutput(input)
          )
@@ -79,7 +76,7 @@ function Sequencer:updateOutput(inputTable)
          local module = self:getStepModule(step)
          
          -- forward propagate this step
-         self.output[step] = recursiveCopy(
+         self.output[step] = rnn.recursiveCopy(
             self.output[step], 
             module:updateOutput(input)
          )
@@ -110,7 +107,7 @@ function Sequencer:updateGradInput(inputTable, gradOutputTable)
          local module = self:getStepModule(step)
          
          -- backward propagate this step
-         self.gradInput[step] = recursiveCopy(
+         self.gradInput[step] = rnn.recursiveCopy(
             self.gradInput[step], 
             self.module:updateGradInput(input, gradOutputTable[step])
          )

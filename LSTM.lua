@@ -172,8 +172,8 @@ function LSTM:updateOutput(input)
    if self.train ~= false then
       local input_ = self.inputs[self.step]
       self.inputs[self.step] = self.copyInputs 
-         and self.recursiveCopy(input_, input) 
-         or self.recursiveSet(input_, input)     
+         and rnn.recursiveCopy(input_, input) 
+         or rnn.recursiveSet(input_, input)     
    end
    
    self.outputs[self.step] = output
@@ -202,7 +202,7 @@ function LSTM:backwardThroughTime()
          -- backward propagate through this step
          local gradOutput = self.gradOutputs[step] 
          if gradPrevOutput then
-            self.recursiveAdd(gradOutput, gradPrevOutput)    
+            rnn.recursiveAdd(gradOutput, gradPrevOutput)    
          end
          
          self.gradCells[step] = gradCell
@@ -235,7 +235,7 @@ function LSTM:updateGradInputThroughTime()
       -- backward propagate through this step
       local gradOutput = self.gradOutputs[step]
       if gradPrevOutput then
-         self.recursiveAdd(gradOutput, gradPrevOutput) 
+         rnn.recursiveAdd(gradOutput, gradPrevOutput) 
       end
       
       self.gradCells[step] = gradCell

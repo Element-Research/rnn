@@ -142,4 +142,3 @@ function Module:cuda(shared)
    local type = 'torch.CudaTensor'
    return shared and self:sharedType(type) or self:type(type)
 end
-
