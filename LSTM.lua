@@ -3,7 +3,8 @@
 -- Long Short Term Memory architecture.
 -- Ref. A.: http://arxiv.org/pdf/1303.5778v1 (blueprint for this module)
 -- B. http://web.eecs.utk.edu/~itamar/courses/ECE-692/Bobby_paper1.pdf
--- C. https://github.com/wojzaremba/lstm
+-- C. http://arxiv.org/pdf/1503.04069v1.pdf
+-- D. https://github.com/wojzaremba/lstm
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
 ------------------------------------------------------------------------
@@ -22,6 +23,7 @@ function LSTM:__init(inputSize, outputSize, rho)
    self.recurrentModule = self:buildModel()
    -- make it work with nn.Container
    self.modules[1] = self.recurrentModule
+   self.sharedClones[1] = self.recurrentModule 
    
    -- for output(0), cell(0) and gradCell(T)
    self.zeroTensor = torch.Tensor() 
@@ -159,24 +161,10 @@ function LSTM:updateOutput(input)
    -- output(t), cell(t) = lstm{input(t), output(t-1), cell(t-1)}
    local output, cell
    if self.train ~= false then
-      -- set/save the output states
-      local modules = self.recurrentModule:listModules()
       self:recycle()
-      local recurrentOutputs = self.recurrentOutputs[self.step]
-      if not recurrentOutputs then
-         recurrentOutputs = {}
-         self.recurrentOutputs[self.step] = recurrentOutputs
-      end
-      for i,modula in ipairs(modules) do
-         local output_ = self.recursiveResizeAs(recurrentOutputs[i], modula.output)
-         modula.output = output_
-      end
+      local recurrentModule = self:getStepModule(self.step)
       -- the actual forward propagation
-      output, cell = unpack(self.recurrentModule:updateOutput{input, prevOutput, prevCell})
-      
-      for i,modula in ipairs(modules) do
-         recurrentOutputs[i]  = modula.output
-      end
+      output, cell = unpack(recurrentModule:updateOutput{input, prevOutput, prevCell})
    else
       output, cell = unpack(self.recurrentModule:updateOutput{input, prevOutput, prevCell})
    end
@@ -202,29 +190,14 @@ end
 
 function LSTM:backwardThroughTime()
    assert(self.step > 1, "expecting at least one updateOutput")
-   self.gradInputs = {}
+   self.gradInputs = {} -- used by Sequencer, Repeater
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    if self.fastBackward then
       local gradInput, gradPrevOutput, gradCell
       for step=self.step-1,math.max(stop,1),-1 do
          -- set the output/gradOutput states of current Module
-         local modules = self.recurrentModule:listModules()
-         local recurrentOutputs = self.recurrentOutputs[step]
-         local recurrentGradInputs = self.recurrentGradInputs[step]
-         if not recurrentGradInputs then
-            recurrentGradInputs = {}
-            self.recurrentGradInputs[step] = recurrentGradInputs
-         end
-         
-         for i,modula in ipairs(modules) do
-            local output, gradInput = modula.output, modula.gradInput
-            assert(gradInput, "missing gradInput")
-            local output_ = recurrentOutputs[i]
-            assert(output_, "backwardThroughTime should be preceded by updateOutput")
-            modula.output = output_
-            modula.gradInput = self.recursiveResizeAs(recurrentGradInputs[i], gradInput) --resize, NOT copy
-         end
+         local recurrentModule = self:getStepModule(step)
          
          -- backward propagate through this step
          local gradOutput = self.gradOutputs[step] 
@@ -236,13 +209,9 @@ function LSTM:backwardThroughTime()
          local scale = self.scales[step]/rho
 
          local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
-         local gradInputTable = self.recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
+         local gradInputTable = recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
          gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
          table.insert(self.gradInputs, 1, gradInput)
-         
-         for i,modula in ipairs(modules) do
-            recurrentGradInputs[i] = modula.gradInput
-         end
       end
       return gradInput
    else
@@ -261,20 +230,7 @@ function LSTM:updateGradInputThroughTime()
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,1),-1 do
       -- set the output/gradOutput states of current Module
-      local modules = self.recurrentModule:listModules()
-      local recurrentOutputs = self.recurrentOutputs[step]
-      local recurrentGradInputs = self.recurrentGradInputs[step]
-      if not recurrentGradInputs then
-         recurrentGradInputs = {}
-         self.recurrentGradInputs[step] = recurrentGradInputs
-      end
-      for i,modula in ipairs(modules) do
-         local output, gradInput = modula.output, modula.gradInput
-         local output_ = recurrentOutputs[i]
-         assert(output_, "updateGradInputThroughTime should be preceded by updateOutput")
-         modula.output = output_
-         modula.gradInput = self.recursiveResizeAs(recurrentGradInputs[i], gradInput)
-      end
+      local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local gradOutput = self.gradOutputs[step]
@@ -285,13 +241,9 @@ function LSTM:updateGradInputThroughTime()
       self.gradCells[step] = gradCell
       local scale = self.scales[step]/rho
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
-      local gradInputTable = self.recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell}, scale)
+      local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell}, scale)
       gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
       table.insert(self.gradInputs, 1, gradInput)
-      
-      for i,modula in ipairs(modules) do
-         recurrentGradInputs[i] = modula.gradInput
-      end
    end
    
    return gradInput
@@ -302,25 +254,13 @@ function LSTM:accGradParametersThroughTime()
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,1),-1 do
       -- set the output/gradOutput states of current Module
-      local modules = self.recurrentModule:listModules()
-      local recurrentOutputs = self.recurrentOutputs[step]
-      local recurrentGradInputs = self.recurrentGradInputs[step]
-      
-      for i,modula in ipairs(modules) do
-         local output, gradInput = modula.output, modula.gradInput
-         local output_ = recurrentOutputs[i]
-         local gradInput_ = recurrentGradInputs[i]
-         assert(output_, "accGradParametersThroughTime should be preceded by updateOutput")
-         assert(gradInput_, "accGradParametersThroughTime should be preceded by updateGradInputThroughTime")
-         modula.output = output_
-         modula.gradInput = gradInput_
-      end
+      local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local scale = self.scales[step]/rho
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
       local gradOutputTable = {self.gradOutputs[step], self.gradCells[step]}
-      self.recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
+      recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
    end
    
    self.gradParametersAccumulated = true
@@ -332,27 +272,27 @@ function LSTM:accUpdateGradParametersThroughTime(lr)
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,1),-1 do
       -- set the output/gradOutput states of current Module
-      local modules = self.recurrentModule:listModules()
-      local recurrentOutputs = self.recurrentOutputs[step]
-      local recurrentGradInputs = self.recurrentGradInputs[step]
-      
-      for i,modula in ipairs(modules) do
-         local output, gradInput = modula.output, modula.gradInput
-         local output_ = recurrentOutputs[i]
-         local gradInput_ = recurrentGradInputs[i]
-         assert(output_, "accGradParametersThroughTime should be preceded by updateOutput")
-         assert(gradInput_, "accGradParametersThroughTime should be preceded by updateGradInputThroughTime")
-         modula.output = output_
-         modula.gradInput = gradInput_
-      end
+      local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local scale = self.scales[step]/rho
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step]}
       local gradOutputTable = {self.gradOutputs[step], self.gradCells[step]}
-      self.recurrentModule:accUpdateGradParameters(inputTable, gradOutputTable, lr*scale)
+      recurrentModule:accUpdateGradParameters(inputTable, gradOutputTable, lr*scale)
    end
    
    return gradInput
 end
 
+function LSTM:sharedType(type, castmap)
+   local modules = self.modules
+   self.modules = {}
+   for i,modules in ipairs{modules, self.sharedClones} do
+      for j, module in pairs(modules) do
+         table.insert(self.modules, module)
+      end
+   end
+   parent.sharedType(self, type, castmap)
+   self.modules = modules
+   return self
+end

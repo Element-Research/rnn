@@ -130,6 +130,16 @@ local function recursiveNormal(t2)
 end
 AbstractRecurrent.recursiveNormal = recursiveNormal
 
+function AbstractRecurrent:getStepModule(step)
+   assert(step, "expecting step at arg 1")
+   local recurrentModule = self.sharedClones[step]
+   if not recurrentModule then
+      recurrentModule = self.recurrentModule:sharedClone()
+      self.sharedClones[step] = recurrentModule
+   end
+   return recurrentModule
+end
+
 function AbstractRecurrent:updateGradInput(input, gradOutput)
    -- Back-Propagate Through Time (BPTT) happens in updateParameters()
    -- for now we just keep a list of the gradOutputs

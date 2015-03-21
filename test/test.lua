@@ -307,7 +307,8 @@ function rnntest.Recurrent()
    end
    
    mlp:forget()
-   local rnn = mlp:float(true)
+   mlp:zeroGradParameters()
+   local rnn = mlp:float(true) --sharedType
    local outputs2 = {}
    for step=1,nSteps do
       rnn:forward(inputSequence[step]:float())
@@ -526,6 +527,15 @@ function rnntest.Sequencer()
       mlp:add(rnn)
       local seq = nn.Sequencer(mlp)
    end, "Sequencer non-recurrent mixed with recurrent error error")
+   
+   local inputs3, gradOutputs3 = {}, {}
+   for i=1,#inputs do
+      inputs3[i] = inputs[i]:float()
+      gradOutputs3[i] = gradOutputs[i]:float()
+   end
+   local seq3 = seq:float(true) --sharedType
+   local outputs3 = seq:forward(inputs3)
+   local gradInputs3 = seq:backward(inputs3, gradOutputs3)
 end
 
 function rnntest.Repeater()

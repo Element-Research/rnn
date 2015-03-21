@@ -61,16 +61,6 @@ function Recurrent:buildRecurrentModule()
    self.recurrentModule:add(self.transferModule)
 end
 
-function Recurrent:getRecurrentModule(step)
-   assert(step, "expecting step at arg 1")
-   local recurrentModule = self.sharedClones[step]
-   if not recurrentModule then
-      recurrentModule = self.recurrentModule:sharedClone()
-      self.sharedClones[step] = recurrentModule
-   end
-   return recurrentModule
-end
-
 function Recurrent:updateOutput(input)
    -- output(t) = transfer(feedback(output_(t-1)) + input(input_(t)))
    local output
@@ -80,7 +70,7 @@ function Recurrent:updateOutput(input)
       if self.train ~= false then
          -- set/save the output states
          self:recycle()
-         local recurrentModule = self:getRecurrentModule(self.step)
+         local recurrentModule = self:getStepModule(self.step)
           -- self.output is the previous output of this module
          output = recurrentModule:updateOutput{input, self.output}
       else
@@ -112,7 +102,7 @@ function Recurrent:backwardThroughTime()
       self.gradInputs = {}
       local gradInput, gradPrevOutput
       for step=self.step-1,math.max(stop, 2),-1 do
-         local recurrentModule = self:getRecurrentModule(step)
+         local recurrentModule = self:getStepModule(step)
          
          -- backward propagate through this step
          local input = self.inputs[step]
@@ -164,7 +154,7 @@ function Recurrent:updateGradInputThroughTime()
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,2),-1 do
-      local recurrentModule = self:getRecurrentModule(step)
+      local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local input = self.inputs[step]
@@ -196,7 +186,7 @@ function Recurrent:accGradParametersThroughTime()
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,2),-1 do
-      local recurrentModule = self:getRecurrentModule(step)
+      local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local input = self.inputs[step]
@@ -232,7 +222,7 @@ function Recurrent:accUpdateGradParametersThroughTime(lr)
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,2),-1 do
-      local recurrentModule = self:getRecurrentModule(step)
+      local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local input = self.inputs[step]

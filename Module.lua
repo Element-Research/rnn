@@ -46,7 +46,7 @@ function Module:sharedClone(shareParams, shareGradParams)
    end
    
    -- find all the tensors that share storage with the shared params
-   for name, param in pairs(self) do
+   for paramName, param in pairs(self) do
       if torch.isTensor(param) and param:storage() then
          if pointers[torch.pointer(param:storage():data())] then
             params[paramName] = param
@@ -70,7 +70,7 @@ function Module:sharedClone(shareParams, shareGradParams)
       clone.modules = moduleClones
    end
    return clone
-end            
+end      
 
 -- for preserving shared params created with sharedClones
 function Module:sharedType(type, castmap)

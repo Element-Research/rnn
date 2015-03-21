@@ -103,7 +103,7 @@ function Sequencer:updateGradInput(inputTable, gradOutputTable)
       for step=1,#inputTable do
          self.gradInput[step] = self.module.gradInputs[step]
       end
-      assert(#self.gradInput == #inputTable, "missing gradInputs")
+      assert(#self.gradInput == #inputTable, "missing gradInputs (rho is too low?)")
    else
       for step, input in ipairs(inputTable) do
          -- set the output/gradOutput states for this step
@@ -159,6 +159,19 @@ function Sequencer:accUpdateGradParameters(input, gradOutput, lr)
          self.module:accUpdateGradParameters(input, gradOutputTable[step], lr)
       end
    end
+end
+
+function Sequencer:sharedType(type, castmap)
+   local modules = self.modules
+   self.modules = {}
+   for i,modules in ipairs{modules, self.sharedClones} do
+      for j, module in pairs(modules) do
+         table.insert(self.modules, module)
+      end
+   end
+   parent.sharedType(self, type, castmap)
+   self.modules = modules
+   return self
 end
 
 function Sequencer:__tostring__()
