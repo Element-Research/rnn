@@ -90,7 +90,18 @@ i.e. it forgets the current sequence. It also resets the `step` attribute to 1.
 It is highly recommended to call `forget` after each parameter update. 
 Otherwise, the previous state will be used to activate the next, which 
 will often lead to instability. This is caused by the previous state being
-the result of now changed parameters.
+the result of now changed parameters. It is also good practice to call 
+`forget` at the start of each new sequence.
+
+### training() ###
+In training mode, the network remembers all previous `rho` (number of time-steps)
+states. This is necessary for BPTT. 
+
+### evaluate() ###
+During evaluation, since their is no need to perform BPTT at a later time, 
+only the previous step is remembered. This is very efficient memory-wise, 
+such that evaluation can be performed using potentially infinite-length 
+sequence.
  
 <a name='rnn.Recurrent'></a>
 ### Recurrent ###
