@@ -245,3 +245,46 @@ through inheritance by overriding the different factory methods :
   * `buildCell` : builds the cell (eq. 4);
   * `buildOutputGate` : builds the output gate (eq. 5). Currently calls `buildGate`;
   * `buildModel` : builds the actual LSTM model which is used internally (eq. 6).
+  
+<a name='rnn.Sequencer'></a>
+## Sequencer ##
+This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) 
+used to abstract away the intricacies of AbstractRecurrent modules. While the latter 
+require a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
+the Sequencer forwards an input sequence (a table) into an output sequence (a table of the same length).
+It also takes care of calling `forget`, `backwardThroughTime` and other such AbstractRecurrent-specific methods.
+
+The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent instances) and apply it to each 
+input to procude an output table of the same length. 
+This is especially useful for processing variable length sequences (tables).
+
+Note that for now, it is only possible to decorate either recurrent or non-recurrent Modules. 
+Specifically, it cannot handle non-recurrent Modules containing recurrent Modules. 
+Instead, class of Modules should be encapsulated by its own `Sequencer`. This may change in the future.
+
+The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
+to be applied from left to right, on each element of the input sequence.
+
+<a name='rnn.Repeater'></a>
+## Repeater ##
+This Module is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) similar to [Sequencer].
+It differs in that the sequence length is fixed before hand and the input is repeatedly forwarded 
+through the wrapped `module` to produce an output table of length `nStep`:
+```lua
+r = nn.Repeater(module, nStep)
+```
+Argument `module` should be an `AbstractRecurrent` instance.
+This is useful for implementing models like [RCNNs](http://jmlr.org/proceedings/papers/v32/pinheiro14.pdf),
+which are repeatedly presented with the same input.
+
+<a name='rnn.RepeaterCriterion'></a>
+## RepeaterCriterion ##
+This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
+```lua
+c = nn.RepeaterCriterion(criterion)
+``` 
+The `input` is expected to be a sequence (a table). A single `target` is 
+repeatedly applied using the same `criterion` to each element in the `input` sequence.
+The output of `forward` is the sum of all individual losses in the sequence.
+This is useful for implementing models like [RCNNs](http://jmlr.org/proceedings/papers/v32/pinheiro14.pdf),
+which are repeatedly presented with the same target.
