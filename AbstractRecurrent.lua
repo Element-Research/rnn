@@ -49,6 +49,19 @@ function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
    self.scales[self.step-1] = scale
 end
 
+function AbstractRecurrent:backwardThroughTime()
+   return self.gradInput
+end
+
+function AbstractRecurrent:updateGradInputThroughTime()
+end
+
+function AbstractRecurrent:accGradParametersThroughTime()
+end
+
+function AbstractRecurrent:accUpdateGradParametersThroughTime(lr)
+end
+
 function AbstractRecurrent:backwardUpdateThroughTime(learningRate)
    local gradInput = self:updateGradInputThroughTime()
    self:accUpdateGradParametersThroughTime(learningRate)
@@ -90,7 +103,7 @@ function AbstractRecurrent:recycle(offset)
 end
 
 function AbstractRecurrent:forget(offset)
-   offset = offset or 1
+   offset = offset or 0
    if self.train ~= false then
       -- bring all states back to the start of the sequence buffers
       local lastStep = self.step - 1

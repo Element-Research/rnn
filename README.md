@@ -5,9 +5,94 @@ You can use it to build RNNs, LSTMs, BRNNs, BLSTMs, and so forth and so on.
 
 ## Library Documentation ##
 This section includes documentation for the following objects:
- * [Recurrent](#nnx.Recurrent) : a generalized recurrent neural network container;
+ * [AbstractRecurrent](#rnn.AbstractRecurrent) : an abstract class inherited by Recurrent and LSTM;
+ * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
+ * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
+ * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
+ * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
+ * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
  
-<a name='rnn.Recurrent'/>
+<a name='rnn.AbstractRecurrent'></a>
+### AbstractRecurrent ###
+An abstract class inherited by [Recurrent](#rnn.Recurrent) and [LSTM](#rnn.LSTM).
+The constructor takes a single argument :
+```lua
+rnn = nn.AbstractRecurrent(rho)
+```
+Argument `rho` is the maximum number of steps to backpropagate through time (BPTT).
+Sub-classes can set this to a large number like 99999 if they want to backpropagate through 
+the entire sequence whatever its length. Setting lower values of rho are 
+useful when long sequences are forward propagated, but we only whish to 
+backpropagate through the last `rho` steps, which means that the remainder 
+of the sequence doesn't need to be stored (so no additional cost). 
+
+### [recurrentModule] getStepModule(step) ###
+Returns a module for time-step `step`. This is used internally by sub-classes 
+to obtain copies of the internal `recurrentModule`. These copies share 
+`parameters` and `gradParameters` but each have their own `output`, `gradInput` 
+and any other intermediate states. 
+
+### [output] updateOutput(input) ###
+Forward propagates the input for the current step. The outputs or intermediate 
+states of the previous steps are used recurrently. This is transparent to the 
+caller as the previous outputs and intermediate states are memorized. This 
+method also increments the `step` attribute by 1.
+
+### updateGradInput(input, gradOutput) ###
+It is important to understand that the actual BPTT happens in the `updateParameters`, 
+`backwardThroughTime` or `backwardUpdateThroughTime` methods. So this 
+method just keeps a copy of the `gradOutput`. These are stored in a 
+table in the order that they were provided.
+
+### accGradParameters(input, gradOutput, scale) ###
+Again, the actual BPTT happens in the `updateParameters`, 
+`backwardThroughTime` or `backwardUpdateThroughTime` methods.
+So this method just keeps a copy of the `scales` for later.
+
+### backwardThroughTime() ###
+This method calls `updateGradInputThroughTime` followed by `accGradParametersThroughTime`.
+This is where the actual BPTT happens.
+
+### updateGradInputThroughTime() ###
+Iteratively calls `updateGradInput` for all time-steps in reverse order 
+(from the end to the start of the sequence). Returns the `gradInput` of 
+the first time-step.
+
+### accGradParametersThroughTime() ###
+Iteratively calls `accGradParameters` for all time-steps in reverse order 
+(from the end to the start of the sequence). 
+
+### accUpdateGradParametersThroughTime(learningRate) ###
+Iteratively calls `accUpdateGradParameters` for all time-steps in reverse order 
+(from the end to the start of the sequence). 
+
+### backwardUpdateThroughTime(learningRate) ###
+This method calls `updateGradInputThroughTime` and 
+`accUpdateGradParametersThroughTime(learningRate)` and returns the `gradInput` 
+of the first step. 
+
+### updateParameters(learningRate) ###
+Unless `backwardThroughTime` or `accGradParameters` where called since
+the last call to `updateOutput`, `backwardUpdateThroughTime` is called.
+Otherwise, it calls `updateParameters` on all encapsulated Modules.
+
+### recycle(offset) ###
+This method goes hand in hand with `forget`. It is useful when the current
+time-step is greater than `rho`, at which point it starts recycling 
+the oldest `recurrentModule` `sharedClones`, 
+such that they can be reused for storing the next step. This `offset` 
+is used for modules like `nn.Recurrent` that use a different module 
+for the first step. Default offset is 0.
+
+### forget(offset) ###
+This method brings back all states to the start of the sequence buffers, 
+i.e. it forgets the current sequence. It also resets the `step` attribute to 1.
+It is highly recommended to call `forget` after each parameter update. 
+Otherwise, the previous state will be used to activate the next, which 
+will often lead to instability. This is caused by the previous state being
+the result of now changed parameters.
+ 
+<a name='rnn.Recurrent'></a>
 ### Recurrent ###
 References :
  * A. [Sutsekever Thesis Sec. 2.5 and 2.8](http://www.cs.utoronto.ca/~ilya/pubs/ilya_sutskever_phd_thesis.pdf)
@@ -105,8 +190,4 @@ while true do
    end
 end
 ```
-
-Note that this won't work with `input` and `feedback` modules that use more than their
-`output` attribute to keep track of their internal state between 
-calls to `forward` and `backward`.
 

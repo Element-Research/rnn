@@ -98,9 +98,10 @@ function Recurrent:backwardThroughTime()
    assert(self.step > 1, "expecting at least one updateOutput")
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
+   local gradInput
    if self.fastBackward then
       self.gradInputs = {}
-      local gradInput, gradPrevOutput
+      local gradPrevOutput
       for step=self.step-1,math.max(stop, 2),-1 do
          local recurrentModule = self:getStepModule(step)
          
@@ -136,15 +137,13 @@ function Recurrent:backwardThroughTime()
                gradParam:mul(rho)
             end
          end
-         
-         self.gradParametersAccumulated = true
-         return gradInput
       end
+      self.gradParametersAccumulated = true
    else
-      local gradInput = self:updateGradInputThroughTime()
+      gradInput = self:updateGradInputThroughTime()
       self:accGradParametersThroughTime()
-      return gradInput
    end
+   return gradInput
 end
 
 function Recurrent:updateGradInputThroughTime()

@@ -162,9 +162,7 @@ function rnntest.Recurrent()
    end
 
    local mlp4 = mlp:clone()
-   assert(mlp.inputModule.addBuffer)
    local mlp5 = mlp:clone()
-   assert(mlp5.inputModule.addBuffer)
    
    -- backward propagate through time (BPTT)
    local gradInput = mlp:backwardThroughTime():clone()
