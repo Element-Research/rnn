@@ -232,7 +232,9 @@ where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step,
 `i[t]` is the input gate (eq. 1), `f[t]` is the forget gate (eq. 2), 
 `z[t]` is the input to the cell (which we call the hidden) (eq. 3), 
 `c[t]` is the cell (eq. 4), `o[t]` is the output gate (eq. 5), 
-and `h[t]` is the output of this module (eq. 6).
+and `h[t]` is the output of this module (eq. 6). Also note that the 
+weight matrices from cell to gate vectors are diagonal `W[c->s]`, where `s` 
+is `i`,`f`, or `o`.
 
 As you can see, unlike [Recurrent](#rnn.Recurrent), this 
 implementation isn't generic enough that it can take arbitrary component Module
