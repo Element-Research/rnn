@@ -218,6 +218,8 @@ The `nn.LSTM(inputSize, outputSize, [rho])` constructor takes 3 arguments:
  * `outputSize` : a number specifying the size of the output;
  * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999.
 
+![LSTM](doc/image/LSTM.png) 
+
 The actual implementation corresponds to the following algorithm:
 ```lua
 i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + W[c->i]c[t−1] + b[1->i])      (1)
