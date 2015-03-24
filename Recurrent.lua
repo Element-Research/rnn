@@ -25,8 +25,12 @@ function Recurrent:__init(start, input, feedback, transfer, rho, merge)
    parent.__init(self, rho or 5)
    
    local ts = torch.type(start)
-   if ts == 'torch.LongTensor' or ts == 'number' then
+   if ts == 'torch.LongStorage' or ts == 'number' then
       start = nn.Add(start)
+   elseif ts == 'table' then
+      start = nn.Add(torch.LongStorage(start))
+   elseif not torch.isTypeOf(start, 'nn.Module') then
+      error"Recurrent : expecting arg 1 of type nn.Module, torch.LongStorage, number or table"
    end
    
    self.startModule = start
