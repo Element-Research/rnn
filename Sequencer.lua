@@ -132,12 +132,12 @@ function Sequencer:accGradParameters(inputTable, gradOutputTable, scale)
          local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
-         self.module:accGradParameters(input, gradOutputTable[step], scale)
+         self.module:accGradParameters(input, gradOutputTable[step], scale/#inputTable) --scale is rho-averaged
       end
    end
 end
 
-function Sequencer:accUpdateGradParameters(input, gradOutput, lr)
+function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
    if self.isRecurrent then
       assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
       assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
@@ -153,7 +153,7 @@ function Sequencer:accUpdateGradParameters(input, gradOutput, lr)
          local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
-         self.module:accUpdateGradParameters(input, gradOutputTable[step], lr)
+         self.module:accUpdateGradParameters(input, gradOutputTable[step], lr/#inputTable) --lr is rho-averaged
       end
    end
 end
