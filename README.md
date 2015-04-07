@@ -8,8 +8,9 @@ This library includes documentation for the following objects:
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
- * [Sequencer](#rnn.Sequencer) : repeatedly applies the same input to an AbstractRecurrent instance;
- * [SequencerCriterion](#rnn.SequencerCriterion) : repeatedly applies the same criterion with the same target on a sequence;
+ * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
+ * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
+ * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
  
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
@@ -269,13 +270,13 @@ Instead, class of Modules should be encapsulated by its own `Sequencer`. This ma
 The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
 to be applied from left to right, on each element of the input sequence.
 
-<a name='rnn.Sequencer'></a>
-## Sequencer ##
+<a name='rnn.Repeater'></a>
+## Repeater ##
 This Module is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) similar to [Sequencer].
 It differs in that the sequence length is fixed before hand and the input is repeatedly forwarded 
 through the wrapped `module` to produce an output table of length `nStep`:
 ```lua
-r = nn.Sequencer(module, nStep)
+r = nn.Repeater(module, nStep)
 ```
 Argument `module` should be an `AbstractRecurrent` instance.
 This is useful for implementing models like [RCNNs](http://jmlr.org/proceedings/papers/v32/pinheiro14.pdf),
@@ -286,6 +287,18 @@ which are repeatedly presented with the same input.
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
 ```lua
 c = nn.SequencerCriterion(criterion)
+``` 
+Both the `input` and `target` are expected to be a sequence (a table). 
+For each step in the sequence, the corresponding elements of the input and target tables 
+will be applied to the `criterion`.
+The output of `forward` is the sum of all individual losses in the sequence.
+This is useful when used in conjuction with a [Sequencer](#rnn.Sequencer).
+
+<a name='rnn.RepeaterCriterion'></a>
+## RepeaterCriterion ##
+This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
+```lua
+c = nn.RepeaterCriterion(criterion)
 ``` 
 The `input` is expected to be a sequence (a table). A single `target` is 
 repeatedly applied using the same `criterion` to each element in the `input` sequence.
