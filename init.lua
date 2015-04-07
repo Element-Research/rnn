@@ -37,7 +37,6 @@ torch.include('rnn', 'test.lua')
 
 -- support modules
 torch.include('rnn', 'ZeroGrad.lua')
-torch.include('rnn', 'Padding.lua')
 
 -- extensions to existing modules
 torch.include('rnn', 'Module.lua')
