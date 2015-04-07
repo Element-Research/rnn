@@ -571,6 +571,31 @@ function rnntest.Repeater()
    mytester:assertTensorEq(gradInput3, gradInput, 0.00001, "Repeater gradInput err")
 end
 
+function rnntest.SequencerCriterion()
+   local batchSize = 4
+   local inputSize = 10
+   local outputSize = 7
+   local nSteps = 5  
+   local criterion = nn.ClassNLLCriterion()
+   local sc = nn.SequencerCriterion(criterion)
+   local input = {}
+   local target = {}
+   local err2 = 0
+   local gradInput2 = {}
+   for i=1,nSteps do
+      input[i] = torch.randn(batchSize, inputSize)
+      target[i] = torch.randperm(inputSize):narrow(1,1,batchSize)
+      err2 = err2 + criterion:forward(input[i], target[i])
+      gradInput2[i] = criterion:backward(input[i], target[i]):clone()
+   end
+   local err = sc:forward(input, target)
+   mytester:asserteq(err, err2, 0.000001, "SequencerCriterion forward err") 
+   local gradInput = sc:backward(input, target)
+   for i=1,nSteps do
+      mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "SequencerCriterion backward err "..i)
+   end
+end
+
 
 function rnn.test(tests)
    mytester = torch.Tester()

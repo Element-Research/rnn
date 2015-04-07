@@ -8,8 +8,8 @@ This library includes documentation for the following objects:
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
- * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
- * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
+ * [Sequencer](#rnn.Sequencer) : repeatedly applies the same input to an AbstractRecurrent instance;
+ * [SequencerCriterion](#rnn.SequencerCriterion) : repeatedly applies the same criterion with the same target on a sequence;
  
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
@@ -269,23 +269,23 @@ Instead, class of Modules should be encapsulated by its own `Sequencer`. This ma
 The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
 to be applied from left to right, on each element of the input sequence.
 
-<a name='rnn.Repeater'></a>
-## Repeater ##
+<a name='rnn.Sequencer'></a>
+## Sequencer ##
 This Module is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) similar to [Sequencer].
 It differs in that the sequence length is fixed before hand and the input is repeatedly forwarded 
 through the wrapped `module` to produce an output table of length `nStep`:
 ```lua
-r = nn.Repeater(module, nStep)
+r = nn.Sequencer(module, nStep)
 ```
 Argument `module` should be an `AbstractRecurrent` instance.
 This is useful for implementing models like [RCNNs](http://jmlr.org/proceedings/papers/v32/pinheiro14.pdf),
 which are repeatedly presented with the same input.
 
-<a name='rnn.RepeaterCriterion'></a>
-## RepeaterCriterion ##
+<a name='rnn.SequencerCriterion'></a>
+## SequencerCriterion ##
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
 ```lua
-c = nn.RepeaterCriterion(criterion)
+c = nn.SequencerCriterion(criterion)
 ``` 
 The `input` is expected to be a sequence (a table). A single `target` is 
 repeatedly applied using the same `criterion` to each element in the `input` sequence.
