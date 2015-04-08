@@ -27,7 +27,7 @@ end
 
 function RepeaterCriterion:backward(inputTable, target)
    for i,input in ipairs(inputTable) do
-      self.gradInput[i] = rnn.recusiveCopy(self.gradInput[i], self.criterion:backward(input, target))
+      self.gradInput[i] = rnn.recursiveCopy(self.gradInput[i], self.criterion:backward(input, target))
    end
    return self.gradInput
 end
