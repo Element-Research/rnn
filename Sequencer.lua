@@ -76,10 +76,7 @@ function Sequencer:updateOutput(inputTable)
          local module = self:getStepModule(step)
          
          -- forward propagate this step
-         self.output[step] = rnn.recursiveCopy(
-            self.output[step], 
-            module:updateOutput(input)
-         )
+         self.output[step] = module:updateOutput(input)
       end
    end
    return self.output
@@ -107,10 +104,7 @@ function Sequencer:updateGradInput(inputTable, gradOutputTable)
          local module = self:getStepModule(step)
          
          -- backward propagate this step
-         self.gradInput[step] = rnn.recursiveCopy(
-            self.gradInput[step], 
-            self.module:updateGradInput(input, gradOutputTable[step])
-         )
+         self.gradInput[step] = module:updateGradInput(input, gradOutputTable[step])
       end
    end
    return self.gradInput
@@ -132,7 +126,7 @@ function Sequencer:accGradParameters(inputTable, gradOutputTable, scale)
          local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
-         self.module:accGradParameters(input, gradOutputTable[step], scale/#inputTable) --scale is rho-averaged
+         module:accGradParameters(input, gradOutputTable[step], scale/#inputTable) --scale is rho-averaged
       end
    end
 end
@@ -153,7 +147,7 @@ function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
          local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
-         self.module:accUpdateGradParameters(input, gradOutputTable[step], lr/#inputTable) --lr is rho-averaged
+         module:accUpdateGradParameters(input, gradOutputTable[step], lr/#inputTable) --lr is rho-averaged
       end
    end
 end
