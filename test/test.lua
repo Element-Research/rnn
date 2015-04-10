@@ -472,10 +472,10 @@ function rnntest.Sequencer()
    local nSteps = 5 
    
    -- test with recurrent module
-   local inputModule = nn.Linear(inputSize, outputSize)
+   local inputModule = nn.Euclidean(inputSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
-   local feedbackModule = nn.Linear(outputSize, outputSize)
+   local feedbackModule = nn.Euclidean(outputSize, outputSize)
    -- rho = nSteps
    local rnn = nn.Recurrent(outputSize, inputModule, feedbackModule, transferModule, nSteps)
    local rnn2 = rnn:clone()
@@ -500,7 +500,7 @@ function rnntest.Sequencer()
    end
    
    -- test with non-recurrent module
-   local linear = nn.Linear(inputSize, outputSize)
+   local linear = nn.Euclidean(inputSize, outputSize)
    local outputs, gradInputs = {}, {}
    linear:zeroGradParameters()
    local clone = linear:clone()
