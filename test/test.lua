@@ -554,6 +554,29 @@ function rnntest.Sequencer()
    for i,gradParam in ipairs(gradParams) do
       mytester:assert(gradParam:sum() == 0, 0.000001, "Sequencer:zeroGradParameters err "..i)
    end
+   
+   -- test with LSTM
+   local lstm = nn.LSTM(inputSize, outputSize)
+   local lstm2 = lstm:clone()
+   
+   local inputs, outputs, gradOutputs = {}, {}, {}
+   for step=1,nSteps do
+      inputs[step] = torch.randn(batchSize, inputSize)
+      outputs[step] = lstm:forward(inputs[step])
+      gradOutputs[step] = torch.randn(batchSize, outputSize)
+      lstm:backward(inputs[step], gradOutputs[step])
+   end
+   lstm:backwardThroughTime()
+   
+   local lstm3 = nn.Sequencer(lstm2)
+   local outputs3 = lstm3:forward(inputs)
+   local gradInputs3 = lstm3:backward(inputs, gradOutputs)
+   mytester:assert(#outputs3 == #outputs, "Sequencer LSTM output size err")
+   mytester:assert(#gradInputs3 == #rnn.gradInputs, "Sequencer LSTM gradInputs size err")
+   for step,output in ipairs(outputs) do
+      mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer LSTM output "..step)
+      mytester:assertTensorEq(gradInputs3[step], lstm.gradInputs[step], 0.00001, "Sequencer LSTM gradInputs "..step)
+   end
 end
 
 function rnntest.Repeater()

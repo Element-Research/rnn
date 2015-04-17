@@ -46,7 +46,7 @@ end
 function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
    -- Back-Propagate Through Time (BPTT) happens in updateParameters()
    -- for now we just keep a list of the scales
-   self.scales[self.step-1] = scale
+   self.scales[self.step-1] = scale or 1
 end
 
 function AbstractRecurrent:backwardThroughTime()

@@ -237,11 +237,9 @@ function LSTM:updateGradInputThroughTime()
       if gradPrevOutput then
          rnn.recursiveAdd(gradOutput, gradPrevOutput) 
       end
-      
       self.gradCells[step] = gradCell
-      local scale = self.scales[step]/rho
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
-      local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell}, scale)
+      local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
       gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
       table.insert(self.gradInputs, 1, gradInput)
    end
