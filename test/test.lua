@@ -501,23 +501,26 @@ function rnntest.Sequencer()
    
    -- test with non-recurrent module
    local linear = nn.Euclidean(inputSize, outputSize)
-   local outputs, gradInputs = {}, {}
-   linear:zeroGradParameters()
-   local clone = linear:clone()
-   for step=1,nSteps do
-      outputs[step] = linear:forward(inputs[step]):clone()
-      gradInputs[step] = linear:backward(inputs[step], gradOutputs[step]):clone()
-   end
-   
-   local seq = nn.Sequencer(clone)
-   local outputs2 = seq:forward(inputs)
-   local gradInputs2 = seq:backward(inputs, gradOutputs)
-   
-   mytester:assert(#outputs2 == #outputs, "Sequencer output size err")
-   mytester:assert(#gradInputs2 == #gradInputs, "Sequencer gradInputs size err")
-   for step,output in ipairs(outputs) do
-      mytester:assertTensorEq(outputs2[step], output, 0.00001, "Sequencer output "..step)
-      mytester:assertTensorEq(gradInputs2[step], gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
+   local seq, outputs, gradInputs
+   for k=1,3 do
+      outputs, gradInputs = {}, {}
+      linear:zeroGradParameters()
+      local clone = linear:clone()
+      for step=1,nSteps do
+         outputs[step] = linear:forward(inputs[step]):clone()
+         gradInputs[step] = linear:backward(inputs[step], gradOutputs[step]):clone()
+      end
+      
+      seq = nn.Sequencer(clone)
+      local outputs2 = seq:forward(inputs)
+      local gradInputs2 = seq:backward(inputs, gradOutputs)
+      
+      mytester:assert(#outputs2 == #outputs, "Sequencer output size err")
+      mytester:assert(#gradInputs2 == #gradInputs, "Sequencer gradInputs size err")
+      for step,output in ipairs(outputs) do
+         mytester:assertTensorEq(outputs2[step], output, 0.00001, "Sequencer output "..step)
+         mytester:assertTensorEq(gradInputs2[step], gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
+      end
    end
    
    mytester:assertError(function()
@@ -534,6 +537,23 @@ function rnntest.Sequencer()
    local seq3 = seq:float(true) --sharedType
    local outputs3 = seq:forward(inputs3)
    local gradInputs3 = seq:backward(inputs3, gradOutputs3)
+   
+   -- test for zeroGradParameters
+   local seq = nn.Sequencer(nn.Linear(inputSize,outputSize))
+   seq:zeroGradParameters()
+   seq:forward(inputs)
+   seq:backward(inputs, gradOutputs)
+   local params, gradParams = seq:parameters()
+   for i,gradParam in ipairs(gradParams) do
+      mytester:assert(gradParam:sum() ~= 0, 0.000001, "Sequencer:backward err "..i)
+   end
+   local param, gradParam = seq:getParameters()
+   seq:zeroGradParameters()
+   mytester:assert(gradParam:sum() == 0, 0.000001, "Sequencer:getParameters err")
+   local params, gradParams = seq:parameters()
+   for i,gradParam in ipairs(gradParams) do
+      mytester:assert(gradParam:sum() == 0, 0.000001, "Sequencer:zeroGradParameters err "..i)
+   end
 end
 
 function rnntest.Repeater()
