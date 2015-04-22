@@ -142,7 +142,7 @@ to handle long sequences without allocating any additional memory.
 
 Example :
 ```lua
-require 'nnx'
+require 'rnn'
 
 batchSize = 8
 rho = 5

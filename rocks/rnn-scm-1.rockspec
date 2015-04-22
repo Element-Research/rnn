@@ -2,7 +2,7 @@ package = "rnn"
 version = "scm-1"
 
 source = {
-   url = "git://github.com/nicholas-leonard/rnn",
+   url = "git://github.com/Element-Research/rnn",
    tag = "master"
 }
 
@@ -11,7 +11,7 @@ description = {
    detailed = [[
 A library to build RNNs, LSTMs, BRNNs, BLSTMs, and so forth and so on.
    ]],
-   homepage = "https://github.com/nicholas-leonard/rnn",
+   homepage = "https://github.com/Element-Research/rnn",
    license = "BSD"
 }
 
