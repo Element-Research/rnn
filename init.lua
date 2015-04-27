@@ -1,6 +1,4 @@
-
-require 'torch'
-require 'nn'
+require 'dpnn'
 
 -- create global rnn table:
 rnn = {}
@@ -12,9 +10,6 @@ torch.include('rnn', 'test.lua')
 
 -- support modules
 torch.include('rnn', 'ZeroGrad.lua')
-
--- extensions to existing modules
-torch.include('rnn', 'Module.lua')
 
 -- recurrent modules
 torch.include('rnn', 'AbstractRecurrent.lua')

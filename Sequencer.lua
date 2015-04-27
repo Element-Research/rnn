@@ -152,7 +152,7 @@ function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
    end
 end
 
-function Sequencer:sharedType(type, castmap)
+function Sequencer:type(type)
    local modules = self.modules
    self.modules = {}
    for i,modules in ipairs{modules, self.sharedClones} do
@@ -160,7 +160,7 @@ function Sequencer:sharedType(type, castmap)
          table.insert(self.modules, module)
       end
    end
-   parent.sharedType(self, type, castmap)
+   parent.type(self, type)
    self.modules = modules
    return self
 end

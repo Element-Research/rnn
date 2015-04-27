@@ -258,7 +258,7 @@ function Recurrent:forget()
    parent.forget(self, 1)
 end
 
-function Recurrent:sharedType(type, castmap)
+function Recurrent:type(type)
    local modules = self.modules
    self.modules = {}
    for i,modules in ipairs{modules, self.sharedClones, {self.initialModule}} do
@@ -266,7 +266,7 @@ function Recurrent:sharedType(type, castmap)
          table.insert(self.modules, module)
       end
    end
-   parent.sharedType(self, type, castmap)
+   parent.type(self, type)
    self.modules = modules
    return self
 end

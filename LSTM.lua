@@ -282,7 +282,7 @@ function LSTM:accUpdateGradParametersThroughTime(lr)
    return gradInput
 end
 
-function LSTM:sharedType(type, castmap)
+function LSTM:type(type)
    local modules = self.modules
    self.modules = {}
    for i,modules in ipairs{modules, self.sharedClones} do
@@ -290,7 +290,7 @@ function LSTM:sharedType(type, castmap)
          table.insert(self.modules, module)
       end
    end
-   parent.sharedType(self, type, castmap)
+   parent.type(self, type)
    self.modules = modules
    return self
 end
