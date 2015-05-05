@@ -40,7 +40,7 @@ end
 function AbstractRecurrent:updateGradInput(input, gradOutput)
    -- Back-Propagate Through Time (BPTT) happens in updateParameters()
    -- for now we just keep a list of the gradOutputs
-   self.gradOutputs[self.step-1] = rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
+   self.gradOutputs[self.step-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
 end
 
 function AbstractRecurrent:accGradParameters(input, gradOutput, scale)

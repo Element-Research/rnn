@@ -21,3 +21,6 @@ torch.include('rnn', 'Sequencer.lua')
 -- recurrent criterions:
 torch.include('rnn', 'RepeaterCriterion.lua')
 torch.include('rnn', 'SequencerCriterion.lua')
+
+-- prevent likely name conflicts
+nn.rnn = rnn

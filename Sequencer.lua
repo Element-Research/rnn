@@ -65,7 +65,7 @@ function Sequencer:updateOutput(inputTable)
    if self.isRecurrent then
       self.module:forget()
       for step, input in ipairs(inputTable) do
-         self.output[step] = rnn.recursiveCopy(
+         self.output[step] = nn.rnn.recursiveCopy(
             self.output[step], 
             self.module:updateOutput(input)
          )

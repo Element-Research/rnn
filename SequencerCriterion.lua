@@ -22,13 +22,13 @@ end
 
 function SequencerCriterion:backward(inputTable, targetTable)
    for i,input in ipairs(inputTable) do
-      self.gradInput[i] = rnn.recursiveCopy(self.gradInput[i], self.criterion:backward(input, targetTable[i]))
+      self.gradInput[i] = nn.rnn.recursiveCopy(self.gradInput[i], self.criterion:backward(input, targetTable[i]))
    end
    return self.gradInput
 end
 
 function SequencerCriterion:type(type)
-   self.gradInput = rnn.recursiveType(self.gradInput)
+   self.gradInput = nn.rnn.recursiveType(self.gradInput)
    return self.criterion:type(type)
 end
 
