@@ -389,7 +389,7 @@ function rnntest.Sequencer()
    local inputs, outputs, gradOutputs = {}, {}, {}
    for step=1,nSteps do
       inputs[step] = torch.randn(batchSize, inputSize)
-      outputs[step] = rnn:forward(inputs[step])
+      outputs[step] = rnn:forward(inputs[step]):clone()
       gradOutputs[step] = torch.randn(batchSize, outputSize)
       rnn:backward(inputs[step], gradOutputs[step])
    end
@@ -403,6 +403,21 @@ function rnntest.Sequencer()
    for step,output in ipairs(outputs) do
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
       mytester:assertTensorEq(gradInputs3[step], rnn.gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
+   end
+   
+   -- test in evaluation mode
+   rnn3:evaluate()
+   local outputs4 = rnn3:forward(inputs)
+   mytester:assert(#outputs4 == #outputs, "Sequencer evaluate output size err")
+   for step,output in ipairs(outputs) do
+      mytester:assertTensorEq(outputs4[step], output, 0.00001, "Sequencer evaluate output "..step)
+   end
+   local inputs5 = _.clone(inputs)
+   table.remove(inputs5, nSteps) -- remove last input
+   local outputs5 = rnn3:forward(inputs5)
+   mytester:assert(#outputs5 == #outputs - 1, "Sequencer evaluate -1 output size err")
+   for step,output in ipairs(outputs5) do
+      mytester:assertTensorEq(outputs[step], output, 0.00001, "Sequencer evaluate -1 output "..step)
    end
    
    -- test with non-recurrent module

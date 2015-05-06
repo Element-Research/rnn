@@ -48,8 +48,13 @@ function Sequencer:__init(module)
       self.module.copyGradOutputs = false
    end
    self.output = {}
-   self.gradInput = {}
    self.step = 1
+   
+   -- table of buffers used for evaluation
+   self._output = {}
+   -- so that these buffers aren't serialized :
+   self.dpnn_mediumEmpty = _.clone(self.dpnn_mediumEmpty)
+   table.insert(self.dpnn_mediumEmpty, '_output')
 end
 
 function Sequencer:getStepModule(step)
@@ -65,11 +70,27 @@ end
 
 function Sequencer:updateOutput(inputTable)
    assert(torch.type(inputTable) == 'table', "expecting input table")
-   self.output = {}
    if self.isRecurrent then
       self.module:forget()
-      for step, input in ipairs(inputTable) do
-         self.output[step] = self.module:updateOutput(input)
+      if self.train ~= false then
+         self.output = {}
+         for step, input in ipairs(inputTable) do
+            self.output[step] = self.module:updateOutput(input)
+         end
+      else
+         -- during evaluation, recurrent modules reuse memory (i.e. outputs)
+         -- so we need to copy each into our own
+         for step, input in ipairs(inputTable) do
+            self.output[step] = nn.rnn.recursiveCopy(
+               self.output[step] or table.remove(self._output, 1), 
+               self.module:updateOutput(input)
+            )
+            self.output[step] = self.module:updateOutput(input)
+         end
+         -- remove extra output tensors (save for later)
+         for i=#inputTable+1,#self.output do
+            table.insert(self._output, self.output)
+         end
       end
    else
       self.output = {}
