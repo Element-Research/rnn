@@ -43,8 +43,12 @@ function Sequencer:__init(module)
          "one or many Sequencers. Yes you can encapsulate many non-recurrent"..
          " modules in a single Sequencer (as long as they don't include recurrent modules.") 
       end
+   else
+      self.module.copyInputs = false
+      self.module.copyGradOutputs = false
    end
    self.output = {}
+   self.gradInput = {}
    self.step = 1
 end
 
@@ -65,12 +69,10 @@ function Sequencer:updateOutput(inputTable)
    if self.isRecurrent then
       self.module:forget()
       for step, input in ipairs(inputTable) do
-         self.output[step] = nn.rnn.recursiveCopy(
-            self.output[step], 
-            self.module:updateOutput(input)
-         )
+         self.output[step] = self.module:updateOutput(input)
       end
    else
+      self.output = {}
       for step, input in ipairs(inputTable) do
          -- set output states for this step
          local module = self:getStepModule(step)
