@@ -12,7 +12,7 @@ function SequencerCriterion:__init(criterion)
    self.gradInput = {}
 end
 
-function SequencerCriterion:forward(inputTable, targetTable)
+function SequencerCriterion:updateOutput(inputTable, targetTable)
    self.output = 0
    for i,input in ipairs(inputTable) do
       self.output = self.output + self.criterion:forward(input, targetTable[i])
@@ -20,15 +20,10 @@ function SequencerCriterion:forward(inputTable, targetTable)
    return self.output
 end
 
-function SequencerCriterion:backward(inputTable, targetTable)
+function SequencerCriterion:updateGradInput(inputTable, targetTable)
    for i,input in ipairs(inputTable) do
       self.gradInput[i] = nn.rnn.recursiveCopy(self.gradInput[i], self.criterion:backward(input, targetTable[i]))
    end
    return self.gradInput
-end
-
-function SequencerCriterion:type(type)
-   self.gradInput = nn.rnn.recursiveType(self.gradInput)
-   return self.criterion:type(type)
 end
 
