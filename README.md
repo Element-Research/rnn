@@ -202,6 +202,8 @@ while true do
 end
 ```
 
+Note that `nn.Recurrent` can be decorated with a [nn.Sequencer](#rnn.Sequencer) such that an entire sequence (a table) can be presented with a single `forward/backward` call.
+
 <a name='rnn.LSTM'></a>
 ## LSTM ##
 References :
@@ -260,12 +262,12 @@ the Sequencer forwards an input sequence (a table) into an output sequence (a ta
 It also takes care of calling `forget`, `backwardThroughTime` and other such AbstractRecurrent-specific methods.
 
 The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent instances) and apply it to each 
-input to procude an output table of the same length. 
+input to produce an output table of the same length. 
 This is especially useful for processing variable length sequences (tables).
 
 Note that for now, it is only possible to decorate either recurrent or non-recurrent Modules. 
 Specifically, it cannot handle non-recurrent Modules containing recurrent Modules. 
-Instead, class of Modules should be encapsulated by its own `Sequencer`. This may change in the future.
+Instead, either Modules should be encapsulated by its own `Sequencer`. This may change in the future.
 
 The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
 to be applied from left to right, on each element of the input sequence.
