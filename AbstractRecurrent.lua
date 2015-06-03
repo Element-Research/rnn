@@ -12,6 +12,7 @@ function AbstractRecurrent:__init(rho)
    
    self.fastBackward = true
    self.copyInputs = true
+   self.copyGradOutputs = true
    
    self.inputs = {}
    self.outputs = {}
@@ -40,7 +41,12 @@ end
 function AbstractRecurrent:updateGradInput(input, gradOutput)
    -- Back-Propagate Through Time (BPTT) happens in updateParameters()
    -- for now we just keep a list of the gradOutputs
-   self.gradOutputs[self.step-1] = rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
+   if self.copyGradOutputs then
+      self.gradOutputs[self.step-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
+   else
+      self.gradOutputs[self.step-1] = self.gradOutputs[self.step-1] or gradOutput.new()
+      self.gradOutputs[self.step-1]:set(gradOutput)
+   end
 end
 
 function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
@@ -111,9 +117,11 @@ function AbstractRecurrent:forget(offset)
       if lastStep > self.rho + offset then
          local i = 1 + offset
          for step = lastStep-self.rho+offset,lastStep do
-            self.sharedClone[i] = self.sharedClone[step]
-            self.sharedClone[step] = nil
+            assert(self.sharedClones[i] == nil)
+            self.sharedClones[i] = self.sharedClones[step]
+            self.sharedClones[step] = nil
             -- we keep rho+1 of these : outputs[k]=outputs[k+rho+1]
+            assert(self.outputs[i-1] == nil)
             self.outputs[i-1] = self.outputs[step]
             self.outputs[step] = nil
             i = i + 1
@@ -124,6 +132,8 @@ function AbstractRecurrent:forget(offset)
       if lastStep > self.rho then
          local i = 1
          for step = lastStep-self.rho+1,lastStep do
+            assert(self.inputs[i] == nil)
+            assert(self.gradOutputs[i] == nil)
             self.inputs[i] = self.inputs[step]
             self.gradOutputs[i] = self.gradOutputs[step]
             self.inputs[step] = nil

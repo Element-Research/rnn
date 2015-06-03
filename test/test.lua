@@ -3,102 +3,6 @@ local rnntest = {}
 local precision = 1e-5
 local mytester
 
-function rnntest.Module_sharedClone()
-
-   local function test(mlp, name)
-      mlp:zeroGradParameters()
-      local clone = mlp:clone()
-      clone:share(mlp,"weight","bias","gradWeight","gradBias")
-      
-      local mlp2 = mlp:clone() -- not shared with mlp
-      local clone2 = mlp2:sharedClone(true, true)
-      
-      local input = torch.randn(2,3)
-      local gradOutput = torch.randn(2,4)
-      
-      local output = mlp:forward(input)
-      local gradInput = mlp:backward(input, gradOutput)
-      local output4 = clone:forward(input)
-      local gradInput4 = clone:backward(input, gradOutput)
-      
-      mytester:assertTensorEq(output, output4, 0.00001, name.." updateOutput")
-      mytester:assertTensorEq(gradInput, gradInput4, 0.00001, name.." updateGradInput")
-      
-      local output2 = clone2:forward(input)
-      local gradInput2 = clone2:backward(input, gradOutput)
-      
-      mytester:assertTensorEq(output, output2, 0.00001, name.." updateOutput")
-      mytester:assertTensorEq(gradInput, gradInput2, 0.00001, name.." updateGradInput")
-      
-      local output3 = mlp2:forward(input)
-      local gradInput3 = mlp2:backward(input, gradOutput)
-      
-      mlp:updateParameters(0.1)
-      mlp2:updateParameters(0.1)
-      
-      mytester:assertTensorEq(output3, output2, 0.00001, name.." updateOutput")
-      mytester:assertTensorEq(gradInput3, gradInput2, 0.00001, name.." updateGradInput")
-      
-      local params, gradParams = mlp:parameters()
-      local params4, gradParams4 = clone:parameters()
-      local params2, gradParams2 = clone2:parameters()
-      local params3, gradParams3 = mlp2:parameters()
-      
-      mytester:assert(#params == #params2, name.." num params err")
-      mytester:assert(#params3 == #params2, name.." num params err")
-      mytester:assert(#gradParams == #gradParams2, name.." num gradParams err")
-      mytester:assert(#gradParams == #gradParams3, name.." num gradParams err")
-      
-      for i,param in ipairs(params) do
-         mytester:assertTensorEq(param, params2[i], 0.00001, name.." params2 err "..i)
-         mytester:assertTensorEq(param, params4[i], 0.00001, name.." params4 err "..i)
-         mytester:assertTensorEq(param, params3[i], 0.00001, name.." params3 err "..i)
-         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00001, name.." gradParams2 err "..i)
-         mytester:assertTensorEq(gradParams[i], gradParams4[i], 0.00001, name.." gradParams4 err "..i)
-         mytester:assertTensorEq(gradParams[i], gradParams3[i], 0.00001, name.." gradParams3 err "..i)
-      end
-   end
-   
-   test(nn.Linear(3,4), 'linear')
-   local mlp = nn.Sequential()
-   mlp:add(nn.Linear(3,7))
-   mlp:add(nn.Tanh())
-   mlp:add(nn.Euclidean(7,4))
-   mlp:add(nn.LogSoftMax())
-   test(mlp, 'sequential')
-end
-
-function rnntest.Module_sharedType()
-   local mlp = nn.Sequential()
-   mlp:add(nn.Linear(3,7))
-   mlp:add(nn.Tanh())
-   mlp:add(nn.Euclidean(7,4))
-   mlp:add(nn.LogSoftMax())
-   mlp:zeroGradParameters()
-   local mlp2 = mlp:sharedClone()
-   local concat = nn.ConcatTable()
-   concat:add(mlp):add(mlp2)
-   
-   concat:float(true) -- i.e. sharedType('torch.FloatTensor')
-   
-   local input = torch.randn(2,3):float()
-   local gradOutput = torch.randn(2,4):float()
-   
-   local output = mlp:forward(input)
-   local gradInput = mlp:backwardUpdate(input, gradOutput, 0.1)
-   
-   local params, gradParams = mlp:parameters()
-   local params2, gradParams2 = mlp2:parameters()
-   
-   mytester:assert(#params == #params2, "num params err")
-   mytester:assert(#gradParams == #gradParams2, "num gradParams err")
-   
-   for i,param in ipairs(params) do
-      mytester:assertTensorEq(param, params2[i], 0.00001, " params err "..i)
-      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00001, " gradParams err "..i)
-   end
-end
-
 function rnntest.Recurrent()
    local batchSize = 4
    local inputSize = 10
@@ -259,6 +163,8 @@ function rnntest.Recurrent()
    local params, gradParams = mlp:parameters()
    mytester:assert(#params2 == #params, 'missing parameters')
    mytester:assert(#gradParams == #params, 'missing gradParameters')
+   mytester:assert(#gradParams2 == #params, 'missing gradParameters2')
+   
    for i=1,#params do
       if i > 1 then
          gradParams2[i]:div(nSteps)
@@ -306,7 +212,7 @@ function rnntest.Recurrent()
    
    mlp:forget()
    mlp:zeroGradParameters()
-   local rnn = mlp:float(true) --sharedType
+   local rnn = mlp:float()
    local outputs2 = {}
    for step=1,nSteps do
       rnn:forward(inputSequence[step]:float())
@@ -483,7 +389,7 @@ function rnntest.Sequencer()
    local inputs, outputs, gradOutputs = {}, {}, {}
    for step=1,nSteps do
       inputs[step] = torch.randn(batchSize, inputSize)
-      outputs[step] = rnn:forward(inputs[step])
+      outputs[step] = rnn:forward(inputs[step]):clone()
       gradOutputs[step] = torch.randn(batchSize, outputSize)
       rnn:backward(inputs[step], gradOutputs[step])
    end
@@ -497,6 +403,21 @@ function rnntest.Sequencer()
    for step,output in ipairs(outputs) do
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
       mytester:assertTensorEq(gradInputs3[step], rnn.gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
+   end
+   
+   -- test in evaluation mode
+   rnn3:evaluate()
+   local outputs4 = rnn3:forward(inputs)
+   mytester:assert(#outputs4 == #outputs, "Sequencer evaluate output size err")
+   for step,output in ipairs(outputs) do
+      mytester:assertTensorEq(outputs4[step], output, 0.00001, "Sequencer evaluate output "..step)
+   end
+   local inputs5 = _.clone(inputs)
+   table.remove(inputs5, nSteps) -- remove last input
+   local outputs5 = rnn3:forward(inputs5)
+   mytester:assert(#outputs5 == #outputs - 1, "Sequencer evaluate -1 output size err")
+   for step,output in ipairs(outputs5) do
+      mytester:assertTensorEq(outputs[step], output, 0.00001, "Sequencer evaluate -1 output "..step)
    end
    
    -- test with non-recurrent module
@@ -534,7 +455,7 @@ function rnntest.Sequencer()
       inputs3[i] = inputs[i]:float()
       gradOutputs3[i] = gradOutputs[i]:float()
    end
-   local seq3 = seq:float(true) --sharedType
+   local seq3 = seq:float()
    local outputs3 = seq:forward(inputs3)
    local gradInputs3 = seq:backward(inputs3, gradOutputs3)
    
