@@ -25,7 +25,7 @@ function Repeater:updateOutput(input)
    self.rnn:forget()
    -- TODO make copy outputs optional
    for step=1,self.nStep do
-      self.output[step] = rnn.recursiveCopy(self.output[step], self.rnn:updateOutput(input))
+      self.output[step] = nn.rnn.recursiveCopy(self.output[step], self.rnn:updateOutput(input))
    end
    return self.output
 end
@@ -43,9 +43,9 @@ function Repeater:updateGradInput(input, gradOutput)
    
    for i,currentGradInput in ipairs(self.rnn.gradInputs) do
       if i == 1 then
-         self.gradInput = rnn.recursiveCopy(self.gradInput, currentGradInput)
+         self.gradInput = nn.rnn.recursiveCopy(self.gradInput, currentGradInput)
       else
-         rnn.recursiveAdd(self.gradInput, currentGradInput)
+         nn.rnn.recursiveAdd(self.gradInput, currentGradInput)
       end
    end
    
