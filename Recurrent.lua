@@ -221,6 +221,26 @@ function Recurrent:accGradParametersThroughTime()
    return gradInput
 end
 
+function Recurrent:accUpdateGradParametersThroughInitialModule(lr, rho)
+   if self.initialModule:size() ~= 3 then
+      error("only works with Recurrent:buildInitialModule(). "..
+      "Reimplement this method to work with your subclass."..
+      "Or use accGradParametersThroughTime instead of accUpdateGrad...")
+   end
+   
+   -- backward propagate through first step
+   local input = self.inputs[1]
+   local gradOutput = self.gradOutputs[1]
+   local scale = self.scales[1]
+   local inputModule = self.initialModule:get(1)
+   local startModule = self.initialModule:get(2)
+   local transferModule = self.initialModule:get(3)
+   inputModule:accUpdateGradParameters(input, self.startModule.gradInput, lr*scale/rho)
+   -- startModule's gradParams shouldn't be step-averaged as it is used only once (the reason for this method).
+   startModule:accUpdateGradParameters(inputModule.output, transferModule.gradInput, lr*scale)
+   transferModule:accUpdateGradParameters(startModule.output, gradOutput, lr*scale/rho)
+end
+
 function Recurrent:accUpdateGradParametersThroughTime(lr)
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
@@ -237,14 +257,7 @@ function Recurrent:accUpdateGradParametersThroughTime(lr)
    end
    
    if stop <= 1 then      
-      -- backward propagate through first step
-      local input = self.inputs[1]
-      local gradOutput = self.gradOutputs[1]
-      local scale = self.scales[1]
-      -- TODO : make this survive inheritance
-      self.inputModule:accUpdateGradParameters(input, self.startModule.gradInput, lr*scale/rho)
-      -- startModule's gradParams shouldn't be step-averaged as it is used only once.
-      self.startModule:accUpdateGradParameters(self.inputModule.output, self.transferModule.gradInput, lr*scale)
+      self:accUpdateGradParametersThroughInitialModule(lr, rho)
    end
    
    return gradInput

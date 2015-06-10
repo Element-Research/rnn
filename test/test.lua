@@ -221,6 +221,34 @@ function rnntest.Recurrent()
    local gradInput2 = rnn:backwardThroughTime()
 end
 
+function rnntest.Recurrent_oneElement()
+   -- test sequence of one element
+   local x = torch.rand(200)
+   local target = torch.rand(2)
+
+   local rho = 5
+   local hiddenSize = 100
+   -- RNN
+   local r = nn.Recurrent(
+     hiddenSize, nn.Linear(200,hiddenSize), 
+     nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(), 
+     rho
+   )
+
+   local seq = nn.Sequential()
+   seq:add(r)
+   seq:add(nn.Linear(hiddenSize, 2))
+
+   local criterion = nn.MSECriterion()
+
+   local output = seq:forward(x)
+   local err = criterion:forward(output,target)
+   local gradOutput = criterion:backward(output,target)
+   
+   seq:backward(x,gradOutput)
+   seq:updateParameters(0.01)
+end
+
 function rnntest.Recurrent_TestTable()
    -- Set up RNN where internal state is a table.
    -- Trivial example is same RNN from rnntest.Recurrent test
