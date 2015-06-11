@@ -282,15 +282,3 @@ function LSTM:accUpdateGradParametersThroughTime(lr)
    return gradInput
 end
 
-function LSTM:type(type)
-   local modules = self.modules
-   self.modules = {}
-   for i,modules in ipairs{modules, self.sharedClones} do
-      for j, module in pairs(modules) do
-         table.insert(self.modules, module)
-      end
-   end
-   parent.type(self, type)
-   self.modules = modules
-   return self
-end

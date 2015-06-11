@@ -271,7 +271,7 @@ function Recurrent:forget()
    parent.forget(self, 1)
 end
 
-function Recurrent:type(type)
+function Recurrent:includingSharedClones(f)
    local modules = self.modules
    self.modules = {}
    for i,modules in ipairs{modules, self.sharedClones, {self.initialModule}} do
@@ -279,9 +279,9 @@ function Recurrent:type(type)
          table.insert(self.modules, module)
       end
    end
-   parent.type(self, type)
+   local r = f()
    self.modules = modules
-   return self
+   return r
 end
 
 function Recurrent:__tostring__()

@@ -149,6 +149,37 @@ function AbstractRecurrent:forget(offset)
    self.step = 1
 end
 
+function AbstractRecurrent:includingSharedClones(f)
+   local modules = self.modules
+   self.modules = {}
+   for i,modules in ipairs{modules, self.sharedClones} do
+      for j, module in pairs(modules) do
+         table.insert(self.modules, module)
+      end
+   end
+   local r = f()
+   self.modules = modules
+   return r
+end
+
+function AbstractRecurrent:type(type)
+   return self:includingSharedClones(function()
+      return parent.type(self, type)
+   end)
+end
+
+function AbstractRecurrent:training()
+   return self:includingSharedClones(function()
+      return parent.training(self)
+   end)
+end
+
+function AbstractRecurrent:evaluate()
+   return self:includingSharedClones(function()
+      return parent.evaluate(self)
+   end)
+end
+
 -- backwards compatibility
 AbstractRecurrent.recursiveResizeAs = rnn.recursiveResizeAs
 AbstractRecurrent.recursiveSet = rnn.recursiveSet
