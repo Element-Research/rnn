@@ -588,6 +588,83 @@ function rnntest.SequencerCriterion()
    end
 end
 
+function rnntest.RecurrentVisualAttention()
+   if not image then return end -- needs the image package
+   local opt = {
+      sensorDepth = 3,
+      sensorHiddenSize = 20,
+      sensorPatchSize = 8,
+      locatorHiddenSize = 20,
+      hiddenSize = 20,
+      rho = 5,
+      locatorStd = 0.1,
+      inputSize = 28,
+      nClass = 10,
+      batchSize = 4
+   }
+   -- glimpse network (input layer of the rnn)
+   local glimpseSensor = nn.Sequential()
+   glimpseSensor:add(nn.Collapse(3))
+   glimpseSensor:add(nn.Linear(1*(opt.sensorPatchSize^2)*opt.sensorDepth, opt.sensorHiddenSize))
+   glimpseSensor:add(nn.ReLU())
+
+   local locationSensor = nn.Sequential()
+   locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
+   locationSensor:add(nn.ReLU())
+
+   local para = nn.ParallelTable()
+   para:add(locationSensor):add(glimpseSensor)
+
+   local glimpse = nn.Sequential()
+   glimpse:add(para)
+   glimpse:add(nn.JoinTable(1, 1))
+   glimpse:add(nn.Linear(opt.sensorHiddenSize+opt.locatorHiddenSize, opt.hiddenSize))
+
+   -- recurrent neural network
+   local rnn = nn.Recurrent(
+      opt.hiddenSize, 
+      glimpse,
+      nn.Linear(opt.hiddenSize, opt.hiddenSize), 
+      nn.ReLU(), 99999
+   )
+
+   -- output layer (actions)
+   local locatorSize = 28-opt.sensorPatchSize+1
+   local locator = nn.Sequential()
+   locator:add(nn.Linear(opt.hiddenSize, 2))
+   locator:add(nn.ReinforceNormal(locatorSize*opt.locatorStd)) -- uses REINFORCE learning rule
+   locator:add(nn.Clip(1,locatorSize))
+
+   local classifier = nn.Sequential()
+   classifier:add(nn.Linear(opt.hiddenSize, opt.nClass))
+   classifier:add(nn.SoftMax())
+
+   -- model is a reinforcement learning agent
+   local agent = nn.RecurrentVisualAttention(rnn, classifier, locator, opt.rho, {opt.hiddenSize})
+   agent:initGlimpseSensor(opt.sensorPatchSize, opt.sensorDepth, opt.sensorScale)
+   
+   local mnist = torch.load(paths.concat(sys.fpath(), "mnistsample.t7"))
+   local input = mnist:narrow(1,1,opt.batchSize):resize(opt.batchSize, 1, 28, 28):double()
+   local output = agent:forward(input)
+   
+   -- test glimpseSensor : save sample glimpses to disk (verify visually)
+   local testPath = "/tmp/rfa-test"
+   paths.mkdir(testPath)
+   for step, glimpse in ipairs(agent.glimpse) do
+      local glimpse = glimpse:view(glimpse:size(1), opt.sensorDepth, -1, glimpse:size(3), glimpse:size(4))
+      local location = agent.location[step]
+      for i=1,opt.batchSize do
+         local xy = location[i]
+         local x, y = xy[1], xy[2]
+         for j=1,opt.sensorDepth do
+            image.save(paths.concat(testPath, "glimpse_s"..step.."b"..i.."_d"..j.."_x"..x.."_y"..y..".png"), glimpse[{i,j,{},{},{}}])
+         end
+      end
+   end
+   
+   
+end
+
 
 function rnn.test(tests)
    mytester = torch.Tester()
