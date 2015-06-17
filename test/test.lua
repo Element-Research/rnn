@@ -436,6 +436,7 @@ function rnntest.Sequencer()
    -- test in evaluation mode
    rnn3:evaluate()
    local outputs4 = rnn3:forward(inputs)
+   local outputs4_ = _.map(outputs4, function(k,v) return v:clone() end)
    mytester:assert(#outputs4 == #outputs, "Sequencer evaluate output size err")
    for step,output in ipairs(outputs) do
       mytester:assertTensorEq(outputs4[step], output, 0.00001, "Sequencer evaluate output "..step)
@@ -446,6 +447,21 @@ function rnntest.Sequencer()
    mytester:assert(#outputs5 == #outputs - 1, "Sequencer evaluate -1 output size err")
    for step,output in ipairs(outputs5) do
       mytester:assertTensorEq(outputs[step], output, 0.00001, "Sequencer evaluate -1 output "..step)
+   end
+   
+   -- test evaluation with remember 
+   rnn3:evaluate()
+   rnn3:forget() -- flush out current buffers.
+   rnn3:remember()
+   local inputsA, inputsB = {inputs[1],inputs[2],inputs[3]}, {inputs[4],inputs[5]}
+   local outputsA = _.map(rnn3:forward(inputsA), function(k,v) return v:clone() end)
+   local outputsB = rnn3:forward(inputsB)
+   mytester:assert(#outputsA == 3, "Sequencer evaluate-remember output size err A")
+   mytester:assert(#outputsB == 2, "Sequencer evaluate-remember output size err B")
+   local outputsAB = {unpack(outputsA)}
+   outputsAB[4], outputsAB[5] = unpack(outputsB)
+   for step,output in ipairs(outputs4_) do
+      mytester:assertTensorEq(outputsAB[step], output, 0.00001, "Sequencer evaluate-remember output "..step)
    end
    
    -- test with non-recurrent module

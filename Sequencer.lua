@@ -55,6 +55,8 @@ function Sequencer:__init(module)
    -- so that these buffers aren't serialized :
    self.dpnn_mediumEmpty = _.clone(self.dpnn_mediumEmpty)
    table.insert(self.dpnn_mediumEmpty, '_output')
+   -- default is to forget previous inputs before each forward()
+   self._remember = false
 end
 
 function Sequencer:getStepModule(step)
@@ -71,25 +73,28 @@ end
 function Sequencer:updateOutput(inputTable)
    assert(torch.type(inputTable) == 'table', "expecting input table")
    if self.isRecurrent then
-      self.module:forget()
-      if self.train ~= false then
+      if self.train ~= false then -- training
+         self.module:forget()
          self.output = {}
          for step, input in ipairs(inputTable) do
             self.output[step] = self.module:updateOutput(input)
          end
-      else
+      else -- evaluation
+         if not self._remember then
+            self.module:forget()
+         end
          -- during evaluation, recurrent modules reuse memory (i.e. outputs)
-         -- so we need to copy each into our own
+         -- so we need to copy each output into our own
          for step, input in ipairs(inputTable) do
             self.output[step] = nn.rnn.recursiveCopy(
                self.output[step] or table.remove(self._output, 1), 
                self.module:updateOutput(input)
             )
-            self.output[step] = self.module:updateOutput(input)
          end
          -- remove extra output tensors (save for later)
          for i=#inputTable+1,#self.output do
-            table.insert(self._output, self.output)
+            table.insert(self._output, self.output[i])
+            self.output[i] = nil
          end
       end
    else
@@ -175,6 +180,20 @@ function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
    end
 end
 
+-- Turn this on to feed long sequences using multiple forwards.
+-- Only affects evaluation (self.train = false).
+-- Essentially, forget() isn't called on rnn module when remember is on
+function Sequencer:remember(remember)
+   self._remember = (remember == nil) and true or false
+end
+
+-- You can use this to manually forget.
+function Sequencer:forget()
+   if self.module.forget then
+      self.module:forget()
+   end
+end
+
 function Sequencer:type(type)
    local modules = self.modules
    self.modules = {}
@@ -186,6 +205,25 @@ function Sequencer:type(type)
    parent.type(self, type)
    self.modules = modules
    return self
+end
+
+function Sequencer:training()
+   if self.isRecurrent and self.train == false then
+      -- empty output table (tensor mem is managed by seq)
+      for i,output in ipairs(self.output) do
+         table.insert(self._output, output)
+         self.output[i] = nil
+      end
+   end
+   parent.training(self)
+end
+
+function Sequencer:evaluate()
+   if self.isRecurrent and self.train ~= false then
+      -- empty output table (tensor mem is managed by rnn)
+      self.output = {}
+   end
+   parent.evaluate(self)
 end
 
 function Sequencer:__tostring__()
