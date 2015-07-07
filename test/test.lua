@@ -402,12 +402,12 @@ end
 
 function rnntest.Sequencer()
    local batchSize = 4
-   local inputSize = 10
+   local dictSize = 100
    local outputSize = 7
    local nSteps = 5 
    
    -- test with recurrent module
-   local inputModule = nn.Euclidean(inputSize, outputSize)
+   local inputModule = nn.Dictionary(dictSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
    local feedbackModule = nn.Euclidean(outputSize, outputSize)
@@ -417,7 +417,7 @@ function rnntest.Sequencer()
    
    local inputs, outputs, gradOutputs = {}, {}, {}
    for step=1,nSteps do
-      inputs[step] = torch.randn(batchSize, inputSize)
+      inputs[step] = torch.IntTensor(batchSize):random(1,dictSize)
       outputs[step] = rnn:forward(inputs[step]):clone()
       gradOutputs[step] = torch.randn(batchSize, outputSize)
       rnn:backward(inputs[step], gradOutputs[step])
@@ -466,6 +466,11 @@ function rnntest.Sequencer()
    end
    
    -- test with non-recurrent module
+   local inputSize = 10
+   local inputs = {}
+   for step=1,nSteps do
+      inputs[step] = torch.randn(batchSize, inputSize)
+   end
    local linear = nn.Euclidean(inputSize, outputSize)
    local seq, outputs, gradInputs
    for k=1,3 do
