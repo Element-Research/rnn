@@ -5,11 +5,11 @@ local mytester
 
 function rnntest.Recurrent()
    local batchSize = 4
-   local inputSize = 10
+   local dictSize = 100
    local hiddenSize = 12
    local outputSize = 7
    local nSteps = 5 
-   local inputModule = nn.Linear(inputSize, outputSize)
+   local inputModule = nn.Dictionary(dictSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
    local feedbackModule = nn.Sequential()
@@ -34,7 +34,7 @@ function rnntest.Recurrent()
    mlp7.rho = nSteps - 1
    local inputSequence = {}
    for step=1,nSteps do
-      local input = torch.randn(batchSize, inputSize)
+      local input = torch.IntTensor(batchSize):random(1,dictSize)
       inputSequence[step] = input
       local gradOutput
       if step ~= nSteps then
@@ -101,10 +101,9 @@ function rnntest.Recurrent()
    local mlp2 -- this one will simulate rho = nSteps
    local outputModules = {}
    for step=1,nSteps do
-      local inputModule_ = inputModule:clone()
+      local inputModule_ = inputModule:sharedClone()
       local outputModule = transferModule:clone()
       table.insert(outputModules, outputModule)
-      inputModule_:share(inputModule, 'weight', 'gradWeight', 'bias', 'gradBias')
       if step == 1 then
          local initialModule = nn.Sequential()
          initialModule:add(inputModule_)
@@ -161,11 +160,11 @@ function rnntest.Recurrent()
    mlp3:add(startModule):add(inputModule):add(feedbackModule)
    local params2, gradParams2 = mlp3:parameters()
    local params, gradParams = mlp:parameters()
-   mytester:assert(#params2 == #params, 'missing parameters')
-   mytester:assert(#gradParams == #params, 'missing gradParameters')
-   mytester:assert(#gradParams2 == #params, 'missing gradParameters2')
+   mytester:assert(#_.keys(params2) == #_.keys(params), 'missing parameters')
+   mytester:assert(#_.keys(gradParams) == #_.keys(params), 'missing gradParameters')
+   mytester:assert(#_.keys(gradParams2) == #_.keys(params), 'missing gradParameters2')
    
-   for i=1,#params do
+   for i,v in pairs(params) do
       if i > 1 then
          gradParams2[i]:div(nSteps)
       end
@@ -177,9 +176,9 @@ function rnntest.Recurrent()
    mlp9:add(startModule8):add(inputModule8):add(feedbackModule8)
    local params9, gradParams9 = mlp9:parameters()
    local params7, gradParams7 = mlp7:parameters()
-   mytester:assert(#params9 == #params7, 'missing parameters')
-   mytester:assert(#gradParams7 == #params7, 'missing gradParameters')
-   for i=1,#params do
+   mytester:assert(#_.keys(params9) == #_.keys(params7), 'missing parameters')
+   mytester:assert(#_.keys(gradParams7) == #_.keys(params7), 'missing gradParameters')
+   for i,v in pairs(params7) do
       if i > 1 then
          gradParams9[i]:div(nSteps-1)
       end
@@ -193,11 +192,13 @@ function rnntest.Recurrent()
    local params4 = mlp4:parameters()
    local params5 = mlp5:parameters()
    local params = mlp:parameters()
-   mytester:assert(#params4 == #params, 'missing parameters')
-   mytester:assert(#params5 == #params, 'missing parameters')
-   for i=1,#params do
-      mytester:assertTensorEq(params[i], params4[i], 0.000001, 'backwardThroughTime error ' .. i)
-      mytester:assertTensorNe(params[i], params5[i], 0.0000000001, 'backwardThroughTime error ' .. i)
+   mytester:assert(#_.keys(params4) == #_.keys(params), 'missing parameters')
+   mytester:assert(#_.keys(params5) ~= #_.keys(params), 'missing parameters') -- because of nn.Dictionary (it has sparse params)
+   for k,v in pairs(params) do
+      mytester:assertTensorEq(params[k], params4[k], 0.000001, 'backwardThroughTime error ' .. i)
+      if params5[k] then
+         mytester:assertTensorNe(params[k], params5[k], 0.0000000001, 'backwardThroughTime error ' .. i)
+      end
    end
    
    -- should call backwardUpdateThroughTime()
@@ -205,8 +206,8 @@ function rnntest.Recurrent()
    
    local params5 = mlp5:parameters()
    local params = mlp:parameters()
-   mytester:assert(#params5 == #params, 'missing parameters')
-   for i=1,#params do
+   mytester:assert(#_.keys(params5) == #_.keys(params), 'missing parameters')
+   for i,v in pairs(params) do
       mytester:assertTensorEq(params[i], params5[i], 0.000001, 'backwardUpdateThroughTime error ' .. i)
    end
    
