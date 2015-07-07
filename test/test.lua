@@ -591,7 +591,7 @@ function rnntest.SequencerCriterion()
    local outputSize = 7
    local nSteps = 5  
    local criterion = nn.ClassNLLCriterion()
-   local sc = nn.SequencerCriterion(criterion)
+   local sc = nn.SequencerCriterion(criterion:clone())
    local input = {}
    local target = {}
    local err2 = 0
@@ -608,6 +608,7 @@ function rnntest.SequencerCriterion()
    for i=1,nSteps do
       mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "SequencerCriterion backward err "..i)
    end
+   mytester:assert(sc.isStateless, "SequencerCriterion stateless error")
 end
 
 

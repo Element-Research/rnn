@@ -325,6 +325,8 @@ will be applied to the `criterion`.
 The output of `forward` is the sum of all individual losses in the sequence.
 This is useful when used in conjuction with a [Sequencer](#rnn.Sequencer).
 
+WARNING : assumes that the decorated criterion is stateless, i.e. a `backward` shouldn't need to be preceded by a commensurate `forward`.
+
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
