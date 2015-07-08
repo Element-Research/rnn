@@ -48,7 +48,6 @@ function Sequencer:__init(module)
       self.module.copyGradOutputs = false
    end
    self.output = {}
-   self.step = 1
    
    -- table of buffers used for evaluation
    self._output = {}
@@ -226,15 +225,4 @@ function Sequencer:evaluate()
    parent.evaluate(self)
 end
 
-function Sequencer:__tostring__()
-   local tab = '  '
-   local line = '\n'
-   local str = torch.type(self) .. ' {' .. line
-   str = str .. tab .. '[input(1), input(2), ..., input(T)]'.. line
-   str = str .. tab .. '   V           V            V      '.. line
-   str = str .. tab .. tostring(self.modules[1]):gsub(line, line .. tab) .. line
-   str = str .. tab .. '   V           V            V      '.. line
-   str = str .. tab .. '[output(1),output(2),...,output(T)]' .. line
-   str = str .. '}'
-   return str
-end
+Sequencer.__tostring__ = nn.Decorator.__tostring__

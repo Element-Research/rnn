@@ -15,8 +15,10 @@ torch.include('rnn', 'ZeroGrad.lua')
 torch.include('rnn', 'AbstractRecurrent.lua')
 torch.include('rnn', 'Recurrent.lua')
 torch.include('rnn', 'LSTM.lua')
+
 torch.include('rnn', 'Repeater.lua')
 torch.include('rnn', 'Sequencer.lua')
+torch.include('rnn', 'BiSequencer.lua')
 
 -- recurrent criterions:
 torch.include('rnn', 'RepeaterCriterion.lua')
