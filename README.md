@@ -8,6 +8,7 @@ This library includes documentation for the following objects:
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
+ * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
@@ -300,6 +301,41 @@ This behavior is only applicable to decorated AbstractRecurrent `modules`.
 
 ### forget() ###
 Calls the decorated AbstractRecurrent module's `forget` method.
+
+<a name='rnn.BiSequencer'></a>
+## BiSequencer ##
+Applies encapsulated `fwd` and `bwd` rnns to an input sequence in forward and reverse order.
+It is used for implementing Bidirectional RNNs and LSTMs.
+
+```lua
+brnn = nn.BiSequencer(fwd, [bwd, merge])
+```
+
+The input to the module is a sequence (a table) of tensors
+and the output is a sequence (a table) of tensors of the same length.
+Applies a `fwd` rnn (an [AbstractRecurrent](#rnn.AbstractRecurrent) instance to each element in the sequence in
+forward order and applies the `bwd` rnn in reverse order (from last element to first element).
+The `bwd` rnn defaults to:
+
+```lua
+bwd = fwd:clone()
+bwd:reset()
+```
+
+For each step (in the original sequence), the outputs of both rnns are merged together using
+the `merge` module (defaults to `nn.JoinTable(1,1)`). 
+If `merge` is a number, it specifies the [JoinTable](https://github.com/torch/nn/blob/master/doc/table.md#nn.JoinTable)
+constructor's `nInputDim` argument. Such that the `merge` module is then initialized as :
+
+```lua
+merge = nn.JoinTable(1,merge)
+```
+
+Internally, the `BiSequencer` is implemented by decorating a structure of modules that makes 
+use of 3 Sequencers for the forward, backward and merge modules.
+
+Similarly to a [Sequencer](#rnn.Sequencer), the sequences in a batch must have the same size.
+But the sequence length of each batch can vary.
 
 <a name='rnn.Repeater'></a>
 ## Repeater ##

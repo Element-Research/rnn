@@ -48,7 +48,6 @@ function Sequencer:__init(module)
       self.module.copyGradOutputs = false
    end
    self.output = {}
-   self.step = 1
    
    -- table of buffers used for evaluation
    self._output = {}
