@@ -9,6 +9,7 @@ This library includes documentation for the following objects:
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
+ * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
@@ -336,6 +337,58 @@ use of 3 Sequencers for the forward, backward and merge modules.
 
 Similarly to a [Sequencer](#rnn.Sequencer), the sequences in a batch must have the same size.
 But the sequence length of each batch can vary.
+
+<a name='rnn.BiSequencerLM'></a>
+## BiSequencerLM ##
+
+Applies encapsulated `fwd` and `bwd` rnns to an input sequence in forward and reverse order.
+It is used for implementing Bidirectional RNNs and LSTMs for Language Models (LM).
+
+```lua
+brnn = nn.BiSequencerLM(fwd, [bwd, merge])
+```
+
+The input to the module is a sequence (a table) of tensors
+and the output is a sequence (a table) of tensors of the same length.
+Applies a `fwd` rnn (an [AbstractRecurrent](#rnn.AbstractRecurrent) instance to the 
+first `N-1` elements in the sequence in forward order.
+Applies the `bwd` rnn in reverse order to the last `N-1` elements (from second-to-last element to first element).
+This is the main difference of this module with the [BiSequencer](#rnn.BiSequencer).
+The latter cannot be used for language modeling because the `bwd` rnn would be trained to predict the input it had just be fed as input.
+
+[BiDirectionalLM]!(doc/image/bidirectionallm.png)
+
+The `bwd` rnn defaults to:
+
+```lua
+bwd = fwd:clone()
+bwd:reset()
+```
+
+While the `fwd` rnn will output representations for the last `N-1` steps,
+the `bwd` rnn will output representations for the first `N-1` steps.
+The missing outputs for each rnn ( the first step for the `fwd`, the last step for the `bwd`)
+will be filled with zero Tensors of the same size the commensure rnn's outputs.
+This way they can be merged. If `nn.JoinTable` is used (the default), then the first 
+and last output elements will be padded with zeros for the missing `fwd` and `bwd` rnn outputs, respectively.
+
+For each step (in the original sequence), the outputs of both rnns are merged together using
+the `merge` module (defaults to `nn.JoinTable(1,1)`). 
+If `merge` is a number, it specifies the [JoinTable](https://github.com/torch/nn/blob/master/doc/table.md#nn.JoinTable)
+constructor's `nInputDim` argument. Such that the `merge` module is then initialized as :
+
+```lua
+merge = nn.JoinTable(1,merge)
+```
+
+Similarly to a [Sequencer](#rnn.Sequencer), the sequences in a batch must have the same size.
+But the sequence length of each batch can vary.
+
+Note that LMs implemented with this module will not be classical LMs as they won't measure the 
+probability of a word given the previous words. Instead, they measure the probabiliy of a word
+given the surrounding words, i.e. context. While for mathematical reasons you may not be able to use this to measure the 
+probability of a sequence of words (like a sentence), 
+you can still measure the pseudo-likeliness of such a sequence (see [this](http://arxiv.org/pdf/1504.01575.pdf) for a discussion).
 
 <a name='rnn.Repeater'></a>
 ## Repeater ##

@@ -3,14 +3,10 @@
 -- Encapsulates forward, backward and merge modules. 
 -- Input is a sequence (a table) of tensors.
 -- Output is a sequence (a table) of tensors of the same length.
--- Applies a forward rnn to the first each element in the sequence in
--- forward order and applies a backward rnn in reverse order.
--- For each step, the outputs of both rnn are merged together using
--- the merge module (defaults to nn.JoinTable(1,1)).
--- The sequences in a batch must have the same size.
--- But the sequence length of each batch can vary.
--- It is implemented by decorating a structure of modules that makes 
--- use of 3 Sequencers for the forward, backward and merge modules.
+-- Applies a `fwd` rnn instance to the first `N-1` elements in the 
+-- sequence in forward order.
+-- Applies the `bwd` rnn in reverse order to the last `N-1` elements 
+-- (from second-to-last element to first element).
 ------------------------------------------------------------------------
 local BiSequencerLM, parent = torch.class('nn.BiSequencerLM', 'nn.Container')
 
