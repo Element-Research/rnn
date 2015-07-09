@@ -356,7 +356,7 @@ Applies the `bwd` rnn in reverse order to the last `N-1` elements (from second-t
 This is the main difference of this module with the [BiSequencer](#rnn.BiSequencer).
 The latter cannot be used for language modeling because the `bwd` rnn would be trained to predict the input it had just be fed as input.
 
-[BiDirectionalLM]!(doc/image/bidirectionallm.png)
+![BiDirectionalLM](doc/image/bidirectionallm.png)
 
 The `bwd` rnn defaults to:
 
