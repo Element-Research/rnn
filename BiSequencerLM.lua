@@ -138,9 +138,9 @@ function BiSequencerLM:__tostring__()
    local last = '   ... -> '
    local str = torch.type(self)
    str = str .. ' {'
-   str = str .. line .. tab .. '(  fwd  ): ' .. tostring(self.modules[i]):gsub(line, line .. tab .. ext)
-   str = str .. line .. tab .. '(  bwd  ): ' .. tostring(self.modules[i]):gsub(line, line .. tab .. ext)
-   str = str .. line .. tab .. '( merge ): ' .. tostring(self.modules[i]):gsub(line, line .. tab .. extlast)
+   str = str .. line .. tab .. '(  fwd  ): ' .. tostring(self._fwd):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. '(  bwd  ): ' .. tostring(self._bwd):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. '( merge ): ' .. tostring(self._merge):gsub(line, line .. tab .. ext)
    str = str .. line .. '}'
    return str
 end
