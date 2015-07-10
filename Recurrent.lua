@@ -284,6 +284,30 @@ function Recurrent:includingSharedClones(f)
    return r
 end
 
+function Recurrent:reinforce(reward)
+   if torch.type(reward) == 'table' then
+      error"Recurrent Error : step-wise rewards not yet supported"
+   end
+   
+   local rho = math.min(self.rho, self.step-1)
+   local stop = self.step - rho
+   for step=self.step-1,math.max(stop,2),-1 do
+      local recurrentModule = self:getStepModule(step)
+      recurrentModule:reinforce(reward)
+   end
+   
+   if stop <= 1 then      
+      self.initialModule:reinforce(reward)
+      table.insert(self.gradInputs, 1, gradInput)
+   end
+   
+   local modules = self.modules
+   self.modules = nil
+   local ret = parent.reinforce(self, reward)
+   self.modules = modules
+   return ret
+end
+
 function Recurrent:__tostring__()
    local tab = '  '
    local line = '\n'

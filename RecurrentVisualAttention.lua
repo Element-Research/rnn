@@ -48,7 +48,7 @@ function RVA:initGlimpseSensor(glimpseSize, glimpseDepth, glimpseScale)
    assert(torch.type(self.glimpseScale) == 'number')
 end
 
--- a bandwidth limited sensor which focuses on a location
+-- a bandwidth limited sensor which focuses on a location.
 -- locations index the x,y coord of the top-left corner
 function RVA:glimpseSensor(glimpse, input, location)
    assert(self.glimpseSize, "glimpseSensor not initialize")
@@ -152,6 +152,7 @@ function RVA:updateOutput(input)
       -- the locator is updated via the REINFORCE rule
       self.output[step] = main:updateOutput(self.hidden[step])
    end
+   
    return self.output
 end
 
@@ -227,8 +228,22 @@ function RVA:annotate(input)
 end
 
 function RVA:reinforce(reward)
-   parent.reinforce(self, reward)
-   error"TODO : dont forget to reward sharedClones"
+   if torch.type(reward) == 'table' then
+      error"Sequencer Error : step-wise rewards not yet supported"
+   end
+   
+   self.rnn:reinforce(reward)
+   for step=1,self.nStep do
+      local main, locator = self:getStepModule(step)
+      main:reinforce(reward)
+      locator:reinforce(reward)
+   end 
+   
+   local modules = self.modules
+   self.modules = nil
+   local ret = parent.reinforce(self, reward)
+   self.modules = modules
+   return ret
 end
 
 function RVA:type(type)
@@ -239,17 +254,4 @@ function RVA:type(type)
    self._pad = nil
    self._byte = nil
    return parent.type(self, type)
-end
-
-function RVA:__tostring__()
-   local tab = '  '
-   local line = '\n'
-   local str = torch.type(self) .. ' {' .. line
-   str = str .. tab .. '[  input,    input,  ...,  input  ]'.. line
-   str = str .. tab .. '     V         V             V     '.. line
-   str = str .. tab .. tostring(self.modules[1]):gsub(line, line .. tab) .. line
-   str = str .. tab .. '     V         V             V     '.. line
-   str = str .. tab .. '[output(1),output(2),...,output('..self.nStep..')]' .. line
-   str = str .. '}'
-   return str
 end

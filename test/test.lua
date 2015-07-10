@@ -759,7 +759,7 @@ function rnntest.SequencerCriterion()
 end
 
 function rnntest.RecurrentVisualAttention()
-   if not image then return end -- needs the image package
+   if not pcall(function() require "image" end) then return end -- needs the image package
    local opt = {
       sensorDepth = 3,
       sensorHiddenSize = 20,
