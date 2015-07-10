@@ -615,6 +615,88 @@ function rnntest.BiSequencer()
    end
 end
 
+function rnntest.BiSequencerLM()
+   local hiddenSize = 8
+   local batchSize = 4
+   local nStep = 3
+   local fwd = nn.LSTM(hiddenSize, hiddenSize)
+   local bwd = nn.LSTM(hiddenSize, hiddenSize)
+   fwd:zeroGradParameters()
+   bwd:zeroGradParameters()
+   local brnn = nn.BiSequencerLM(fwd:clone(), bwd:clone())
+   local inputs, gradOutputs = {}, {}
+   for i=1,nStep do
+      inputs[i] = torch.randn(batchSize, hiddenSize)
+      gradOutputs[i] = torch.randn(batchSize, hiddenSize*2)
+   end
+   local outputs = brnn:forward(inputs)
+   local gradInputs = brnn:backward(inputs, gradOutputs)
+   mytester:assert(#inputs == #outputs, "BiSequencerLM #outputs error")
+   mytester:assert(#inputs == #gradInputs, "BiSequencerLM #outputs error")
+   
+   -- forward
+   local fwdSeq = nn.Sequencer(fwd)
+   local bwdSeq = nn.Sequencer(bwd)
+   local merge = nn.Sequential():add(nn.ZipTable()):add(nn.Sequencer(nn.JoinTable(1,1)))
+   
+   local fwdOutputs = fwdSeq:forward(_.first(inputs, #inputs-1))
+   local bwdOutputs = _.reverse(bwdSeq:forward(_.reverse(_.last(inputs, #inputs-1))))
+   
+   local fwdMergeInputs = _.clone(fwdOutputs)
+   table.insert(fwdMergeInputs, 1, fwdOutputs[1]:clone():zero())
+   local bwdMergeInputs = _.clone(bwdOutputs)
+   table.insert(bwdMergeInputs, bwdOutputs[1]:clone():zero())
+   
+   local outputs2 = merge:forward{fwdMergeInputs, bwdMergeInputs}
+   
+   for i,output in ipairs(outputs) do
+      mytester:assertTensorEq(output, outputs2[i], 0.000001, "BiSequencerLM output err "..i)
+   end
+   
+   -- backward
+   local mergeGradInputs = merge:backward({fwdMergeInputs, bwdMergeInputs}, gradOutputs)
+   
+   local bwdGradInputs = _.reverse(bwdSeq:backward(_.reverse(_.last(inputs, #inputs-1)), _.reverse(_.first(mergeGradInputs[2], #inputs-1))))
+   local fwdGradInputs = fwdSeq:backward(_.first(inputs, #inputs-1), _.last(mergeGradInputs[1], #inputs-1))
+   
+   for i,gradInput in ipairs(gradInputs) do
+      local gradInput2
+      if i == 1 then
+         gradInput2 = fwdGradInputs[1]
+      elseif i == #inputs then
+         gradInput2 = bwdGradInputs[#inputs-1]
+      else
+         gradInput2 = fwdGradInputs[i]:clone()
+         gradInput2:add(bwdGradInputs[i-1])
+      end
+      mytester:assertTensorEq(gradInput, gradInput2, 0.000001, "BiSequencerLM gradInput err "..i)
+   end
+   
+   
+   -- params
+   local brnn2 = nn.Sequential():add(fwd):add(bwd)
+   local params, gradParams = brnn:parameters()
+   local params2, gradParams2 = brnn2:parameters()
+   mytester:assert(#params == #params2, "BiSequencerLM #params err")
+   mytester:assert(#params == #gradParams, "BiSequencerLM #gradParams err")
+   for i,param in pairs(params) do
+      mytester:assertTensorEq(param, params2[i], 0.000001, "BiSequencerLM params err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, "BiSequencerLM gradParams err "..i)
+   end
+   
+   -- updateParameters
+   brnn:updateParameters(0.1)
+   brnn2:updateParameters(0.1)
+   brnn:zeroGradParameters()
+   brnn2:zeroGradParameters()
+   for i,param in pairs(params) do
+      mytester:assertTensorEq(param, params2[i], 0.000001, "BiSequencerLM params update err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, "BiSequencerLM gradParams zero err "..i)
+   end
+end
+
+
+
 function rnntest.Repeater()
    local batchSize = 4
    local inputSize = 10

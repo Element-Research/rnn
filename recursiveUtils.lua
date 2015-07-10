@@ -96,6 +96,20 @@ function rnn.recursiveNormal(t2)
    return t2
 end
 
+function rnn.recursiveFill(t2, val)
+   if torch.type(t2) == 'table' then
+      for key,_ in pairs(t2) do
+         t2[key] = rnn.recursiveNormal(t2[key], val)
+      end
+   elseif torch.isTensor(t2) then
+      t2:fill(val)
+   else
+      error("expecting tensor or table thereof. Got "
+           ..torch.type(t2).." instead")
+   end
+   return t2
+end
+
 function rnn.recursiveType(param, type_str)
    if torch.type(param) == 'table' then
       for i = 1, #param do

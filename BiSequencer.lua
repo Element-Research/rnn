@@ -40,24 +40,27 @@ function BiSequencer:__init(forward, backward, merge)
       error"BiSequencer: expecting nn.Module or number instance at arg 3"
    end
    
-   self.forwardSequencer = nn.Sequencer(self.forwardModule)
-   self.backwardSequencer = nn.Sequencer(self.backwardModule)
-   self.mergeSequencer = nn.Sequencer(self.mergeModule)
+   self.fwdSeq = nn.Sequencer(self.forwardModule)
+   self.bwdSeq = nn.Sequencer(self.backwardModule)
+   self.mergeSeq = nn.Sequencer(self.mergeModule)
    
    local backward = nn.Sequential()
    backward:add(nn.ReverseTable()) -- reverse
-   backward:add(self.backwardSequencer)
+   backward:add(self.bwdSeq)
    backward:add(nn.ReverseTable()) -- unreverse
    
    local concat = nn.ConcatTable()
-   concat:add(self.forwardSequencer):add(backward)
+   concat:add(self.fwdSeq):add(backward)
    
    local brnn = nn.Sequential()
    brnn:add(concat)
    brnn:add(nn.ZipTable())
-   brnn:add(self.mergeSequencer)
+   brnn:add(self.mergeSeq)
    
    parent.__init(self, brnn)
+   
+   self.output = {}
+   self.gradInput = {}
 end
 
 -- Turn this on to feed long sequences using multiple forwards.
@@ -65,14 +68,14 @@ end
 -- Essentially, forget() isn't called on rnn module when remember is on
 function BiSequencer:remember(remember)
    self._remember = (remember == nil) and true or false
-   self.forwardSequencer:remember(self._remember)
-   self.backwardSequencer:remember(self._remember)
-   self.mergeSequencer:remember(self._remember)
+   self.fwdSeq:remember(self._remember)
+   self.bwdSeq:remember(self._remember)
+   self.mergeSeq:remember(self._remember)
 end
 
 -- You can use this to manually forget.
 function BiSequencer:forget()
-   self.forwardSequencer:forget()
-   self.backwardSequencer:forget()
-   self.mergeSequencer:forget()
+   self.fwdSeq:forget()
+   self.bwdSeq:forget()
+   self.mergeSeq:forget()
 end

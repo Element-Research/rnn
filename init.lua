@@ -19,6 +19,7 @@ torch.include('rnn', 'LSTM.lua')
 torch.include('rnn', 'Repeater.lua')
 torch.include('rnn', 'Sequencer.lua')
 torch.include('rnn', 'BiSequencer.lua')
+torch.include('rnn', 'BiSequencerLM.lua')
 
 -- recurrent criterions:
 torch.include('rnn', 'RepeaterCriterion.lua')
