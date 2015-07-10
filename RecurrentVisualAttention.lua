@@ -1,5 +1,5 @@
 ------------------------------------------------------------------------
---[[ SpatialVisualAttention ]]-- 
+--[[ RecurrentVisualAttention ]]-- 
 -- Ref. A. http://papers.nips.cc/paper/5542-recurrent-models-of-visual-attention.pdf
 -- B. http://incompleteideas.net/sutton/williams-92.pdf
 -- module which takes an RNN as argument with other 
