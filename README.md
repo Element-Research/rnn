@@ -84,6 +84,7 @@ such that they can be reused for storing the next step. This `offset`
 is used for modules like `nn.Recurrent` that use a different module 
 for the first step. Default offset is 0.
 
+<a name='rnn.AbstractRecurrent.forget'></a>
 ### forget(offset) ###
 This method brings back all states to the start of the sequence buffers, 
 i.e. it forgets the current sequence. It also resets the `step` attribute to 1.
@@ -255,11 +256,34 @@ through inheritance by overriding the different factory methods :
   
 <a name='rnn.Sequencer'></a>
 ## Sequencer ##
+
+The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
+to be applied from left to right, on each element of the input sequence.
+
+```lua
+seq = nn.Sequencer(module)
+```
+
 This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) 
-used to abstract away the intricacies of AbstractRecurrent modules. While the latter 
+used to abstract away the intricacies of AbstractRecurrent `modules`. While the latter 
 require a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
 the Sequencer forwards an input sequence (a table) into an output sequence (a table of the same length).
 It also takes care of calling `forget`, `backwardThroughTime` and other such AbstractRecurrent-specific methods.
+
+For example, `rnn` : an instance of nn.AbstractRecurrent, can forward an `input` sequence one forward at a time:
+```lua
+input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
+rnn:forward(input[1])
+rnn:forward(input[2])
+rnn:forward(input[3])
+```
+
+Equivalently, we can use a Sequencer to forward the entire `input` sequence at once:
+
+```lua
+seq = nn.Sequencer(rnn)
+seq:forward(input)
+```
 
 The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent instances) and apply it to each 
 input to produce an output table of the same length. 
@@ -269,8 +293,13 @@ Note that for now, it is only possible to decorate either recurrent or non-recur
 Specifically, it cannot handle non-recurrent Modules containing recurrent Modules. 
 Instead, either Modules should be encapsulated by its own `Sequencer`. This may change in the future.
 
-The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
-to be applied from left to right, on each element of the input sequence.
+### remember([r]) ###
+When `r=true` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
+each call to `forward`, which is the default behavior of the class. 
+This behavior is only applicable to decorated AbstractRecurrent `modules`.
+
+### forget() ###
+Calls the decorated AbstractRecurrent module's `forget` method.
 
 <a name='rnn.Repeater'></a>
 ## Repeater ##
@@ -295,6 +324,8 @@ For each step in the sequence, the corresponding elements of the input and targe
 will be applied to the `criterion`.
 The output of `forward` is the sum of all individual losses in the sequence.
 This is useful when used in conjuction with a [Sequencer](#rnn.Sequencer).
+
+WARNING : assumes that the decorated criterion is stateless, i.e. a `backward` shouldn't need to be preceded by a commensurate `forward`.
 
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
