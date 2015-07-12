@@ -221,6 +221,8 @@ function Sequencer:evaluate()
    if self.isRecurrent and self.train ~= false then
       -- empty output table (tensor mem is managed by rnn)
       self.output = {}
+      -- forget at the start of each evaluation
+      self:forget()
    end
    parent.evaluate(self)
 end
