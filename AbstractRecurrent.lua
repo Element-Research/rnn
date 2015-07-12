@@ -106,6 +106,8 @@ function AbstractRecurrent:recycle(offset)
       self.gradOutputs[self.step-self.rho] = nil
       self.scales[self.step-self.rho] = nil
    end
+   
+   return self
 end
 
 function AbstractRecurrent:forget(offset)
@@ -147,6 +149,8 @@ function AbstractRecurrent:forget(offset)
    
    -- forget the past inputs; restart from first step
    self.step = 1
+   
+   return self
 end
 
 function AbstractRecurrent:includingSharedClones(f)

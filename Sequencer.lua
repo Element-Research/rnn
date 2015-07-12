@@ -184,13 +184,7 @@ end
 -- Essentially, forget() isn't called on rnn module when remember is on
 function Sequencer:remember(remember)
    self._remember = (remember == nil) and true or false
-end
-
--- You can use this to manually forget.
-function Sequencer:forget()
-   if self.module.forget then
-      self.module:forget()
-   end
+   return self
 end
 
 function Sequencer:type(type)

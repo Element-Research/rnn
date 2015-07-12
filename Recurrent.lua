@@ -264,11 +264,11 @@ function Recurrent:accUpdateGradParametersThroughTime(lr)
 end
 
 function Recurrent:recycle()
-   parent.recycle(self, 1)
+   return parent.recycle(self, 1)
 end
 
 function Recurrent:forget()
-   parent.forget(self, 1)
+   return parent.forget(self, 1)
 end
 
 function Recurrent:includingSharedClones(f)

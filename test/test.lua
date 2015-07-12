@@ -672,7 +672,6 @@ function rnntest.BiSequencerLM()
       mytester:assertTensorEq(gradInput, gradInput2, 0.000001, "BiSequencerLM gradInput err "..i)
    end
    
-   
    -- params
    local brnn2 = nn.Sequential():add(fwd):add(bwd)
    local params, gradParams = brnn:parameters()
@@ -694,8 +693,6 @@ function rnntest.BiSequencerLM()
       mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, "BiSequencerLM gradParams zero err "..i)
    end
 end
-
-
 
 function rnntest.Repeater()
    local batchSize = 4

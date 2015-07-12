@@ -5,6 +5,9 @@ rnn = {}
 
 torch.include('rnn', 'recursiveUtils.lua')
 
+-- extensions to nn.Module
+torch.include('rnn', 'Module.lua')
+
 -- for testing:
 torch.include('rnn', 'test.lua')
 
