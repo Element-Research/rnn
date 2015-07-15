@@ -13,6 +13,7 @@ torch.include('rnn', 'test.lua')
 
 -- support modules
 torch.include('rnn', 'ZeroGrad.lua')
+torch.include('rnn', 'LinearNoBias.lua')
 
 -- recurrent modules
 torch.include('rnn', 'AbstractRecurrent.lua')
