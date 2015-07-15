@@ -71,6 +71,7 @@ function LSTM:buildHidden()
    hidden:add(concat)
    hidden:add(para)
    hidden:add(nn.CAddTable())
+   hidden:add(nn.Tanh())
    self.hiddenLayer = hidden
    return hidden
 end
