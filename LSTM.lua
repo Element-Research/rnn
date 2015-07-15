@@ -37,9 +37,8 @@ function LSTM:buildGate()
    -- Note : gate expects an input table : {input, output(t-1), cell(t-1)}
    local gate = nn.Sequential()
    local input2gate = nn.Linear(self.inputSize, self.outputSize)
-   local output2gate = nn.Linear(self.outputSize, self.outputSize)
+   local output2gate = nn.LinearNoBias(self.outputSize, self.outputSize)
    local cell2gate = nn.CMul(self.outputSize) -- diagonal cell to gate weight matrix
-   --output2gate:noBias() --TODO
    local para = nn.ParallelTable()
    para:add(input2gate):add(output2gate):add(cell2gate)
    gate:add(para)
@@ -61,9 +60,8 @@ end
 function LSTM:buildHidden()
    local hidden = nn.Sequential()
    local input2hidden = nn.Linear(self.inputSize, self.outputSize)
-   local output2hidden = nn.Linear(self.outputSize, self.outputSize) 
+   local output2hidden = nn.LinearNoBias(self.outputSize, self.outputSize)
    local para = nn.ParallelTable()
-   --output2hidden:noBias()
    para:add(input2hidden):add(output2hidden)
    -- input is {input, output(t-1), cell(t-1)}, but we only need {input, output(t-1)}
    local concat = nn.ConcatTable()
