@@ -99,7 +99,7 @@ end
 function rnn.recursiveFill(t2, val)
    if torch.type(t2) == 'table' then
       for key,_ in pairs(t2) do
-         t2[key] = rnn.recursiveNormal(t2[key], val)
+         t2[key] = rnn.recursiveFill(t2[key], val)
       end
    elseif torch.isTensor(t2) then
       t2:fill(val)
