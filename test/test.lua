@@ -400,6 +400,69 @@ function rnntest.LSTM()
    end
 end
 
+function rnntest.FastLSTM()
+   --require 'dp'
+   local inputSize = 100
+   local batchSize = 40
+   local nStep = 3
+   
+   local input = {}
+   local gradOutput = {}
+   for step=1,nStep do
+      input[step] = torch.randn(batchSize, inputSize)
+      gradOutput[step] = torch.randn(batchSize, inputSize)
+   end
+   local gradOutputClone = gradOutput[1]:clone()
+   local lstm1 = nn.LSTM(inputSize, inputSize, nil, false)
+   local lstm2 = nn.FastLSTM(inputSize, inputSize, nil)
+   local seq1 = nn.Sequencer(lstm1)
+   local seq2 = nn.Sequencer(lstm2)
+   
+   local output1 = seq1:forward(input)
+   local gradInput1 = seq1:backward(input, gradOutput)
+   mytester:assertTensorEq(gradOutput[1], gradOutputClone, 0.00001, "LSTM modified gradOutput")
+   seq1:zeroGradParameters()
+   seq2:zeroGradParameters()
+   
+   -- make them have same params
+   local ig = lstm1.inputGate:parameters()
+   local hg = lstm1.hiddenLayer:parameters()
+   local fg = lstm1.forgetGate:parameters()
+   local og = lstm1.outputGate:parameters()
+   
+   local i2g = lstm2.i2g:parameters()
+   local o2g = lstm2.o2g:parameters()
+   
+   ig[1]:copy(i2g[1]:narrow(1,1,inputSize))
+   ig[2]:copy(i2g[2]:narrow(1,1,inputSize))
+   ig[3]:copy(o2g[1]:narrow(1,1,inputSize))
+   ig[4]:copy(o2g[2]:narrow(1,1,inputSize))
+   hg[1]:copy(i2g[1]:narrow(1,inputSize+1,inputSize))
+   hg[2]:copy(i2g[2]:narrow(1,inputSize+1,inputSize))
+   hg[3]:copy(o2g[1]:narrow(1,inputSize+1,inputSize))
+   hg[4]:copy(o2g[2]:narrow(1,inputSize+1,inputSize))
+   fg[1]:copy(i2g[1]:narrow(1,inputSize*2+1,inputSize))
+   fg[2]:copy(i2g[2]:narrow(1,inputSize*2+1,inputSize))
+   fg[3]:copy(o2g[1]:narrow(1,inputSize*2+1,inputSize))
+   fg[4]:copy(o2g[2]:narrow(1,inputSize*2+1,inputSize))
+   og[1]:copy(i2g[1]:narrow(1,inputSize*3+1,inputSize))
+   og[2]:copy(i2g[2]:narrow(1,inputSize*3+1,inputSize))
+   og[3]:copy(o2g[1]:narrow(1,inputSize*3+1,inputSize))
+   og[4]:copy(o2g[2]:narrow(1,inputSize*3+1,inputSize))
+   
+   local output1 = seq1:forward(input)
+   local gradInput1 = seq1:backward(input, gradOutput)
+   local output2 = seq2:forward(input)
+   local gradInput2 = seq2:backward(input, gradOutput)
+   
+   mytester:assert(#output1 == #output2 and #output1 == nStep)
+   mytester:assert(#gradInput1 == #gradInput2 and #gradInput1 == nStep)
+   for i=1,#output1 do
+      mytester:assertTensorEq(output1[i], output2[i], 0.000001, "FastLSTM output error "..i)
+      mytester:assertTensorEq(gradInput1[i], gradInput2[i], 0.000001, "FastLSTM gradInput error "..i)
+   end
+end
+
 function rnntest.Sequencer()
    local batchSize = 4
    local dictSize = 100

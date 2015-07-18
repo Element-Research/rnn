@@ -9,10 +9,10 @@ function FastLSTM:buildModel()
    -- output : {output, cell}
    
    -- Calculate all four gates in one go : input, hidden, forget, output
-   local i2g = nn.Linear(self.inputSize, 4*self.outputSize)
-   local o2g = nn.Linear(self.outputSize, 4*self.outputSize)
+   self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
+   self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
 
-   local para = nn.ParallelTable():add(i2h):add(h2h)
+   local para = nn.ParallelTable():add(self.i2g):add(self.o2g)
    local gates = nn.Sequential()
    gates:add(nn.NarrowTable(1,2))
    gates:add(para)
@@ -67,30 +67,30 @@ function FastLSTM:buildModel()
    local concat = nn.ConcatTable()
    concat:add(output):add(nn.SelectTable(1))
    seq:add(concat)
-
+   
    return seq
 end
 
-function LSTM:buildGate()
+function FastLSTM:buildGate()
    error"Not Implemented"
 end
 
-function LSTM:buildInputGate()
+function FastLSTM:buildInputGate()
    error"Not Implemented"
 end
 
-function LSTM:buildForgetGate()
+function FastLSTM:buildForgetGate()
    error"Not Implemented"
 end
 
-function LSTM:buildHidden()
+function FastLSTM:buildHidden()
    error"Not Implemented"
 end
 
-function LSTM:buildCell()
+function FastLSTM:buildCell()
    error"Not Implemented"
 end   
    
-function LSTM:buildOutputGate()
+function FastLSTM:buildOutputGate()
    error"Not Implemented"
 end
