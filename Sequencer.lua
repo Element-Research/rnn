@@ -55,7 +55,7 @@ function Sequencer:__init(module)
    self.dpnn_mediumEmpty = _.clone(self.dpnn_mediumEmpty)
    table.insert(self.dpnn_mediumEmpty, '_output')
    -- default is to forget previous inputs before each forward()
-   self._remember = false
+   self._remember = 'neither'
 end
 
 function Sequencer:getStepModule(step)
@@ -73,13 +73,19 @@ function Sequencer:updateOutput(inputTable)
    assert(torch.type(inputTable) == 'table', "expecting input table")
    if self.isRecurrent then
       if self.train ~= false then -- training
-         self.module:forget()
+         if self._remember == 'train' or self._remember == 'both' then
+            self.module.rho = #inputTable
+         else
+            self.module:forget()
+         end
          self.output = {}
          for step, input in ipairs(inputTable) do
             self.output[step] = self.module:updateOutput(input)
          end
       else -- evaluation
-         if not self._remember then
+         if self._remember == 'eval' or self._remember == 'both' then
+            self.module.rho = #inputTable
+         else
             self.module:forget()
          end
          -- during evaluation, recurrent modules reuse memory (i.e. outputs)
@@ -114,15 +120,17 @@ function Sequencer:updateGradInput(inputTable, gradOutputTable)
    if self.isRecurrent then
       assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
       assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
-      for step, input in ipairs(inputTable) do
-         self.module.step = step + 1
-         self.module:updateGradInput(input, gradOutputTable[step])
+      local i = 1
+      for step=self.module.step-#inputTable+1,self.module.step do
+         self.module.step = step
+         self.module:updateGradInput(inputTable[i], gradOutputTable[i])
+         i = i + 1
       end
       -- back-propagate through time (BPTT)
       self.module:updateGradInputThroughTime()
       assert(self.module.gradInputs, "recurrent module did not fill gradInputs")
-      for step=1,#inputTable do
-         self.gradInput[step] = self.module.gradInputs[step]
+      for i=1,#inputTable do
+         self.gradInput[i] = self.module.gradInputs[i]
       end
       assert(#self.gradInput == #inputTable, "missing gradInputs (rho is too low?)")
    else
@@ -141,9 +149,11 @@ function Sequencer:accGradParameters(inputTable, gradOutputTable, scale)
    if self.isRecurrent then
       assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
       assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
-      for step, input in ipairs(inputTable) do
-         self.module.step = step + 1
-         self.module:accGradParameters(input, gradOutputTable[step], scale)
+      local i = 1
+      for step=self.module.step-#inputTable+1,self.module.step do
+         self.module.step = step
+         self.module:accGradParameters(inputTable[i], gradOutputTable[i], scale)
+         i = i + 1
       end
       -- back-propagate through time (BPTT)
       self.module:accGradParametersThroughTime()
@@ -153,7 +163,7 @@ function Sequencer:accGradParameters(inputTable, gradOutputTable, scale)
          local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
-         module:accGradParameters(input, gradOutputTable[step], scale/#inputTable) --scale is rho-averaged
+         module:accGradParameters(input, gradOutputTable[step], scale)
       end
    end
 end
@@ -162,9 +172,11 @@ function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
    if self.isRecurrent then
       assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
       assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
-      for step, input in ipairs(inputTable) do
-         self.module.step = step + 1
-         self.module:accGradParameters(input, gradOutputTable[step], 1)
+      local i = 1
+      for step=self.module.step-#inputTable+1,self.module.step do
+         self.module.step = step
+         self.module:accGradUpdateParameters(inputTable[i], gradOutputTable[i], lr)
+         i = i + 1
       end
       -- back-propagate through time (BPTT)
       self.module:accUpdateGradParametersThroughTime(lr)
@@ -174,16 +186,19 @@ function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
          local module = self:getStepModule(step)
          
          -- accumulate parameters for this step
-         module:accUpdateGradParameters(input, gradOutputTable[step], lr/#inputTable) --lr is rho-averaged
+         module:accUpdateGradParameters(input, gradOutputTable[step], lr)
       end
    end
 end
 
--- Turn this on to feed long sequences using multiple forwards.
--- Only affects evaluation (self.train = false).
+-- Toggle to feed long sequences using multiple forwards.
+-- 'eval' only affects evaluation (recommended for RNNs)
+-- 'train' only affects training
+-- 'neither' affects neither training nor evaluation
+-- 'both' affects both training and evaluation (recommended for LSTMs)
 -- Essentially, forget() isn't called on rnn module when remember is on
 function Sequencer:remember(remember)
-   self._remember = (remember == nil) and true or false
+   self._remember = (remember == nil) and 'both' or remember
    return self
 end
 

@@ -827,6 +827,277 @@ function rnntest.SequencerCriterion()
    mytester:assert(sc.isStateless, "SequencerCriterion stateless error")
 end
 
+function rnntest.LSTM_nn_vs_nngraph()
+   local model = {}
+   -- match the successful https://github.com/wojzaremba/lstm
+   -- We want to make sure our LSTM matches theirs.
+   -- Also, the ugliest unit test you have every seen.
+   local success = pcall(function() require 'nngraph' end)
+   if not success then
+      return
+   end
+   
+   local vocabSize = 100
+   local inputSize = 30
+   local batchSize = 4
+   local nLayer = 2
+   local dropout = 0
+   local nStep = 5
+   local lr = 1
+   
+   -- build nn equivalent of nngraph model
+   local model2 = nn.Sequential()
+   local container2 = nn.Container()
+   container2:add(nn.LookupTable(vocabSize, inputSize))
+   model2:add(container2:get(1))
+   model2:add(nn.Dropout(dropout))
+   model2:add(nn.SplitTable(1,2))
+   container2:add(nn.FastLSTM(inputSize, inputSize))
+   model2:add(nn.Sequencer(container2:get(2)))
+   model2:add(nn.Sequencer(nn.Dropout(0)))
+   container2:add(nn.FastLSTM(inputSize, inputSize))
+   model2:add(nn.Sequencer(container2:get(3)))
+   model2:add(nn.Sequencer(nn.Dropout(0)))
+   container2:add(nn.Linear(inputSize, vocabSize))
+   model2:add(nn.Sequencer(container2:get(4)))
+   model2:add(nn.Sequencer(nn.LogSoftMax()))
+   
+   local criterion2 = nn.ModuleCriterion(nn.SequencerCriterion(nn.ClassNLLCriterion()), nil, nn.SplitTable(1,1))
+   
+   
+   -- nngraph model 
+   local container = nn.Container()
+   local lstmId = 1
+   local function lstm(x, prev_c, prev_h)
+      -- Calculate all four gates in one go
+      local i2h = nn.Linear(inputSize, 4*inputSize)
+      local dummy = nn.Container()
+      dummy:add(i2h)
+      i2h = i2h(x)
+      local h2h = nn.LinearNoBias(inputSize, 4*inputSize)
+      dummy:add(h2h)
+      h2h = h2h(prev_h)
+      container:add(dummy)
+      local gates = nn.CAddTable()({i2h, h2h})
+
+      -- Reshape to (batch_size, n_gates, hid_size)
+      -- Then slize the n_gates dimension, i.e dimension 2
+      local reshaped_gates =  nn.Reshape(4,inputSize)(gates)
+      local sliced_gates = nn.SplitTable(2)(reshaped_gates)
+
+      -- Use select gate to fetch each gate and apply nonlinearity
+      local in_gate          = nn.Sigmoid()(nn.SelectTable(1)(sliced_gates))
+      local in_transform     = nn.Tanh()(nn.SelectTable(2)(sliced_gates))
+      local forget_gate      = nn.Sigmoid()(nn.SelectTable(3)(sliced_gates))
+      local out_gate         = nn.Sigmoid()(nn.SelectTable(4)(sliced_gates))
+
+      local next_c           = nn.CAddTable()({
+         nn.CMulTable()({forget_gate, prev_c}),
+         nn.CMulTable()({in_gate,     in_transform})
+      })
+      local next_h           = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
+      lstmId = lstmId + 1
+      return next_c, next_h
+   end
+   local function create_network()
+      local x                = nn.Identity()()
+      local y                = nn.Identity()()
+      local prev_s           = nn.Identity()()
+      local lookup = nn.LookupTable(vocabSize, inputSize)
+      container:add(lookup)
+      local i                = {[0] = lookup(x)}
+      local next_s           = {}
+      local split         = {prev_s:split(2 * nLayer)}
+      for layer_idx = 1, nLayer do
+         local prev_c         = split[2 * layer_idx - 1]
+         local prev_h         = split[2 * layer_idx]
+         local dropped        = nn.Dropout(dropout)(i[layer_idx - 1])
+         local next_c, next_h = lstm(dropped, prev_c, prev_h)
+         table.insert(next_s, next_c)
+         table.insert(next_s, next_h)
+         i[layer_idx] = next_h
+      end
+      
+      local h2y              = nn.Linear(inputSize, vocabSize)
+      container:add(h2y)
+      local dropped          = nn.Dropout(dropout)(i[nLayer])
+      local pred             = nn.LogSoftMax()(h2y(dropped))
+      local err              = nn.ClassNLLCriterion()({pred, y})
+      local module           = nn.gModule({x, y, prev_s}, {err, nn.Identity()(next_s)})
+      module:getParameters():uniform(-0.1, 0.1)
+      return module
+   end
+   
+   local function g_cloneManyTimes(net, T)
+      local clones = {}
+      local params, gradParams = net:parameters()
+      local mem = torch.MemoryFile("w"):binary()
+      mem:writeObject(net)
+      for t = 1, T do
+         local reader = torch.MemoryFile(mem:storage(), "r"):binary()
+         local clone = reader:readObject()
+         reader:close()
+         local cloneParams, cloneGradParams = clone:parameters()
+         for i = 1, #params do
+            cloneParams[i]:set(params[i])
+            cloneGradParams[i]:set(gradParams[i])
+         end
+         clones[t] = clone
+         collectgarbage()
+      end
+      mem:close()
+      return clones
+   end
+   
+   local model = {}
+   local paramx, paramdx
+   local core_network = create_network()
+   
+   -- sync nn with nngraph model
+   local params, gradParams = container:getParameters()
+   local params2, gradParams2 = container2:getParameters()
+   params2:copy(params)
+   container:zeroGradParameters()
+   container2:zeroGradParameters()
+   paramx, paramdx = core_network:getParameters()
+   
+   model.s = {}
+   model.ds = {}
+   model.start_s = {}
+   for j = 0, nStep do
+      model.s[j] = {}
+      for d = 1, 2 * nLayer do
+         model.s[j][d] = torch.zeros(batchSize, inputSize)
+      end
+   end
+   for d = 1, 2 * nLayer do
+      model.start_s[d] = torch.zeros(batchSize, inputSize)
+      model.ds[d] = torch.zeros(batchSize, inputSize)
+   end
+   model.core_network = core_network
+   model.rnns = g_cloneManyTimes(core_network, nStep)
+   model.norm_dw = 0
+   model.err = torch.zeros(nStep)
+   
+   -- more functions for nngraph baseline
+   local function g_replace_table(to, from)
+     assert(#to == #from)
+     for i = 1, #to do
+       to[i]:copy(from[i])
+     end
+   end
+
+   local function reset_ds()
+     for d = 1, #model.ds do
+       model.ds[d]:zero()
+     end
+   end
+   
+   local function reset_state(state)
+     state.pos = 1
+     if model ~= nil and model.start_s ~= nil then
+       for d = 1, 2 * nLayer do
+         model.start_s[d]:zero()
+       end
+     end
+   end
+
+   local function fp(state)
+     g_replace_table(model.s[0], model.start_s)
+     if state.pos + nStep > state.data:size(1) then
+         error"Not Supposed to happen in this unit test"
+     end
+     for i = 1, nStep do
+       local x = state.data[state.pos]
+       local y = state.data[state.pos + 1]
+       local s = model.s[i - 1]
+       model.err[i], model.s[i] = unpack(model.rnns[i]:forward({x, y, s}))
+       state.pos = state.pos + 1
+     end
+     g_replace_table(model.start_s, model.s[nStep])
+     return model.err:mean()
+   end
+
+   local function bp(state)
+     paramdx:zero()
+     reset_ds()
+     for i = nStep, 1, -1 do
+       state.pos = state.pos - 1
+       local x = state.data[state.pos]
+       local y = state.data[state.pos + 1]
+       local s = model.s[i - 1]
+       local derr = torch.ones(1)
+       local tmp = model.rnns[i]:backward({x, y, s}, {derr, model.ds})[3]
+       g_replace_table(model.ds, tmp)
+     end
+     state.pos = state.pos + nStep
+     paramx:add(-1, paramdx)
+   end
+   
+   -- inputs and targets (for nngraph implementation)
+   local inputs = torch.Tensor(nStep*10, batchSize):random(1,vocabSize)
+
+   -- is everything aligned between models?
+   local params_, gradParams_ = container:parameters()
+   local params2_, gradParams2_ = container2:parameters()
+
+   for i=1,#params_ do
+      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph unaligned params err "..i)
+      mytester:assertTensorEq(gradParams_[i], gradParams2_[i], 0.00001, "nn vs nngraph unaligned gradParams err "..i)
+   end
+   
+   -- forward 
+   local state = {pos=1,data=inputs}
+   local err = fp(state)
+   
+   local inputs2 = inputs:narrow(1,1,nStep):transpose(1,2)
+   local targets2 = inputs:narrow(1,2,nStep):transpose(1,2)
+   local outputs2 = model2:forward(inputs2)
+   local err2 = criterion2:forward(outputs2, targets2)
+   mytester:asserteq(err, err2/nStep, 0.0001, "nn vs nngraph err error")
+   
+   -- backward/update
+   bp(state)
+   
+   local gradOutputs2 = criterion2:backward(outputs2, targets2)
+   model2:backward(inputs2, gradOutputs2)
+   model2:updateParameters(lr)
+   model2:zeroGradParameters()
+   
+   for i=1,#params_ do
+      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph params err "..i)
+   end
+   
+   for i=1,#params2_ do
+      params2_[i]:copy(params_[i])
+      gradParams_[i]:copy(gradParams2_[i])
+   end
+   
+   -- and do it again
+   -- forward 
+   --reset_state(state)
+   local state = {pos=1,data=inputs}
+   local err = fp(state)
+   
+   local inputs2 = inputs:narrow(1,1,nStep):transpose(1,2)
+   local targets2 = inputs:narrow(1,2,nStep):transpose(1,2)
+   model2:remember()
+   local outputs2 = model2:forward(inputs2)
+   local err2 = criterion2:forward(outputs2, targets2)
+   mytester:asserteq(err2/nStep, err, 0.0001, "nn vs nngraph err error")
+   
+   -- backward/update
+   bp(state)
+   
+   local gradOutputs2 = criterion2:backward(outputs2, targets2)
+   model2:backward(inputs2, gradOutputs2)
+   model2:updateParameters(lr)
+   
+   for i=1,#params_ do
+      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph params err "..i)
+   end
+end
+
 
 function rnn.test(tests)
    mytester = torch.Tester()
