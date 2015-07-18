@@ -16,6 +16,7 @@ function AbstractRecurrent:__init(rho)
    
    self.inputs = {}
    self.outputs = {}
+   self._gradOutputs = {}
    self.gradOutputs = {}
    self.scales = {}
    

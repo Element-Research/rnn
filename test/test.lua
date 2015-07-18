@@ -357,7 +357,7 @@ function rnntest.LSTM()
    local output2 = mlp2:forward(inputs)
    
    mlp2:zeroGradParameters()
-   local gradInput2 = mlp2:backward(inputs, gradOutput[nStep], 1/nStep)
+   local gradInput2 = mlp2:backward(inputs, gradOutput[nStep], 1) --/nStep)
    mytester:assertTensorEq(gradInput2[2][2][1], gradInput, 0.00001, "LSTM gradInput error")
    mytester:assertTensorEq(output[nStep], output2, 0.00001, "LSTM output error")
    
@@ -424,6 +424,7 @@ function rnntest.Sequencer()
    end
    rnn:backwardThroughTime()
    
+   local gradOutput1 = gradOutputs[1]:clone()
    local rnn3 = nn.Sequencer(rnn2)
    local outputs3 = rnn3:forward(inputs)
    local gradInputs3 = rnn3:backward(inputs, gradOutputs)
@@ -433,6 +434,7 @@ function rnntest.Sequencer()
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
       mytester:assertTensorEq(gradInputs3[step], rnn.gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
    end
+   mytester:assertTensorEq(gradOutputs[1], gradOutput1, 0.00001, "Sequencer rnn gradOutput modified error")
    
    -- test in evaluation mode
    rnn3:evaluate()
@@ -527,19 +529,25 @@ function rnntest.Sequencer()
    end
    
    -- test with LSTM
-   local lstm = nn.LSTM(inputSize, outputSize)
+   local outputSize = inputSize
+   local lstm = nn.LSTM(inputSize, outputSize, nil, false)
+   lstm:zeroGradParameters()
    local lstm2 = lstm:clone()
    
    local inputs, outputs, gradOutputs = {}, {}, {}
    for step=1,nSteps do
       inputs[step] = torch.randn(batchSize, inputSize)
-      outputs[step] = lstm:forward(inputs[step])
       gradOutputs[step] = torch.randn(batchSize, outputSize)
+   end
+   local gradOutput1 = gradOutputs[2]:clone()
+   for step=1,nSteps do
+      outputs[step] = lstm:forward(inputs[step])
       lstm:backward(inputs[step], gradOutputs[step])
    end
    lstm:backwardThroughTime()
    
    local lstm3 = nn.Sequencer(lstm2)
+   lstm3:zeroGradParameters()
    local outputs3 = lstm3:forward(inputs)
    local gradInputs3 = lstm3:backward(inputs, gradOutputs)
    mytester:assert(#outputs3 == #outputs, "Sequencer LSTM output size err")
@@ -548,6 +556,7 @@ function rnntest.Sequencer()
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer LSTM output "..step)
       mytester:assertTensorEq(gradInputs3[step], lstm.gradInputs[step], 0.00001, "Sequencer LSTM gradInputs "..step)
    end
+   mytester:assertTensorEq(gradOutputs[2], gradOutput1, 0.00001, "Sequencer lstm gradOutput modified error")
 end
 
 function rnntest.BiSequencer()

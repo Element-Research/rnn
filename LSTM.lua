@@ -201,14 +201,15 @@ function LSTM:backwardThroughTime()
          local recurrentModule = self:getStepModule(step)
          
          -- backward propagate through this step
-         local gradOutput = self.gradOutputs[step] 
+         local gradOutput = self.gradOutputs[step]
          if gradPrevOutput then
-            nn.rnn.recursiveAdd(gradOutput, gradPrevOutput)    
+            self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradPrevOutput)
+            nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
+            gradOutput = self._gradOutputs[step]
          end
          
          self.gradCells[step] = gradCell
-         local scale = self.scales[step] --/rho
-
+         local scale = self.scales[step]
          local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
          local gradInputTable = recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
          gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
@@ -236,8 +237,11 @@ function LSTM:updateGradInputThroughTime()
       -- backward propagate through this step
       local gradOutput = self.gradOutputs[step]
       if gradPrevOutput then
-         nn.rnn.recursiveAdd(gradOutput, gradPrevOutput) 
+         self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradPrevOutput)
+         nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
+         gradOutput = self._gradOutputs[step]
       end
+      
       self.gradCells[step] = gradCell
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
       local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
@@ -256,9 +260,10 @@ function LSTM:accGradParametersThroughTime()
       local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
-      local scale = self.scales[step] --/rho
+      local scale = self.scales[step]
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
-      local gradOutputTable = {self.gradOutputs[step], self.gradCells[step]}
+      local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
+      local gradOutputTable = {gradOutput, self.gradCells[step]}
       recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
    end
    
@@ -274,8 +279,9 @@ function LSTM:accUpdateGradParametersThroughTime(lr)
       local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
-      local scale = self.scales[step] --/rho
+      local scale = self.scales[step] 
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step]}
+      local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
       local gradOutputTable = {self.gradOutputs[step], self.gradCells[step]}
       recurrentModule:accUpdateGradParameters(inputTable, gradOutputTable, lr*scale)
    end
