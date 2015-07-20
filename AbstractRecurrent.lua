@@ -89,25 +89,32 @@ end
 function AbstractRecurrent:recycle(offset)
    offset = offset or 0
    -- offset can be used to skip initialModule (if any)
+   self.rho = self.rho + 1 -- pad with one extra time-step of memory (helps for Sequencer:remember())
    if self.step > self.rho + offset then
       assert(self.sharedClones[self.step] == nil)
       assert(self.sharedClones[self.step-self.rho] ~= nil)
       self.sharedClones[self.step] = self.sharedClones[self.step-self.rho]
       self.sharedClones[self.step-self.rho] = nil
       -- need to keep rho+1 of these
+      assert(self.outputs[self.step] == nil)
+      assert(self.outputs[self.step-self.rho-1] ~= nil)
       self.outputs[self.step] = self.outputs[self.step-self.rho-1] 
       self.outputs[self.step-self.rho-1] = nil
    end
    if self.step > self.rho then
       assert(self.inputs[self.step] == nil)
       assert(self.inputs[self.step-self.rho] ~= nil)
-      self.inputs[self.step] = self.inputs[self.step-self.rho] 
+      assert(self.gradOutputs[self.step] == nil)
+      assert(self._gradOutputs[self.step] == nil)
+      self.inputs[self.step] = self.inputs[self.step-self.rho]
       self.gradOutputs[self.step] = self.gradOutputs[self.step-self.rho] 
+      self._gradOutputs[self.step] = self._gradOutputs[self.step-self.rho]
       self.inputs[self.step-self.rho] = nil
       self.gradOutputs[self.step-self.rho] = nil
+      self._gradOutputs[self.step-self.rho] = nil
       self.scales[self.step-self.rho] = nil
    end
-   
+   self.rho = self.rho - 1
    return self
 end
 
@@ -116,11 +123,11 @@ function AbstractRecurrent:forget(offset)
    if self.train ~= false then
       -- bring all states back to the start of the sequence buffers
       local lastStep = self.step - 1
-      
+      self.rho = self.rho + 1 -- pad with one extra time-step of memory (helps for Sequencer:remember())
       if lastStep > self.rho + offset then
          local i = 1 + offset
          for step = lastStep-self.rho+offset,lastStep do
-            assert(self.sharedClones[i] == nil)
+            assert(self.sharedClones[i] == nil, "Error : rho was most likely modified after first forward.")
             self.sharedClones[i] = self.sharedClones[step]
             self.sharedClones[step] = nil
             -- we keep rho+1 of these : outputs[k]=outputs[k+rho+1]
@@ -137,15 +144,19 @@ function AbstractRecurrent:forget(offset)
          for step = lastStep-self.rho+1,lastStep do
             assert(self.inputs[i] == nil)
             assert(self.gradOutputs[i] == nil)
+            assert(self._gradOutputs[i] == nil)
             self.inputs[i] = self.inputs[step]
             self.gradOutputs[i] = self.gradOutputs[step]
+            self._gradOutputs[i] = self._gradOutputs[step]
             self.inputs[step] = nil
             self.gradOutputs[step] = nil
+            self._gradOutputs[step] = nil
             self.scales[step] = nil
             i = i + 1
          end
 
       end
+      self.rho = self.rho - 1
    end
    
    -- forget the past inputs; restart from first step

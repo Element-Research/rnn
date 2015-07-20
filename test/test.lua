@@ -85,9 +85,9 @@ function rnntest.Recurrent()
    local gradInput4 = mlp4:backwardThroughTime()
    mytester:assertTensorEq(gradInput, gradInput4, 0.000001, 'error slow vs fast backwardThroughTime')
    local mlp10 = mlp7:clone()
-   mytester:assert(mlp10.inputs[1] == nil, 'recycle inputs error')
+   --mytester:assert(mlp10.inputs[1] == nil, 'recycle inputs error')
    mlp10:forget()
-   mytester:assert(#mlp10.inputs == 4, 'forget inputs error')
+   --mytester:assert(#mlp10.inputs == 4, 'forget inputs error')
    mytester:assert(#mlp10.outputs == 5, 'forget outputs error')
    local i = 0
    for k,v in pairs(mlp10.sharedClones) do
@@ -842,7 +842,7 @@ function rnntest.LSTM_nn_vs_nngraph()
    local batchSize = 4
    local nLayer = 2
    local dropout = 0
-   local nStep = 5
+   local nStep = 10
    local lr = 1
    
    -- build nn equivalent of nngraph model
@@ -850,7 +850,8 @@ function rnntest.LSTM_nn_vs_nngraph()
    local container2 = nn.Container()
    container2:add(nn.LookupTable(vocabSize, inputSize))
    model2:add(container2:get(1))
-   model2:add(nn.Dropout(dropout))
+   local dropout2 = nn.Dropout(dropout)
+   model2:add(dropout2)
    model2:add(nn.SplitTable(1,2))
    container2:add(nn.FastLSTM(inputSize, inputSize))
    model2:add(nn.Sequencer(container2:get(2)))
@@ -905,7 +906,9 @@ function rnntest.LSTM_nn_vs_nngraph()
       local prev_s           = nn.Identity()()
       local lookup = nn.LookupTable(vocabSize, inputSize)
       container:add(lookup)
-      local i                = {[0] = lookup(x)}
+      local identity = nn.Identity()
+      lookup = identity(lookup(x))
+      local i                = {[0] = lookup}
       local next_s           = {}
       local split         = {prev_s:split(2 * nLayer)}
       for layer_idx = 1, nLayer do
@@ -925,6 +928,7 @@ function rnntest.LSTM_nn_vs_nngraph()
       local err              = nn.ClassNLLCriterion()({pred, y})
       local module           = nn.gModule({x, y, prev_s}, {err, nn.Identity()(next_s)})
       module:getParameters():uniform(-0.1, 0.1)
+      module._lookup = identity
       return module
    end
    
@@ -932,6 +936,7 @@ function rnntest.LSTM_nn_vs_nngraph()
       local clones = {}
       local params, gradParams = net:parameters()
       local mem = torch.MemoryFile("w"):binary()
+      assert(net._lookup)
       mem:writeObject(net)
       for t = 1, T do
          local reader = torch.MemoryFile(mem:storage(), "r"):binary()
@@ -1018,20 +1023,26 @@ function rnntest.LSTM_nn_vs_nngraph()
      return model.err:mean()
    end
 
+   model.dss = {}
    local function bp(state)
      paramdx:zero()
-     reset_ds()
+     local __, gradParams = core_network:parameters()
+     for i=1,#gradParams do
+        mytester:assert(gradParams[i]:sum() == 0)
+     end
+     reset_ds() -- backward of last step in each sequence is zero
      for i = nStep, 1, -1 do
        state.pos = state.pos - 1
        local x = state.data[state.pos]
        local y = state.data[state.pos + 1]
        local s = model.s[i - 1]
        local derr = torch.ones(1)
-       local tmp = model.rnns[i]:backward({x, y, s}, {derr, model.ds})[3]
+       local tmp = model.rnns[i]:backward({x, y, s}, {derr, model.ds,})[3]
+       model.dss[i-1] = tmp
        g_replace_table(model.ds, tmp)
      end
      state.pos = state.pos + nStep
-     paramx:add(-1, paramdx)
+     paramx:add(-lr, paramdx)
    end
    
    -- inputs and targets (for nngraph implementation)
@@ -1064,8 +1075,25 @@ function rnntest.LSTM_nn_vs_nngraph()
    model2:updateParameters(lr)
    model2:zeroGradParameters()
    
+   for i=1,#gradParams2_ do
+      mytester:assert(gradParams2_[i]:sum() == 0)
+   end
+   
    for i=1,#params_ do
       mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph params err "..i)
+   end
+   
+   for i=1,nStep do
+      mytester:assertTensorEq(model.rnns[i]._lookup.output, dropout2.output:select(2,i), 0.0000001)
+      mytester:assertTensorEq(model.rnns[i]._lookup.gradInput, dropout2.gradInput:select(2,i), 0.0000001)
+   end
+   
+   -- next_c, next_h, next_c...
+   for i=nStep-1,2,-1 do
+      mytester:assertTensorEq(model.dss[i][1], container2:get(2).gradCells[i], 0.0000001, "gradCells1 err "..i)
+      mytester:assertTensorEq(model.dss[i][2], container2:get(2)._gradOutputs[i] - container2:get(2).gradOutputs[i], 0.0000001, "gradOutputs1 err "..i)
+      mytester:assertTensorEq(model.dss[i][3], container2:get(3).gradCells[i], 0.0000001, "gradCells2 err "..i)
+      mytester:assertTensorEq(model.dss[i][4], container2:get(3)._gradOutputs[i] - container2:get(3).gradOutputs[i], 0.0000001, "gradOutputs2 err "..i)
    end
    
    for i=1,#params2_ do
@@ -1073,28 +1101,62 @@ function rnntest.LSTM_nn_vs_nngraph()
       gradParams_[i]:copy(gradParams2_[i])
    end
    
+   local gradInputClone = dropout2.gradInput:select(2,1):clone()
+   
+   local start_s = _.map(model.start_s, function(k,v) return v:clone() end)
+   mytester:assertTensorEq(start_s[1], container2:get(2).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[2], container2:get(2).outputs[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[3], container2:get(3).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[4], container2:get(3).outputs[nStep], 0.0000001)
+   
    -- and do it again
    -- forward 
    --reset_state(state)
-   local state = {pos=1,data=inputs}
-   local err = fp(state)
    
-   local inputs2 = inputs:narrow(1,1,nStep):transpose(1,2)
-   local targets2 = inputs:narrow(1,2,nStep):transpose(1,2)
+   local inputs2 = inputs:narrow(1,nStep+1,nStep):transpose(1,2)
+   local targets2 = inputs:narrow(1,nStep+2,nStep):transpose(1,2)
    model2:remember()
    local outputs2 = model2:forward(inputs2)
-   local err2 = criterion2:forward(outputs2, targets2)
-   mytester:asserteq(err2/nStep, err, 0.0001, "nn vs nngraph err error")
    
+   local inputsClone, outputsClone, cellsClone = container2:get(2).inputs[nStep+1]:clone(), container2:get(2).outputs[nStep]:clone(), container2:get(2).cells[nStep]:clone()
+   local err2 = criterion2:forward(outputs2, targets2)
+   local state = {pos=nStep+1,data=inputs}
+   local err = fp(state)
+   mytester:asserteq(err2/nStep, err, 0.00001, "nn vs nngraph err error")
    -- backward/update
    bp(state)
    
    local gradOutputs2 = criterion2:backward(outputs2, targets2)
    model2:backward(inputs2, gradOutputs2)
+   
+   mytester:assertTensorEq(start_s[1], container2:get(2).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[2], container2:get(2).outputs[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[3], container2:get(3).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[4], container2:get(3).outputs[nStep], 0.0000001)
+   
    model2:updateParameters(lr)
    
+   mytester:assertTensorEq(inputsClone, container2:get(2).inputs[nStep+1], 0.000001)
+   mytester:assertTensorEq(outputsClone, container2:get(2).outputs[nStep], 0.000001)
+   mytester:assertTensorEq(cellsClone, container2:get(2).cells[nStep], 0.000001)
+   
+   -- next_c, next_h, next_c...
+   for i=nStep-1,2,-1 do
+      mytester:assertTensorEq(model.dss[i][1], container2:get(2).gradCells[i+nStep], 0.0000001, "gradCells1 err "..i)
+      mytester:assertTensorEq(model.dss[i][2], container2:get(2)._gradOutputs[i+nStep] - container2:get(2).gradOutputs[i+nStep], 0.0000001, "gradOutputs1 err "..i)
+      mytester:assertTensorEq(model.dss[i][3], container2:get(3).gradCells[i+nStep], 0.0000001, "gradCells2 err "..i)
+      mytester:assertTensorEq(model.dss[i][4], container2:get(3)._gradOutputs[i+nStep] - container2:get(3).gradOutputs[i+nStep], 0.0000001, "gradOutputs2 err "..i)
+   end
+   
+   mytester:assertTensorNe(gradInputClone, dropout2.gradInput:select(2,1), 0.0000001, "lookup table gradInput1 err")
+   
+   for i=1,nStep do
+      mytester:assertTensorEq(model.rnns[i]._lookup.output, dropout2.output:select(2,i), 0.0000001, "lookup table output err "..i)
+      mytester:assertTensorEq(model.rnns[i]._lookup.gradInput, dropout2.gradInput:select(2,i), 0.0000001, "lookup table gradInput err "..i)
+   end
+   
    for i=1,#params_ do
-      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph params err "..i)
+      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph second update params err "..i)
    end
 end
 

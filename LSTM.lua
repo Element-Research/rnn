@@ -195,7 +195,7 @@ function LSTM:backwardThroughTime()
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    if self.fastBackward then
-      local gradInput, gradPrevOutput, gradCell
+      local gradPrevOutput
       for step=self.step-1,math.max(stop,1),-1 do
          -- set the output/gradOutput states of current Module
          local recurrentModule = self:getStepModule(step)
@@ -208,11 +208,14 @@ function LSTM:backwardThroughTime()
             gradOutput = self._gradOutputs[step]
          end
          
-         self.gradCells[step] = gradCell
          local scale = self.scales[step]
          local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
+         local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
          local gradInputTable = recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
          gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
+         if step > math.max(stop,1) then
+            self.gradCells[step-1] = gradCell
+         end
          table.insert(self.gradInputs, 1, gradInput)
       end
       return gradInput
@@ -227,7 +230,6 @@ function LSTM:updateGradInputThroughTime()
    assert(self.step > 1, "expecting at least one updateOutput")
    self.gradInputs = {}
    local gradInput, gradPrevOutput
-   local gradCell = self.zeroTensor
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,1),-1 do
@@ -242,10 +244,13 @@ function LSTM:updateGradInputThroughTime()
          gradOutput = self._gradOutputs[step]
       end
       
-      self.gradCells[step] = gradCell
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
+      local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
       local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
       gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
+      if step > math.max(stop,1) then
+         self.gradCells[step-1] = gradCell
+      end
       table.insert(self.gradInputs, 1, gradInput)
    end
    
@@ -263,7 +268,8 @@ function LSTM:accGradParametersThroughTime()
       local scale = self.scales[step]
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step-1]}
       local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
-      local gradOutputTable = {gradOutput, self.gradCells[step]}
+      local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
+      local gradOutputTable = {gradOutput, gradCell}
       recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
    end
    
@@ -282,7 +288,8 @@ function LSTM:accUpdateGradParametersThroughTime(lr)
       local scale = self.scales[step] 
       local inputTable = {self.inputs[step], self.outputs[step-1], self.cells[step]}
       local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
-      local gradOutputTable = {self.gradOutputs[step], self.gradCells[step]}
+      local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
+      local gradOutputTable = {self.gradOutputs[step], gradCell}
       recurrentModule:accUpdateGradParameters(inputTable, gradOutputTable, lr*scale)
    end
    

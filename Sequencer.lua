@@ -129,6 +129,7 @@ function Sequencer:updateGradInput(inputTable, gradOutputTable)
       -- back-propagate through time (BPTT)
       self.module:updateGradInputThroughTime()
       assert(self.module.gradInputs, "recurrent module did not fill gradInputs")
+      assert(#inputTable == #self.module.gradInputs)
       for i=1,#inputTable do
          self.gradInput[i] = self.module.gradInputs[i]
       end
