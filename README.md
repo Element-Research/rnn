@@ -295,10 +295,16 @@ Note that for now, it is only possible to decorate either recurrent or non-recur
 Specifically, it cannot handle non-recurrent Modules containing recurrent Modules. 
 Instead, either Modules should be encapsulated by its own `Sequencer`. This may change in the future.
 
-### remember([r]) ###
-When `r=true` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
+### remember([mode]) ###
+When `mode='both'` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
 each call to `forward`, which is the default behavior of the class. 
 This behavior is only applicable to decorated AbstractRecurrent `modules`.
+Accepted values for argument `mode` are as follows :
+
+ * 'eval' only affects evaluation (recommended for RNNs)
+ * 'train' only affects training
+ * 'neither' affects neither training nor evaluation (default behavior of the class)
+ * 'both' affects both training and evaluation (recommended for LSTMs)
 
 ### forget() ###
 Calls the decorated AbstractRecurrent module's `forget` method.

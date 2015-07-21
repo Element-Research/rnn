@@ -120,48 +120,20 @@ end
 
 function AbstractRecurrent:forget(offset)
    offset = offset or 0
+   
+    -- bring all states back to the start of the sequence buffers
    if self.train ~= false then
-      -- bring all states back to the start of the sequence buffers
-      local lastStep = self.step - 1
-      self.rho = self.rho + 1 -- pad with one extra time-step of memory (helps for Sequencer:remember())
-      if lastStep > self.rho + offset then
-         local i = 1 + offset
-         for step = lastStep-self.rho+offset,lastStep do
-            assert(self.sharedClones[i] == nil, "Error : rho was most likely modified after first forward.")
-            self.sharedClones[i] = self.sharedClones[step]
-            self.sharedClones[step] = nil
-            -- we keep rho+1 of these : outputs[k]=outputs[k+rho+1]
-            assert(self.outputs[i-1] == nil)
-            self.outputs[i-1] = self.outputs[step]
-            self.outputs[step] = nil
-            i = i + 1
-         end
-         
-      end
+      self.outputs = _.compact(self.outputs)
+      self.sharedClones = _.compact(self.sharedClones)
+      self.inputs = _.compact(self.inputs)
       
-      if lastStep > self.rho then
-         local i = 1
-         for step = lastStep-self.rho+1,lastStep do
-            assert(self.inputs[i] == nil)
-            assert(self.gradOutputs[i] == nil)
-            assert(self._gradOutputs[i] == nil)
-            self.inputs[i] = self.inputs[step]
-            self.gradOutputs[i] = self.gradOutputs[step]
-            self._gradOutputs[i] = self._gradOutputs[step]
-            self.inputs[step] = nil
-            self.gradOutputs[step] = nil
-            self._gradOutputs[step] = nil
-            self.scales[step] = nil
-            i = i + 1
-         end
-
-      end
-      self.rho = self.rho - 1
+      self.scales = {}
+      self.gradOutputs = _.compact(self.gradOutputs)
+      self._gradOutputs = _.compact(self._gradOutputs)
    end
    
    -- forget the past inputs; restart from first step
    self.step = 1
-   
    return self
 end
 

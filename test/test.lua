@@ -165,9 +165,6 @@ function rnntest.Recurrent()
    mytester:assert(#_.keys(gradParams2) == #_.keys(params), 'missing gradParameters2')
    
    for i,v in pairs(params) do
-      if i > 1 then
-         gradParams2[i]:div(nSteps)
-      end
       mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, 'gradParameter error ' .. i)
    end
    
@@ -179,9 +176,6 @@ function rnntest.Recurrent()
    mytester:assert(#_.keys(params9) == #_.keys(params7), 'missing parameters')
    mytester:assert(#_.keys(gradParams7) == #_.keys(params7), 'missing gradParameters')
    for i,v in pairs(params7) do
-      if i > 1 then
-         gradParams9[i]:div(nSteps-1)
-      end
       mytester:assertTensorEq(gradParams7[i], gradParams9[i], 0.00001, 'gradParameter error ' .. i)
    end
    
@@ -390,7 +384,7 @@ function rnntest.LSTM()
    end
    
    mytester:assertTensorEq(gradInput, gradInput3, 0.00001, "LSTM updateGradInputThroughTime error")
-   --if true then return end
+   
    local params3, gradParams3 = lstm:parameters()
    mytester:assert(#params == #params3, "LSTM parameters error "..#params.." ~= "..#params3)
    for i, gradParam in ipairs(gradParams) do
@@ -470,12 +464,13 @@ function rnntest.Sequencer()
    local nSteps = 5 
    
    -- test with recurrent module
-   local inputModule = nn.Dictionary(dictSize, outputSize)
+   local inputModule = nn.LookupTable(dictSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
    local feedbackModule = nn.Euclidean(outputSize, outputSize)
    -- rho = nSteps
    local rnn = nn.Recurrent(outputSize, inputModule, feedbackModule, transferModule, nSteps)
+   rnn:zeroGradParameters()
    local rnn2 = rnn:clone()
    
    local inputs, outputs, gradOutputs = {}, {}, {}
@@ -498,6 +493,77 @@ function rnntest.Sequencer()
       mytester:assertTensorEq(gradInputs3[step], rnn.gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
    end
    mytester:assertTensorEq(gradOutputs[1], gradOutput1, 0.00001, "Sequencer rnn gradOutput modified error")
+   
+   -- test remember for training mode
+   local nSteps7 = 10 -- nSteps*2
+   local rnn7 = nn.Recurrent(outputSize, nn.Linear(outputSize, outputSize), feedbackModule:clone(), transferModule:clone(), 5)
+   local rnn8 = rnn7:clone()
+   local rnn9 = rnn7:clone()
+   
+   local inputs7, outputs9 = {}, {}
+   for step=1,nSteps7 do
+      inputs7[step] = torch.randn(batchSize, outputSize)
+      outputs9[step] = rnn9:forward(inputs7[step]):clone()
+   end
+   
+   for i=1,2 do
+      for j=1,nSteps7/2 do
+         local step = (i-1)*nSteps7/2+j
+         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember forward err "..step)
+      end
+   end
+   
+   rnn7:forget()
+   
+   for i=1,2 do
+      for j=1,nSteps7/2 do
+         local step = (i-1)*nSteps7/2+j
+         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember forward2 err "..step)
+      end
+   end
+   
+   rnn7:forget()
+   
+   local outputs7, gradOutputs7, gradInputs7 = {}, {}, {}
+   for i=1,2 do
+      for j=1,nSteps7/2 do
+         local step = (i-1)*nSteps7/2+j
+         outputs7[step] = rnn7:forward(inputs7[step]):clone()
+         gradOutputs7[step] = torch.randn(batchSize, outputSize)
+         rnn7:backward(inputs7[step], gradOutputs7[step])
+      end
+      rnn7:backwardThroughTime()
+      for i=1,#rnn7.gradInputs do
+         table.insert(gradInputs7, rnn7.gradInputs[i])
+      end
+      rnn7:updateParameters(1)
+      rnn7:zeroGradParameters()
+   end
+   
+   local seq = nn.Sequencer(rnn8)
+   seq:remember('both')
+   local outputs8a = _.clone(seq:forward(_.slice(inputs7,1,5)))
+   local gradInputs8a = _.clone(seq:backward(_.slice(inputs7,1,5), _.slice(gradOutputs7,1,5)))
+   seq:updateParameters(1)
+   seq:zeroGradParameters()
+   
+   local outputs8b = _.clone(seq:forward(_.slice(inputs7,6,10)))
+   local gradInputs8b = _.clone(seq:backward(_.slice(inputs7,6,10), _.slice(gradOutputs7,6,10)))
+   seq:updateParameters(1)
+   
+   for i=1,5 do
+      mytester:assertTensorEq(gradInputs8a[i], gradInputs7[i], 0.0000001, "Sequencer remember first backward err "..i)
+   end
+   for i=6,10 do
+      mytester:assertTensorEq(gradInputs8b[i-5], gradInputs7[i], 0.0000001, "Sequencer remember second backward err "..i)
+      mytester:assertTensorEq(outputs8b[i-5], outputs7[i], 0.0000001, "Sequencer remember second forward err "..i)
+   end
+   
+   local params7 = rnn7:parameters()
+   local params8 = rnn8:parameters()
+   for i=1,#params7 do
+      mytester:assertTensorEq(params7[i], params8[i], 0.0000001, "Sequencer remember params err "..i)
+   end
    
    -- test in evaluation mode
    rnn3:evaluate()
@@ -832,6 +898,7 @@ function rnntest.LSTM_nn_vs_nngraph()
    -- match the successful https://github.com/wojzaremba/lstm
    -- We want to make sure our LSTM matches theirs.
    -- Also, the ugliest unit test you have every seen.
+   -- Resolved 2-3 annoying bugs with it.
    local success = pcall(function() require 'nngraph' end)
    if not success then
       return

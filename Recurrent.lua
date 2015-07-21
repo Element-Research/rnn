@@ -120,7 +120,7 @@ function Recurrent:backwardThroughTime()
          end
          local scale = self.scales[step]
          
-         gradInput, gradPrevOutput = unpack(recurrentModule:backward({input, output}, gradOutput, scale/rho))
+         gradInput, gradPrevOutput = unpack(recurrentModule:backward({input, output}, gradOutput, scale))
          table.insert(self.gradInputs, 1, gradInput)
       end
       
@@ -134,7 +134,7 @@ function Recurrent:backwardThroughTime()
             gradOutput = self._gradOutputs[1]
          end
          local scale = self.scales[1]
-         gradInput = self.initialModule:backward(input, gradOutput, scale/rho)
+         gradInput = self.initialModule:backward(input, gradOutput, scale)
          table.insert(self.gradInputs, 1, gradInput)
          
          -- startModule's gradParams shouldn't be step-averaged
@@ -205,7 +205,7 @@ function Recurrent:accGradParametersThroughTime()
       local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
 
       local scale = self.scales[step]
-      recurrentModule:accGradParameters({input, output}, gradOutput, scale/rho)
+      recurrentModule:accGradParameters({input, output}, gradOutput, scale)
    end
    
    if stop <= 1 then
@@ -213,7 +213,7 @@ function Recurrent:accGradParametersThroughTime()
       local input = self.inputs[1]
       local gradOutput = (1 == self.step-1) and self.gradOutputs[1] or self._gradOutputs[1]
       local scale = self.scales[1]
-      self.initialModule:accGradParameters(input, gradOutput, scale/rho)
+      self.initialModule:accGradParameters(input, gradOutput, scale)
       
       -- startModule's gradParams shouldn't be step-averaged
       -- as it is used only once. So un-step-average it
@@ -243,10 +243,9 @@ function Recurrent:accUpdateGradParametersThroughInitialModule(lr, rho)
    local inputModule = self.initialModule:get(1)
    local startModule = self.initialModule:get(2)
    local transferModule = self.initialModule:get(3)
-   inputModule:accUpdateGradParameters(input, self.startModule.gradInput, lr*scale/rho)
-   -- startModule's gradParams shouldn't be step-averaged as it is used only once (the reason for this method).
+   inputModule:accUpdateGradParameters(input, self.startModule.gradInput, lr*scale)
    startModule:accUpdateGradParameters(inputModule.output, transferModule.gradInput, lr*scale)
-   transferModule:accUpdateGradParameters(startModule.output, gradOutput, lr*scale/rho)
+   transferModule:accUpdateGradParameters(startModule.output, gradOutput, lr*scale)
 end
 
 function Recurrent:accUpdateGradParametersThroughTime(lr)
@@ -261,7 +260,7 @@ function Recurrent:accUpdateGradParametersThroughTime(lr)
       local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
 
       local scale = self.scales[step]
-      recurrentModule:accUpdateGradParameters({input, output}, gradOutput, lr*scale/rho)
+      recurrentModule:accUpdateGradParameters({input, output}, gradOutput, lr*scale)
    end
    
    if stop <= 1 then      
