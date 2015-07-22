@@ -87,34 +87,38 @@ end
 
 -- goes hand in hand with the next method : forget()
 function AbstractRecurrent:recycle(offset)
-   offset = offset or 0
    -- offset can be used to skip initialModule (if any)
-   self.rho = self.rho + 1 -- pad with one extra time-step of memory (helps for Sequencer:remember())
-   if self.step > self.rho + offset then
+   offset = offset or 0
+   -- pad with one extra time-step of memory (helps for Sequencer:remember())
+   local rho = self.rho + 1 
+   -- rho could have been manually increased or decreased
+   rho = math.max(rho, _.size(self.outputs)-1)
+   
+   if self.step > rho + offset then
       assert(self.sharedClones[self.step] == nil)
-      assert(self.sharedClones[self.step-self.rho] ~= nil)
-      self.sharedClones[self.step] = self.sharedClones[self.step-self.rho]
-      self.sharedClones[self.step-self.rho] = nil
+      assert(self.sharedClones[self.step-rho] ~= nil)
+      self.sharedClones[self.step] = self.sharedClones[self.step-rho]
+      self.sharedClones[self.step-rho] = nil
       -- need to keep rho+1 of these
       assert(self.outputs[self.step] == nil)
-      assert(self.outputs[self.step-self.rho-1] ~= nil)
-      self.outputs[self.step] = self.outputs[self.step-self.rho-1] 
-      self.outputs[self.step-self.rho-1] = nil
+      assert(self.outputs[self.step-rho-1] ~= nil)
+      self.outputs[self.step] = self.outputs[self.step-rho-1] 
+      self.outputs[self.step-rho-1] = nil
    end
-   if self.step > self.rho then
+   if self.step > rho then
       assert(self.inputs[self.step] == nil)
-      assert(self.inputs[self.step-self.rho] ~= nil)
+      assert(self.inputs[self.step-rho] ~= nil)
       assert(self.gradOutputs[self.step] == nil)
       assert(self._gradOutputs[self.step] == nil)
-      self.inputs[self.step] = self.inputs[self.step-self.rho]
-      self.gradOutputs[self.step] = self.gradOutputs[self.step-self.rho] 
-      self._gradOutputs[self.step] = self._gradOutputs[self.step-self.rho]
-      self.inputs[self.step-self.rho] = nil
-      self.gradOutputs[self.step-self.rho] = nil
-      self._gradOutputs[self.step-self.rho] = nil
-      self.scales[self.step-self.rho] = nil
+      self.inputs[self.step] = self.inputs[self.step-rho]
+      self.gradOutputs[self.step] = self.gradOutputs[self.step-rho] 
+      self._gradOutputs[self.step] = self._gradOutputs[self.step-rho]
+      self.inputs[self.step-rho] = nil
+      self.gradOutputs[self.step-rho] = nil
+      self._gradOutputs[self.step-rho] = nil
+      self.scales[self.step-rho] = nil
    end
-   self.rho = self.rho - 1
+   
    return self
 end
 
