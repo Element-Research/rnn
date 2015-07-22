@@ -7,6 +7,7 @@ This library includes documentation for the following objects:
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : an abstract class inherited by Recurrent and LSTM;
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
+  * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
@@ -256,6 +257,12 @@ through inheritance by overriding the different factory methods :
   * `buildOutputGate` : builds the output gate (eq. 5). Currently calls `buildGate`;
   * `buildModel` : builds the actual LSTM model which is used internally (eq. 6).
   
+<a name='rnn.FastLSTM'></a>
+## FastLSTM ##
+
+A faster version of the [LSTM](#rnn.LSTM). 
+Basically, the input, forget and output gates, as well as the hidden state are computed at one fell swoop.
+  
 <a name='rnn.Sequencer'></a>
 ## Sequencer ##
 
@@ -295,10 +302,16 @@ Note that for now, it is only possible to decorate either recurrent or non-recur
 Specifically, it cannot handle non-recurrent Modules containing recurrent Modules. 
 Instead, either Modules should be encapsulated by its own `Sequencer`. This may change in the future.
 
-### remember([r]) ###
-When `r=true` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
+### remember([mode]) ###
+When `mode='both'` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
 each call to `forward`, which is the default behavior of the class. 
 This behavior is only applicable to decorated AbstractRecurrent `modules`.
+Accepted values for argument `mode` are as follows :
+
+ * 'eval' only affects evaluation (recommended for RNNs)
+ * 'train' only affects training
+ * 'neither' affects neither training nor evaluation (default behavior of the class)
+ * 'both' affects both training and evaluation (recommended for LSTMs)
 
 ### forget() ###
 Calls the decorated AbstractRecurrent module's `forget` method.

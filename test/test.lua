@@ -85,9 +85,9 @@ function rnntest.Recurrent()
    local gradInput4 = mlp4:backwardThroughTime()
    mytester:assertTensorEq(gradInput, gradInput4, 0.000001, 'error slow vs fast backwardThroughTime')
    local mlp10 = mlp7:clone()
-   mytester:assert(mlp10.inputs[1] == nil, 'recycle inputs error')
+   --mytester:assert(mlp10.inputs[1] == nil, 'recycle inputs error')
    mlp10:forget()
-   mytester:assert(#mlp10.inputs == 4, 'forget inputs error')
+   --mytester:assert(#mlp10.inputs == 4, 'forget inputs error')
    mytester:assert(#mlp10.outputs == 5, 'forget outputs error')
    local i = 0
    for k,v in pairs(mlp10.sharedClones) do
@@ -165,9 +165,6 @@ function rnntest.Recurrent()
    mytester:assert(#_.keys(gradParams2) == #_.keys(params), 'missing gradParameters2')
    
    for i,v in pairs(params) do
-      if i > 1 then
-         gradParams2[i]:div(nSteps)
-      end
       mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, 'gradParameter error ' .. i)
    end
    
@@ -179,9 +176,6 @@ function rnntest.Recurrent()
    mytester:assert(#_.keys(params9) == #_.keys(params7), 'missing parameters')
    mytester:assert(#_.keys(gradParams7) == #_.keys(params7), 'missing gradParameters')
    for i,v in pairs(params7) do
-      if i > 1 then
-         gradParams9[i]:div(nSteps-1)
-      end
       mytester:assertTensorEq(gradParams7[i], gradParams9[i], 0.00001, 'gradParameter error ' .. i)
    end
    
@@ -357,7 +351,7 @@ function rnntest.LSTM()
    local output2 = mlp2:forward(inputs)
    
    mlp2:zeroGradParameters()
-   local gradInput2 = mlp2:backward(inputs, gradOutput[nStep], 1/nStep)
+   local gradInput2 = mlp2:backward(inputs, gradOutput[nStep], 1) --/nStep)
    mytester:assertTensorEq(gradInput2[2][2][1], gradInput, 0.00001, "LSTM gradInput error")
    mytester:assertTensorEq(output[nStep], output2, 0.00001, "LSTM output error")
    
@@ -390,13 +384,76 @@ function rnntest.LSTM()
    end
    
    mytester:assertTensorEq(gradInput, gradInput3, 0.00001, "LSTM updateGradInputThroughTime error")
-   --if true then return end
+   
    local params3, gradParams3 = lstm:parameters()
    mytester:assert(#params == #params3, "LSTM parameters error "..#params.." ~= "..#params3)
    for i, gradParam in ipairs(gradParams) do
       local gradParam3 = gradParams3[i]
       mytester:assertTensorEq(gradParam, gradParam3, 0.000001, 
          "LSTM gradParam "..i.." error "..tostring(gradParam).." "..tostring(gradParam3))
+   end
+end
+
+function rnntest.FastLSTM()
+   --require 'dp'
+   local inputSize = 100
+   local batchSize = 40
+   local nStep = 3
+   
+   local input = {}
+   local gradOutput = {}
+   for step=1,nStep do
+      input[step] = torch.randn(batchSize, inputSize)
+      gradOutput[step] = torch.randn(batchSize, inputSize)
+   end
+   local gradOutputClone = gradOutput[1]:clone()
+   local lstm1 = nn.LSTM(inputSize, inputSize, nil, false)
+   local lstm2 = nn.FastLSTM(inputSize, inputSize, nil)
+   local seq1 = nn.Sequencer(lstm1)
+   local seq2 = nn.Sequencer(lstm2)
+   
+   local output1 = seq1:forward(input)
+   local gradInput1 = seq1:backward(input, gradOutput)
+   mytester:assertTensorEq(gradOutput[1], gradOutputClone, 0.00001, "LSTM modified gradOutput")
+   seq1:zeroGradParameters()
+   seq2:zeroGradParameters()
+   
+   -- make them have same params
+   local ig = lstm1.inputGate:parameters()
+   local hg = lstm1.hiddenLayer:parameters()
+   local fg = lstm1.forgetGate:parameters()
+   local og = lstm1.outputGate:parameters()
+   
+   local i2g = lstm2.i2g:parameters()
+   local o2g = lstm2.o2g:parameters()
+   
+   ig[1]:copy(i2g[1]:narrow(1,1,inputSize))
+   ig[2]:copy(i2g[2]:narrow(1,1,inputSize))
+   ig[3]:copy(o2g[1]:narrow(1,1,inputSize))
+   ig[4]:copy(o2g[2]:narrow(1,1,inputSize))
+   hg[1]:copy(i2g[1]:narrow(1,inputSize+1,inputSize))
+   hg[2]:copy(i2g[2]:narrow(1,inputSize+1,inputSize))
+   hg[3]:copy(o2g[1]:narrow(1,inputSize+1,inputSize))
+   hg[4]:copy(o2g[2]:narrow(1,inputSize+1,inputSize))
+   fg[1]:copy(i2g[1]:narrow(1,inputSize*2+1,inputSize))
+   fg[2]:copy(i2g[2]:narrow(1,inputSize*2+1,inputSize))
+   fg[3]:copy(o2g[1]:narrow(1,inputSize*2+1,inputSize))
+   fg[4]:copy(o2g[2]:narrow(1,inputSize*2+1,inputSize))
+   og[1]:copy(i2g[1]:narrow(1,inputSize*3+1,inputSize))
+   og[2]:copy(i2g[2]:narrow(1,inputSize*3+1,inputSize))
+   og[3]:copy(o2g[1]:narrow(1,inputSize*3+1,inputSize))
+   og[4]:copy(o2g[2]:narrow(1,inputSize*3+1,inputSize))
+   
+   local output1 = seq1:forward(input)
+   local gradInput1 = seq1:backward(input, gradOutput)
+   local output2 = seq2:forward(input)
+   local gradInput2 = seq2:backward(input, gradOutput)
+   
+   mytester:assert(#output1 == #output2 and #output1 == nStep)
+   mytester:assert(#gradInput1 == #gradInput2 and #gradInput1 == nStep)
+   for i=1,#output1 do
+      mytester:assertTensorEq(output1[i], output2[i], 0.000001, "FastLSTM output error "..i)
+      mytester:assertTensorEq(gradInput1[i], gradInput2[i], 0.000001, "FastLSTM gradInput error "..i)
    end
 end
 
@@ -407,12 +464,13 @@ function rnntest.Sequencer()
    local nSteps = 5 
    
    -- test with recurrent module
-   local inputModule = nn.Dictionary(dictSize, outputSize)
+   local inputModule = nn.LookupTable(dictSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
    local feedbackModule = nn.Euclidean(outputSize, outputSize)
    -- rho = nSteps
    local rnn = nn.Recurrent(outputSize, inputModule, feedbackModule, transferModule, nSteps)
+   rnn:zeroGradParameters()
    local rnn2 = rnn:clone()
    
    local inputs, outputs, gradOutputs = {}, {}, {}
@@ -424,6 +482,7 @@ function rnntest.Sequencer()
    end
    rnn:backwardThroughTime()
    
+   local gradOutput1 = gradOutputs[1]:clone()
    local rnn3 = nn.Sequencer(rnn2)
    local outputs3 = rnn3:forward(inputs)
    local gradInputs3 = rnn3:backward(inputs, gradOutputs)
@@ -432,6 +491,78 @@ function rnntest.Sequencer()
    for step,output in ipairs(outputs) do
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
       mytester:assertTensorEq(gradInputs3[step], rnn.gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
+   end
+   mytester:assertTensorEq(gradOutputs[1], gradOutput1, 0.00001, "Sequencer rnn gradOutput modified error")
+   
+   -- test remember for training mode
+   local nSteps7 = 10 -- nSteps*2
+   local rnn7 = nn.Recurrent(outputSize, nn.Linear(outputSize, outputSize), feedbackModule:clone(), transferModule:clone(), 5)
+   local rnn8 = rnn7:clone()
+   local rnn9 = rnn7:clone()
+   
+   local inputs7, outputs9 = {}, {}
+   for step=1,nSteps7 do
+      inputs7[step] = torch.randn(batchSize, outputSize)
+      outputs9[step] = rnn9:forward(inputs7[step]):clone()
+   end
+   
+   for i=1,2 do
+      for j=1,nSteps7/2 do
+         local step = (i-1)*nSteps7/2+j
+         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember forward err "..step)
+      end
+   end
+   
+   rnn7:forget()
+   
+   for i=1,2 do
+      for j=1,nSteps7/2 do
+         local step = (i-1)*nSteps7/2+j
+         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember forward2 err "..step)
+      end
+   end
+   
+   rnn7:forget()
+   
+   local outputs7, gradOutputs7, gradInputs7 = {}, {}, {}
+   for i=1,2 do
+      for j=1,nSteps7/2 do
+         local step = (i-1)*nSteps7/2+j
+         outputs7[step] = rnn7:forward(inputs7[step]):clone()
+         gradOutputs7[step] = torch.randn(batchSize, outputSize)
+         rnn7:backward(inputs7[step], gradOutputs7[step])
+      end
+      rnn7:backwardThroughTime()
+      for i=1,#rnn7.gradInputs do
+         table.insert(gradInputs7, rnn7.gradInputs[i])
+      end
+      rnn7:updateParameters(1)
+      rnn7:zeroGradParameters()
+   end
+   
+   local seq = nn.Sequencer(rnn8)
+   seq:remember('both')
+   local outputs8a = _.clone(seq:forward(_.slice(inputs7,1,5)))
+   local gradInputs8a = _.clone(seq:backward(_.slice(inputs7,1,5), _.slice(gradOutputs7,1,5)))
+   seq:updateParameters(1)
+   seq:zeroGradParameters()
+   
+   local outputs8b = _.clone(seq:forward(_.slice(inputs7,6,10)))
+   local gradInputs8b = _.clone(seq:backward(_.slice(inputs7,6,10), _.slice(gradOutputs7,6,10)))
+   seq:updateParameters(1)
+   
+   for i=1,5 do
+      mytester:assertTensorEq(gradInputs8a[i], gradInputs7[i], 0.0000001, "Sequencer remember first backward err "..i)
+   end
+   for i=6,10 do
+      mytester:assertTensorEq(gradInputs8b[i-5], gradInputs7[i], 0.0000001, "Sequencer remember second backward err "..i)
+      mytester:assertTensorEq(outputs8b[i-5], outputs7[i], 0.0000001, "Sequencer remember second forward err "..i)
+   end
+   
+   local params7 = rnn7:parameters()
+   local params8 = rnn8:parameters()
+   for i=1,#params7 do
+      mytester:assertTensorEq(params7[i], params8[i], 0.0000001, "Sequencer remember params err "..i)
    end
    
    -- test in evaluation mode
@@ -527,19 +658,25 @@ function rnntest.Sequencer()
    end
    
    -- test with LSTM
-   local lstm = nn.LSTM(inputSize, outputSize)
+   local outputSize = inputSize
+   local lstm = nn.LSTM(inputSize, outputSize, nil, false)
+   lstm:zeroGradParameters()
    local lstm2 = lstm:clone()
    
    local inputs, outputs, gradOutputs = {}, {}, {}
    for step=1,nSteps do
       inputs[step] = torch.randn(batchSize, inputSize)
-      outputs[step] = lstm:forward(inputs[step])
       gradOutputs[step] = torch.randn(batchSize, outputSize)
+   end
+   local gradOutput1 = gradOutputs[2]:clone()
+   for step=1,nSteps do
+      outputs[step] = lstm:forward(inputs[step])
       lstm:backward(inputs[step], gradOutputs[step])
    end
    lstm:backwardThroughTime()
    
    local lstm3 = nn.Sequencer(lstm2)
+   lstm3:zeroGradParameters()
    local outputs3 = lstm3:forward(inputs)
    local gradInputs3 = lstm3:backward(inputs, gradOutputs)
    mytester:assert(#outputs3 == #outputs, "Sequencer LSTM output size err")
@@ -548,6 +685,7 @@ function rnntest.Sequencer()
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer LSTM output "..step)
       mytester:assertTensorEq(gradInputs3[step], lstm.gradInputs[step], 0.00001, "Sequencer LSTM gradInputs "..step)
    end
+   mytester:assertTensorEq(gradOutputs[2], gradOutput1, 0.00001, "Sequencer lstm gradOutput modified error")
 end
 
 function rnntest.BiSequencer()
@@ -753,6 +891,340 @@ function rnntest.SequencerCriterion()
       mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "SequencerCriterion backward err "..i)
    end
    mytester:assert(sc.isStateless, "SequencerCriterion stateless error")
+end
+
+function rnntest.LSTM_nn_vs_nngraph()
+   local model = {}
+   -- match the successful https://github.com/wojzaremba/lstm
+   -- We want to make sure our LSTM matches theirs.
+   -- Also, the ugliest unit test you have every seen.
+   -- Resolved 2-3 annoying bugs with it.
+   local success = pcall(function() require 'nngraph' end)
+   if not success then
+      return
+   end
+   
+   local vocabSize = 100
+   local inputSize = 30
+   local batchSize = 4
+   local nLayer = 2
+   local dropout = 0
+   local nStep = 10
+   local lr = 1
+   
+   -- build nn equivalent of nngraph model
+   local model2 = nn.Sequential()
+   local container2 = nn.Container()
+   container2:add(nn.LookupTable(vocabSize, inputSize))
+   model2:add(container2:get(1))
+   local dropout2 = nn.Dropout(dropout)
+   model2:add(dropout2)
+   model2:add(nn.SplitTable(1,2))
+   container2:add(nn.FastLSTM(inputSize, inputSize))
+   model2:add(nn.Sequencer(container2:get(2)))
+   model2:add(nn.Sequencer(nn.Dropout(0)))
+   container2:add(nn.FastLSTM(inputSize, inputSize))
+   model2:add(nn.Sequencer(container2:get(3)))
+   model2:add(nn.Sequencer(nn.Dropout(0)))
+   container2:add(nn.Linear(inputSize, vocabSize))
+   model2:add(nn.Sequencer(container2:get(4)))
+   model2:add(nn.Sequencer(nn.LogSoftMax()))
+   
+   local criterion2 = nn.ModuleCriterion(nn.SequencerCriterion(nn.ClassNLLCriterion()), nil, nn.SplitTable(1,1))
+   
+   
+   -- nngraph model 
+   local container = nn.Container()
+   local lstmId = 1
+   local function lstm(x, prev_c, prev_h)
+      -- Calculate all four gates in one go
+      local i2h = nn.Linear(inputSize, 4*inputSize)
+      local dummy = nn.Container()
+      dummy:add(i2h)
+      i2h = i2h(x)
+      local h2h = nn.LinearNoBias(inputSize, 4*inputSize)
+      dummy:add(h2h)
+      h2h = h2h(prev_h)
+      container:add(dummy)
+      local gates = nn.CAddTable()({i2h, h2h})
+
+      -- Reshape to (batch_size, n_gates, hid_size)
+      -- Then slize the n_gates dimension, i.e dimension 2
+      local reshaped_gates =  nn.Reshape(4,inputSize)(gates)
+      local sliced_gates = nn.SplitTable(2)(reshaped_gates)
+
+      -- Use select gate to fetch each gate and apply nonlinearity
+      local in_gate          = nn.Sigmoid()(nn.SelectTable(1)(sliced_gates))
+      local in_transform     = nn.Tanh()(nn.SelectTable(2)(sliced_gates))
+      local forget_gate      = nn.Sigmoid()(nn.SelectTable(3)(sliced_gates))
+      local out_gate         = nn.Sigmoid()(nn.SelectTable(4)(sliced_gates))
+
+      local next_c           = nn.CAddTable()({
+         nn.CMulTable()({forget_gate, prev_c}),
+         nn.CMulTable()({in_gate,     in_transform})
+      })
+      local next_h           = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
+      lstmId = lstmId + 1
+      return next_c, next_h
+   end
+   local function create_network()
+      local x                = nn.Identity()()
+      local y                = nn.Identity()()
+      local prev_s           = nn.Identity()()
+      local lookup = nn.LookupTable(vocabSize, inputSize)
+      container:add(lookup)
+      local identity = nn.Identity()
+      lookup = identity(lookup(x))
+      local i                = {[0] = lookup}
+      local next_s           = {}
+      local split         = {prev_s:split(2 * nLayer)}
+      for layer_idx = 1, nLayer do
+         local prev_c         = split[2 * layer_idx - 1]
+         local prev_h         = split[2 * layer_idx]
+         local dropped        = nn.Dropout(dropout)(i[layer_idx - 1])
+         local next_c, next_h = lstm(dropped, prev_c, prev_h)
+         table.insert(next_s, next_c)
+         table.insert(next_s, next_h)
+         i[layer_idx] = next_h
+      end
+      
+      local h2y              = nn.Linear(inputSize, vocabSize)
+      container:add(h2y)
+      local dropped          = nn.Dropout(dropout)(i[nLayer])
+      local pred             = nn.LogSoftMax()(h2y(dropped))
+      local err              = nn.ClassNLLCriterion()({pred, y})
+      local module           = nn.gModule({x, y, prev_s}, {err, nn.Identity()(next_s)})
+      module:getParameters():uniform(-0.1, 0.1)
+      module._lookup = identity
+      return module
+   end
+   
+   local function g_cloneManyTimes(net, T)
+      local clones = {}
+      local params, gradParams = net:parameters()
+      local mem = torch.MemoryFile("w"):binary()
+      assert(net._lookup)
+      mem:writeObject(net)
+      for t = 1, T do
+         local reader = torch.MemoryFile(mem:storage(), "r"):binary()
+         local clone = reader:readObject()
+         reader:close()
+         local cloneParams, cloneGradParams = clone:parameters()
+         for i = 1, #params do
+            cloneParams[i]:set(params[i])
+            cloneGradParams[i]:set(gradParams[i])
+         end
+         clones[t] = clone
+         collectgarbage()
+      end
+      mem:close()
+      return clones
+   end
+   
+   local model = {}
+   local paramx, paramdx
+   local core_network = create_network()
+   
+   -- sync nn with nngraph model
+   local params, gradParams = container:getParameters()
+   local params2, gradParams2 = container2:getParameters()
+   params2:copy(params)
+   container:zeroGradParameters()
+   container2:zeroGradParameters()
+   paramx, paramdx = core_network:getParameters()
+   
+   model.s = {}
+   model.ds = {}
+   model.start_s = {}
+   for j = 0, nStep do
+      model.s[j] = {}
+      for d = 1, 2 * nLayer do
+         model.s[j][d] = torch.zeros(batchSize, inputSize)
+      end
+   end
+   for d = 1, 2 * nLayer do
+      model.start_s[d] = torch.zeros(batchSize, inputSize)
+      model.ds[d] = torch.zeros(batchSize, inputSize)
+   end
+   model.core_network = core_network
+   model.rnns = g_cloneManyTimes(core_network, nStep)
+   model.norm_dw = 0
+   model.err = torch.zeros(nStep)
+   
+   -- more functions for nngraph baseline
+   local function g_replace_table(to, from)
+     assert(#to == #from)
+     for i = 1, #to do
+       to[i]:copy(from[i])
+     end
+   end
+
+   local function reset_ds()
+     for d = 1, #model.ds do
+       model.ds[d]:zero()
+     end
+   end
+   
+   local function reset_state(state)
+     state.pos = 1
+     if model ~= nil and model.start_s ~= nil then
+       for d = 1, 2 * nLayer do
+         model.start_s[d]:zero()
+       end
+     end
+   end
+
+   local function fp(state)
+     g_replace_table(model.s[0], model.start_s)
+     if state.pos + nStep > state.data:size(1) then
+         error"Not Supposed to happen in this unit test"
+     end
+     for i = 1, nStep do
+       local x = state.data[state.pos]
+       local y = state.data[state.pos + 1]
+       local s = model.s[i - 1]
+       model.err[i], model.s[i] = unpack(model.rnns[i]:forward({x, y, s}))
+       state.pos = state.pos + 1
+     end
+     g_replace_table(model.start_s, model.s[nStep])
+     return model.err:mean()
+   end
+
+   model.dss = {}
+   local function bp(state)
+     paramdx:zero()
+     local __, gradParams = core_network:parameters()
+     for i=1,#gradParams do
+        mytester:assert(gradParams[i]:sum() == 0)
+     end
+     reset_ds() -- backward of last step in each sequence is zero
+     for i = nStep, 1, -1 do
+       state.pos = state.pos - 1
+       local x = state.data[state.pos]
+       local y = state.data[state.pos + 1]
+       local s = model.s[i - 1]
+       local derr = torch.ones(1)
+       local tmp = model.rnns[i]:backward({x, y, s}, {derr, model.ds,})[3]
+       model.dss[i-1] = tmp
+       g_replace_table(model.ds, tmp)
+     end
+     state.pos = state.pos + nStep
+     paramx:add(-lr, paramdx)
+   end
+   
+   -- inputs and targets (for nngraph implementation)
+   local inputs = torch.Tensor(nStep*10, batchSize):random(1,vocabSize)
+
+   -- is everything aligned between models?
+   local params_, gradParams_ = container:parameters()
+   local params2_, gradParams2_ = container2:parameters()
+
+   for i=1,#params_ do
+      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph unaligned params err "..i)
+      mytester:assertTensorEq(gradParams_[i], gradParams2_[i], 0.00001, "nn vs nngraph unaligned gradParams err "..i)
+   end
+   
+   -- forward 
+   local state = {pos=1,data=inputs}
+   local err = fp(state)
+   
+   local inputs2 = inputs:narrow(1,1,nStep):transpose(1,2)
+   local targets2 = inputs:narrow(1,2,nStep):transpose(1,2)
+   local outputs2 = model2:forward(inputs2)
+   local err2 = criterion2:forward(outputs2, targets2)
+   mytester:asserteq(err, err2/nStep, 0.0001, "nn vs nngraph err error")
+   
+   -- backward/update
+   bp(state)
+   
+   local gradOutputs2 = criterion2:backward(outputs2, targets2)
+   model2:backward(inputs2, gradOutputs2)
+   model2:updateParameters(lr)
+   model2:zeroGradParameters()
+   
+   for i=1,#gradParams2_ do
+      mytester:assert(gradParams2_[i]:sum() == 0)
+   end
+   
+   for i=1,#params_ do
+      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph params err "..i)
+   end
+   
+   for i=1,nStep do
+      mytester:assertTensorEq(model.rnns[i]._lookup.output, dropout2.output:select(2,i), 0.0000001)
+      mytester:assertTensorEq(model.rnns[i]._lookup.gradInput, dropout2.gradInput:select(2,i), 0.0000001)
+   end
+   
+   -- next_c, next_h, next_c...
+   for i=nStep-1,2,-1 do
+      mytester:assertTensorEq(model.dss[i][1], container2:get(2).gradCells[i], 0.0000001, "gradCells1 err "..i)
+      mytester:assertTensorEq(model.dss[i][2], container2:get(2)._gradOutputs[i] - container2:get(2).gradOutputs[i], 0.0000001, "gradOutputs1 err "..i)
+      mytester:assertTensorEq(model.dss[i][3], container2:get(3).gradCells[i], 0.0000001, "gradCells2 err "..i)
+      mytester:assertTensorEq(model.dss[i][4], container2:get(3)._gradOutputs[i] - container2:get(3).gradOutputs[i], 0.0000001, "gradOutputs2 err "..i)
+   end
+   
+   for i=1,#params2_ do
+      params2_[i]:copy(params_[i])
+      gradParams_[i]:copy(gradParams2_[i])
+   end
+   
+   local gradInputClone = dropout2.gradInput:select(2,1):clone()
+   
+   local start_s = _.map(model.start_s, function(k,v) return v:clone() end)
+   mytester:assertTensorEq(start_s[1], container2:get(2).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[2], container2:get(2).outputs[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[3], container2:get(3).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[4], container2:get(3).outputs[nStep], 0.0000001)
+   
+   -- and do it again
+   -- forward 
+   --reset_state(state)
+   
+   local inputs2 = inputs:narrow(1,nStep+1,nStep):transpose(1,2)
+   local targets2 = inputs:narrow(1,nStep+2,nStep):transpose(1,2)
+   model2:remember()
+   local outputs2 = model2:forward(inputs2)
+   
+   local inputsClone, outputsClone, cellsClone = container2:get(2).inputs[nStep+1]:clone(), container2:get(2).outputs[nStep]:clone(), container2:get(2).cells[nStep]:clone()
+   local err2 = criterion2:forward(outputs2, targets2)
+   local state = {pos=nStep+1,data=inputs}
+   local err = fp(state)
+   mytester:asserteq(err2/nStep, err, 0.00001, "nn vs nngraph err error")
+   -- backward/update
+   bp(state)
+   
+   local gradOutputs2 = criterion2:backward(outputs2, targets2)
+   model2:backward(inputs2, gradOutputs2)
+   
+   mytester:assertTensorEq(start_s[1], container2:get(2).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[2], container2:get(2).outputs[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[3], container2:get(3).cells[nStep], 0.0000001)
+   mytester:assertTensorEq(start_s[4], container2:get(3).outputs[nStep], 0.0000001)
+   
+   model2:updateParameters(lr)
+   
+   mytester:assertTensorEq(inputsClone, container2:get(2).inputs[nStep+1], 0.000001)
+   mytester:assertTensorEq(outputsClone, container2:get(2).outputs[nStep], 0.000001)
+   mytester:assertTensorEq(cellsClone, container2:get(2).cells[nStep], 0.000001)
+   
+   -- next_c, next_h, next_c...
+   for i=nStep-1,2,-1 do
+      mytester:assertTensorEq(model.dss[i][1], container2:get(2).gradCells[i+nStep], 0.0000001, "gradCells1 err "..i)
+      mytester:assertTensorEq(model.dss[i][2], container2:get(2)._gradOutputs[i+nStep] - container2:get(2).gradOutputs[i+nStep], 0.0000001, "gradOutputs1 err "..i)
+      mytester:assertTensorEq(model.dss[i][3], container2:get(3).gradCells[i+nStep], 0.0000001, "gradCells2 err "..i)
+      mytester:assertTensorEq(model.dss[i][4], container2:get(3)._gradOutputs[i+nStep] - container2:get(3).gradOutputs[i+nStep], 0.0000001, "gradOutputs2 err "..i)
+   end
+   
+   mytester:assertTensorNe(gradInputClone, dropout2.gradInput:select(2,1), 0.0000001, "lookup table gradInput1 err")
+   
+   for i=1,nStep do
+      mytester:assertTensorEq(model.rnns[i]._lookup.output, dropout2.output:select(2,i), 0.0000001, "lookup table output err "..i)
+      mytester:assertTensorEq(model.rnns[i]._lookup.gradInput, dropout2.gradInput:select(2,i), 0.0000001, "lookup table gradInput err "..i)
+   end
+   
+   for i=1,#params_ do
+      mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph second update params err "..i)
+   end
 end
 
 
