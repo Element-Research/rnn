@@ -183,9 +183,9 @@ function rnntest.Recurrent()
    mlp:updateParameters(0.1) 
    mlp4:updateParameters(0.1) 
    
-   local params4 = mlp4:parameters()
-   local params5 = mlp5:parameters()
-   local params = mlp:parameters()
+   local params4 = mlp4:sparseParameters()
+   local params5 = mlp5:sparseParameters()
+   local params = mlp:sparseParameters()
    mytester:assert(#_.keys(params4) == #_.keys(params), 'missing parameters')
    mytester:assert(#_.keys(params5) ~= #_.keys(params), 'missing parameters') -- because of nn.Dictionary (it has sparse params)
    for k,v in pairs(params) do
