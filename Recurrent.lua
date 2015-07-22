@@ -180,12 +180,12 @@ function Recurrent:updateGradInputThroughTime()
    if stop <= 1 then      
       -- backward propagate through first step
       local input = self.inputs[1]
-       local gradOutput = self.gradOutputs[1]
-         if gradPrevOutput then
-            self._gradOutputs[1] = nn.rnn.recursiveCopy(self._gradOutputs[1], gradPrevOutput)
-            nn.rnn.recursiveAdd(self._gradOutputs[1], gradOutput)
-            gradOutput = self._gradOutputs[1]
-         end
+      local gradOutput = self.gradOutputs[1]
+      if gradPrevOutput then
+         self._gradOutputs[1] = nn.rnn.recursiveCopy(self._gradOutputs[1], gradPrevOutput)
+         nn.rnn.recursiveAdd(self._gradOutputs[1], gradOutput)
+         gradOutput = self._gradOutputs[1]
+      end
       gradInput = self.initialModule:updateGradInput(input, gradOutput)
       table.insert(self.gradInputs, 1, gradInput)
    end
