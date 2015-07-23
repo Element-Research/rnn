@@ -86,6 +86,7 @@ function AbstractRecurrent:updateParameters(learningRate)
 end
 
 -- goes hand in hand with the next method : forget()
+-- this methods brings the oldest memory to the current step
 function AbstractRecurrent:recycle(offset)
    -- offset can be used to skip initialModule (if any)
    offset = offset or 0
@@ -96,24 +97,22 @@ function AbstractRecurrent:recycle(offset)
    
    if self.step > rho + offset then
       assert(self.sharedClones[self.step] == nil)
-      assert(self.sharedClones[self.step-rho] ~= nil)
       self.sharedClones[self.step] = self.sharedClones[self.step-rho]
       self.sharedClones[self.step-rho] = nil
       -- need to keep rho+1 of these
       assert(self.outputs[self.step] == nil)
-      assert(self.outputs[self.step-rho-1] ~= nil)
       self.outputs[self.step] = self.outputs[self.step-rho-1] 
       self.outputs[self.step-rho-1] = nil
    end
+   
    if self.step > rho then
       assert(self.inputs[self.step] == nil)
-      assert(self.inputs[self.step-rho] ~= nil)
       assert(self.gradOutputs[self.step] == nil)
       assert(self._gradOutputs[self.step] == nil)
       self.inputs[self.step] = self.inputs[self.step-rho]
+      self.inputs[self.step-rho] = nil      
       self.gradOutputs[self.step] = self.gradOutputs[self.step-rho] 
       self._gradOutputs[self.step] = self._gradOutputs[self.step-rho]
-      self.inputs[self.step-rho] = nil
       self.gradOutputs[self.step-rho] = nil
       self._gradOutputs[self.step-rho] = nil
       self.scales[self.step-rho] = nil
@@ -122,6 +121,7 @@ function AbstractRecurrent:recycle(offset)
    return self
 end
 
+-- this method brings all the memory back to the start
 function AbstractRecurrent:forget(offset)
    offset = offset or 0
    
