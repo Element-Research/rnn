@@ -7,6 +7,8 @@
 -- sequence in forward order.
 -- Applies the `bwd` rnn in reverse order to the last `N-1` elements 
 -- (from second-to-last element to first element).
+-- Note : you shouldn't stack these for language modeling. 
+-- Instead, stack each fwd/bwd seqs and encapsulate these.
 ------------------------------------------------------------------------
 local BiSequencerLM, parent = torch.class('nn.BiSequencerLM', 'nn.Container')
 
@@ -36,8 +38,17 @@ function BiSequencerLM:__init(forward, backward, merge)
       error"BiSequencerLM: expecting nn.Module or number instance at arg 3"
    end
    
-   self.fwdSeq = nn.Sequencer(self.forwardModule)
-   self.bwdSeq = nn.Sequencer(self.backwardModule)
+   if torch.isTypeOf(self.forwardModule, 'nn.AbstractRecurrent') then
+      self.fwdSeq = nn.Sequencer(self.forwardModule)
+   else -- assumes a nn.Sequencer or stack thereof
+      self.fwdSeq = self.forwardModule
+   end
+   
+   if torch.isTypeOf(self.backwardModule, 'nn.AbstractRecurrent') then
+      self.bwdSeq = nn.Sequencer(self.backwardModule)
+   else
+      self.bwdSeq = self.backwardModule
+   end
    self.mergeSeq = nn.Sequencer(self.mergeModule)
    
    self._fwd = self.fwdSeq

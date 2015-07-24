@@ -5,16 +5,21 @@ rnn = {}
 
 torch.include('rnn', 'recursiveUtils.lua')
 
+-- extensions to nn.Module
+torch.include('rnn', 'Module.lua')
+
 -- for testing:
 torch.include('rnn', 'test.lua')
 
 -- support modules
 torch.include('rnn', 'ZeroGrad.lua')
+torch.include('rnn', 'LinearNoBias.lua')
 
 -- recurrent modules
 torch.include('rnn', 'AbstractRecurrent.lua')
 torch.include('rnn', 'Recurrent.lua')
 torch.include('rnn', 'LSTM.lua')
+torch.include('rnn', 'FastLSTM.lua')
 
 torch.include('rnn', 'Repeater.lua')
 torch.include('rnn', 'Sequencer.lua')

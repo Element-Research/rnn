@@ -62,20 +62,3 @@ function BiSequencer:__init(forward, backward, merge)
    self.output = {}
    self.gradInput = {}
 end
-
--- Turn this on to feed long sequences using multiple forwards.
--- Only affects evaluation (self.train = false).
--- Essentially, forget() isn't called on rnn module when remember is on
-function BiSequencer:remember(remember)
-   self._remember = (remember == nil) and true or false
-   self.fwdSeq:remember(self._remember)
-   self.bwdSeq:remember(self._remember)
-   self.mergeSeq:remember(self._remember)
-end
-
--- You can use this to manually forget.
-function BiSequencer:forget()
-   self.fwdSeq:forget()
-   self.bwdSeq:forget()
-   self.mergeSeq:forget()
-end
