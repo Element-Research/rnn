@@ -227,7 +227,6 @@ function Sequencer:training()
       end
       -- forget at the start of each training
       self:forget()
-      print"in training"
    end
    parent.training(self)
 end
@@ -238,7 +237,6 @@ function Sequencer:evaluate()
       self.output = {}
       -- forget at the start of each evaluation
       self:forget()
-      print"in evaluation"
    end
    parent.evaluate(self)
    assert(self.train == false)
