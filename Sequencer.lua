@@ -200,6 +200,8 @@ end
 -- Essentially, forget() isn't called on rnn module when remember is on
 function Sequencer:remember(remember)
    self._remember = (remember == nil) and 'both' or remember
+   assert(_.contains({'both','eval','train','neither'}, self._remember), 
+      "Sequencer : unrecognized value for remember : "..self._remember)
    return self
 end
 
@@ -218,23 +220,26 @@ end
 
 function Sequencer:training()
    if self.isRecurrent and self.train == false then
-      -- empty output table (tensor mem is managed by seq)
+      -- empty output table (tensor mem was managed by seq)
       for i,output in ipairs(self.output) do
          table.insert(self._output, output)
          self.output[i] = nil
       end
+      -- forget at the start of each training
+      self:forget()
    end
    parent.training(self)
 end
 
 function Sequencer:evaluate()
    if self.isRecurrent and self.train ~= false then
-      -- empty output table (tensor mem is managed by rnn)
+      -- empty output table (tensor mem was managed by rnn)
       self.output = {}
       -- forget at the start of each evaluation
       self:forget()
    end
    parent.evaluate(self)
+   assert(self.train == false)
 end
 
 Sequencer.__tostring__ = nn.Decorator.__tostring__
