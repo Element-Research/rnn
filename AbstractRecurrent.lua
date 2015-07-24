@@ -90,21 +90,24 @@ end
 function AbstractRecurrent:recycle(offset)
    -- offset can be used to skip initialModule (if any)
    offset = offset or 0
-   -- pad with one extra time-step of memory (helps for Sequencer:remember())
-   local rho = self.rho + 1 
-   -- rho could have been manually increased or decreased
-   rho = math.max(rho, _.size(self.outputs)-1)
-   
+   -- pad rho with one extra time-step of memory (helps for Sequencer:remember()).
+   -- also, rho could have been manually increased or decreased
+   local rho = math.max(self.rho+1, _.size(self.sharedClones))
    if self.step > rho + offset then
       assert(self.sharedClones[self.step] == nil)
       self.sharedClones[self.step] = self.sharedClones[self.step-rho]
       self.sharedClones[self.step-rho] = nil
+   end
+   
+   rho = math.max(self.rho+1, _.size(self.outputs))
+   if self.step > rho + offset then
       -- need to keep rho+1 of these
       assert(self.outputs[self.step] == nil)
       self.outputs[self.step] = self.outputs[self.step-rho-1] 
       self.outputs[self.step-rho-1] = nil
    end
    
+   rho = math.max(self.rho+1, _.size(self.inputs))
    if self.step > rho then
       assert(self.inputs[self.step] == nil)
       assert(self.gradOutputs[self.step] == nil)

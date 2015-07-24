@@ -494,149 +494,155 @@ function rnntest.Sequencer()
    end
    mytester:assertTensorEq(gradOutputs[1], gradOutput1, 0.00001, "Sequencer rnn gradOutput modified error")
    
-   -- test remember for training mode (with variable length)
    local nSteps7 = torch.Tensor{5,4,5,3,7,3,3,3}
-   local rnn7 = nn.Recurrent(outputSize, nn.Linear(outputSize, outputSize), feedbackModule:clone(), transferModule:clone(), nSteps7:max())
-   rnn7:zeroGradParameters()
-   local rnn8 = rnn7:clone()
-   local rnn9 = rnn7:clone()
-   
-   local inputs7, outputs9 = {}, {}
-   for step=1,nSteps7:sum() do
-      inputs7[step] = torch.randn(batchSize, outputSize)
-      outputs9[step] = rnn9:forward(inputs7[step]):clone()
-   end
-   
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember forward err "..step)
-         step = step + 1
-      end
-   end
-   
-   rnn7:forget()
-   
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember forward2 err "..step)
-         step = step + 1
-      end
-   end
-   
-   rnn7:forget()
-   
-   local step = 1
-   local outputs7, gradOutputs7, gradInputs7 = {}, {}, {}
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         outputs7[step] = rnn7:forward(inputs7[step]):clone()
-         gradOutputs7[step] = torch.randn(batchSize, outputSize)
-         rnn7:backward(inputs7[step], gradOutputs7[step])
-         step = step + 1
-      end
-      rnn7.rho = nSteps7[i]
-      rnn7:backwardThroughTime()
-      for i=1,#rnn7.gradInputs do
-         table.insert(gradInputs7, rnn7.gradInputs[i]:clone())
-      end
-      rnn7:updateParameters(1)
+   local function testRemember(rnn)
+      -- test remember for training mode (with variable length)
+      local rnn7 = rnn:clone()
       rnn7:zeroGradParameters()
-   end
-   
-   local seq = nn.Sequencer(rnn8)
-   seq:remember('both')
-   local outputs8, gradInputs8 = {}, {}
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      local inputs8 = _.slice(inputs7,step,step+nSteps7[i]-1)
-      local gradOutputs8 = _.slice(gradOutputs7,step,step+nSteps7[i]-1)
-      outputs8[i] = _.map(seq:forward(inputs8), function(k,v) return v:clone() end)
-      gradInputs8[i] = _.map(seq:backward(inputs8, gradOutputs8), function(k,v) return v:clone() end)
-      seq:updateParameters(1)
-      seq:zeroGradParameters()
-      step = step + nSteps7[i]
-   end
-   
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         mytester:assertTensorEq(gradInputs8[i][j], gradInputs7[step], 0.0000001, "Sequencer remember variable backward err "..i.." "..j)
-         mytester:assertTensorEq(outputs8[i][j], outputs7[step], 0.0000001, "Sequencer remember variable forward err "..i.." "..j)
-         step = step + 1
+      local rnn8 = rnn7:clone()
+      local rnn9 = rnn7:clone()
+      
+      local inputs7, outputs9 = {}, {}
+      for step=1,nSteps7:sum() do
+         inputs7[step] = torch.randn(batchSize, outputSize)
+         outputs9[step] = rnn9:forward(inputs7[step]):clone()
+      end
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer "..torch.type(rnn7).." remember forward err "..step)
+            step = step + 1
+         end
+      end
+      
+      rnn7:forget()
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer "..torch.type(rnn7).." remember forward2 err "..step)
+            step = step + 1
+         end
+      end
+      
+      rnn7:forget()
+      
+      local step = 1
+      local outputs7, gradOutputs7, gradInputs7 = {}, {}, {}
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            outputs7[step] = rnn7:forward(inputs7[step]):clone()
+            gradOutputs7[step] = torch.randn(batchSize, outputSize)
+            rnn7:backward(inputs7[step], gradOutputs7[step])
+            step = step + 1
+         end
+         rnn7.rho = nSteps7[i]
+         rnn7:backwardThroughTime()
+         for i=1,#rnn7.gradInputs do
+            table.insert(gradInputs7, rnn7.gradInputs[i]:clone())
+         end
+         rnn7:updateParameters(1)
+         rnn7:zeroGradParameters()
+      end
+      
+      local seq = nn.Sequencer(rnn8)
+      seq:remember('both')
+      local outputs8, gradInputs8 = {}, {}
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         local inputs8 = _.slice(inputs7,step,step+nSteps7[i]-1)
+         local gradOutputs8 = _.slice(gradOutputs7,step,step+nSteps7[i]-1)
+         outputs8[i] = _.map(seq:forward(inputs8), function(k,v) return v:clone() end)
+         gradInputs8[i] = _.map(seq:backward(inputs8, gradOutputs8), function(k,v) return v:clone() end)
+         seq:updateParameters(1)
+         seq:zeroGradParameters()
+         step = step + nSteps7[i]
+      end
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            if torch.type(rnn7) == 'nn.LSTM' then
+            end
+            mytester:assertTensorEq(gradInputs8[i][j], gradInputs7[step], 0.0000001, "Sequencer "..torch.type(rnn7).." remember variable backward err "..i.." "..j)
+            mytester:assertTensorEq(outputs8[i][j], outputs7[step], 0.0000001, "Sequencer "..torch.type(rnn7).." remember variable forward err "..i.." "..j)
+            step = step + 1
+         end
+      end
+      
+      local params7 = rnn7:parameters()
+      local params8 = rnn8:parameters()
+      for i=1,#params7 do
+         mytester:assertTensorEq(params7[i], params8[i], 0.0000001, "Sequencer "..torch.type(rnn7).." remember params err "..i)
+      end
+      
+      -- test in evaluation mode with remember and variable rho
+      
+      local rnn7 = rnn:clone()
+      local rnn8 = rnn7:clone()
+      local rnn9 = rnn7:clone()
+      rnn9:evaluate()
+      rnn7:evaluate()
+      rnn8:evaluate()
+      
+      local inputs7, outputs9 = {}, {}
+      for step=1,nSteps7:sum() do
+         inputs7[step] = torch.randn(batchSize, outputSize)
+         outputs9[step] = rnn9:forward(inputs7[step]):clone()
+      end
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer "..torch.type(rnn7).." remember eval forward err "..step)
+            step = step + 1
+         end
+      end
+      
+      rnn7:forget()
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer "..torch.type(rnn7).." remember eval forward2 err "..step)
+            step = step + 1
+         end
+      end
+      
+      rnn7:forget()
+      
+      local step = 1
+      local outputs7 = {}
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            outputs7[step] = rnn7:forward(inputs7[step]):clone()
+            step = step + 1
+         end
+      end
+      
+      local seq = nn.Sequencer(rnn8)
+      seq:remember('both')
+      seq:evaluate()
+      local outputs8 = {}
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         local inputs8 = _.slice(inputs7,step,step+nSteps7[i]-1)
+         local gradOutputs8 = _.slice(gradOutputs7,step,step+nSteps7[i]-1)
+         outputs8[i] = _.map(seq:forward(inputs8), function(k,v) return v:clone() end)
+         step = step + nSteps7[i]
+      end
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(outputs8[i][j], outputs7[step], 0.0000001, "Sequencer "..torch.type(rnn7).." remember variable eval forward err "..i.." "..j)
+            step = step + 1
+         end
       end
    end
-   
-   local params7 = rnn7:parameters()
-   local params8 = rnn8:parameters()
-   for i=1,#params7 do
-      mytester:assertTensorEq(params7[i], params8[i], 0.0000001, "Sequencer remember params err "..i)
-   end
-   
-   -- test in evaluation mode with remember and variable rho
-   
-   local rnn7 = nn.Recurrent(outputSize, nn.Linear(outputSize, outputSize), feedbackModule:clone(), transferModule:clone(), nSteps7:max())
-   local rnn8 = rnn7:clone()
-   local rnn9 = rnn7:clone()
-   rnn9:evaluate()
-   rnn7:evaluate()
-   rnn8:evaluate()
-   
-   local inputs7, outputs9 = {}, {}
-   for step=1,nSteps7:sum() do
-      inputs7[step] = torch.randn(batchSize, outputSize)
-      outputs9[step] = rnn9:forward(inputs7[step]):clone()
-   end
-   
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember eval forward err "..step)
-         step = step + 1
-      end
-   end
-   
-   rnn7:forget()
-   
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         mytester:assertTensorEq(outputs9[step], rnn7:forward(inputs7[step]), 0.000001, "Sequencer rnn remember eval forward2 err "..step)
-         step = step + 1
-      end
-   end
-   
-   rnn7:forget()
-   
-   local step = 1
-   local outputs7 = {}
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         outputs7[step] = rnn7:forward(inputs7[step]):clone()
-         step = step + 1
-      end
-   end
-   
-   local seq = nn.Sequencer(rnn8)
-   seq:remember('both')
-   seq:evaluate()
-   local outputs8 = {}
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      local inputs8 = _.slice(inputs7,step,step+nSteps7[i]-1)
-      local gradOutputs8 = _.slice(gradOutputs7,step,step+nSteps7[i]-1)
-      outputs8[i] = _.map(seq:forward(inputs8), function(k,v) return v:clone() end)
-      step = step + nSteps7[i]
-   end
-   
-   local step = 1
-   for i=1,nSteps7:size(1) do
-      for j=1,nSteps7[i] do
-         mytester:assertTensorEq(outputs8[i][j], outputs7[step], 0.0000001, "Sequencer remember variable eval forward err "..i.." "..j)
-         step = step + 1
-      end
-   end
+   testRemember(nn.Recurrent(outputSize, nn.Linear(outputSize, outputSize), feedbackModule:clone(), transferModule:clone(), nSteps7:max()))
+   testRemember(nn.LSTM(outputSize, outputSize, nSteps7:max()))
    
    -- test in evaluation mode
    rnn3:evaluate()
