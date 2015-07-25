@@ -305,12 +305,11 @@ function Recurrent:reinforce(reward)
    
    if stop <= 1 then      
       self.initialModule:reinforce(reward)
-      table.insert(self.gradInputs, 1, gradInput)
    end
    
    local modules = self.modules
    self.modules = nil
-   local ret = parent.reinforce(self, reward)
+   local ret = nn.Container.reinforce(self, reward)
    self.modules = modules
    return ret
 end

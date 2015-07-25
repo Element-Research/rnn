@@ -164,7 +164,7 @@ function RVA:updateGradInput(input, gradOutput)
    -- backward through the main and locator layers
    for step=self.nStep,1,-1 do
       local main, locator = self:getStepModule(step)
-      local gradMain = main:udpateGradInput(self.hidden[step], gradOutput[step])
+      local gradMain = main:updateGradInput(self.hidden[step], gradOutput[step])
       
       if step == self.nStep then
          self.gradHidden[step] = nn.rnn.recursiveCopy(self.gradHidden[step], gradMain)
