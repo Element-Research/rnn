@@ -14,6 +14,10 @@ This library includes documentation for the following objects:
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
+
+
+## Example ##
+A very complete example with either the Penn Tree Bank or Google Billion Words datasets is available [here](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua). 
  
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
