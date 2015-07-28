@@ -38,10 +38,10 @@ function SequencerCriterion:updateGradInput(inputTable, targetTable)
       local gradInput
       for i = 1,3 do
          self.criterion:forward(inputTable[i], targetTable[i])
-         self.criterion:backward(inputTable[i], targetTable[i])
          gradInput = self.criterion:backward(inputTable[i], targetTable[i])
-         if gradInput:add(-1, self.gradInput[i]):abs():max() > 0.00001 then
-            error("SequencerCriterion only decorates stateless criterions")
+         nn.utils.recursiveAdd(gradInput -1, self.gradInput[i])
+         if math.abs(nn.rnn.recursiveSum(gradInput)) < 0.0001 then
+            error("SequencerCriterion only decorates stateless criterions : "..tostring(self.criterion))
          end
       end
       self.isStateless = true -- test should only be run once
