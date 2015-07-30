@@ -89,6 +89,8 @@ function RVA:glimpseSensor(glimpse, input, location)
       x, y = (x+1)/2, (y+1)/2
       -- (0,0), (input:size(3)-1, input:size(4)-1)
       x, y = x*(input:size(3)-1), y*(input:size(4)-1)
+      x = math.min(input:size(3)-1,math.max(0,x))
+      y = math.min(input:size(4)-1,math.max(0,y))
       
       -- for each depth of glimpse : pad, crop, downscale
       for depth=1,self.glimpseDepth do 
@@ -101,8 +103,8 @@ function RVA:glimpseSensor(glimpse, input, location)
          local center = self._pad:narrow(2,padSize,input:size(3)):narrow(3,padSize,input:size(4))
          center:copy(inputSample)
          
-         -- get coord of top-left corner of patch that will be cropped
-         local x, y = x-(glimpseSize/2)+padSize, y-(glimpseSize/2)+padSize
+         -- coord of top-left corner of patch that will be cropped w.r.t padded input
+         -- is coord of center of patch w.r.t original non-padded input.
         
          -- crop it
          self._crop:resize(input:size(2), glimpseSize, glimpseSize)
@@ -262,5 +264,5 @@ function RVA:type(type)
    self._crop = nil
    self._pad = nil
    self._byte = nil
-   return parent.type(self, type)
+   return nn.Sequencer.type(self, type)
 end
