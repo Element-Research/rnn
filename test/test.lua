@@ -1099,37 +1099,26 @@ function rnntest.RecurrentVisualAttention()
    )
 
    -- output layer (actions)
-   local locatorSize = 28-opt.sensorPatchSize+1
    local locator = nn.Sequential()
    locator:add(nn.Linear(opt.hiddenSize, 2))
-   locator:add(nn.ReinforceNormal(locatorSize*opt.locatorStd)) -- uses REINFORCE learning rule
-   locator:add(nn.Clip(1,locatorSize))
+   locator:add(nn.ReinforceNormal(2*opt.locatorStd)) -- uses REINFORCE learning rule
+   locator:add(nn.Clip(-1,1))
 
    local classifier = nn.Sequential()
    classifier:add(nn.Linear(opt.hiddenSize, opt.nClass))
    classifier:add(nn.SoftMax())
 
    -- model is a reinforcement learning agent
-   local agent = nn.RecurrentVisualAttention(rnn, classifier, locator, opt.rho, {opt.hiddenSize})
-   agent:initGlimpseSensor(opt.sensorPatchSize, opt.sensorDepth, opt.sensorScale)
+   local rva = nn.RecurrentVisualAttention(rnn, classifier, locator, opt.rho, {opt.hiddenSize})
+   rva:initGlimpseSensor(opt.sensorPatchSize, opt.sensorDepth, opt.sensorScale)
    
-   local mnist = torch.load(paths.concat(sys.fpath(), "mnistsample.t7"))
-   local input = mnist:narrow(1,1,opt.batchSize):resize(opt.batchSize, 1, 28, 28):double()
-   local output = agent:forward(input)
-   
-   -- test glimpseSensor : save sample glimpses to disk (verify visually)
-   local testPath = "/tmp/rfa-test"
-   paths.mkdir(testPath)
-   for step, glimpse in ipairs(agent.glimpse) do
-      local glimpse = glimpse:view(glimpse:size(1), opt.sensorDepth, -1, glimpse:size(3), glimpse:size(4))
-      local location = agent.location[step]
-      for i=1,opt.batchSize do
-         local xy = location[i]
-         local x, y = xy[1], xy[2]
-         for j=1,opt.sensorDepth do
-            image.save(paths.concat(testPath, "glimpse_s"..step.."b"..i.."_d"..j.."_x"..x.."_y"..y..".png"), glimpse[{i,j,{},{},{}}])
-         end
-      end
+   local input = torch.randn(opt.batchSize,3,opt.inputSize,opt.inputSize)
+   local location = torch.Tensor(opt.batchSize,2)
+   local glimpse = torch.Tensor()
+   for i=1,100 do
+      -- we dont test anything, we just make sure it doesn't fail
+      location:uniform(-1,1)
+      rva:glimpseSensor(glimpse, input, location)
    end
 end
    

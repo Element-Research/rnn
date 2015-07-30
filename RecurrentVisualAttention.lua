@@ -49,7 +49,7 @@ function RVA:initGlimpseSensor(glimpseSize, glimpseDepth, glimpseScale)
 end
 
 -- a bandwidth limited sensor which focuses on a location.
--- locations index the x,y coord of the top-left corner
+-- locations index the x,y coord of the center of the glimpse
 function RVA:glimpseSensor(glimpse, input, location)
    assert(self.glimpseSize, "glimpseSensor not initialize")
    glimpse:resize(input:size(1), self.glimpseDepth, input:size(2), self.glimpseSize, self.glimpseSize)
@@ -83,23 +83,31 @@ function RVA:glimpseSensor(glimpse, input, location)
       local glimpseSample = glimpse[sampleIdx]
       local inputSample = input[sampleIdx]
       local xy = location[sampleIdx]
+      -- (-1,-1) top left corner, (1,1) bottom right corner of image
+      local x, y = xy:select(1,1), xy:select(1,2)
+      -- (0,0), (1,1)
+      x, y = (x+1)/2, (y+1)/2
+      -- (0,0), (input:size(3)-1, input:size(4)-1)
+      x, y = x*(input:size(3)-1), y*(input:size(4)-1)
       
-      for depth=1,self.glimpseDepth do
+      -- for each depth of glimpse : pad, crop, downscale
+      for depth=1,self.glimpseDepth do 
          local dst = glimpseSample[depth]
-         if depth == 1 then
-            -- add 1 because image.crop is zero-indexed
-            image.crop(dst, inputSample, xy:select(1,1)-1, xy:select(1,2)-1)
-         else
-            -- pad, crop, downscale
-            local glimpseSize = self.glimpseSize*(self.glimpseScale^(depth-1))
-            local padSize = (glimpseSize-self.glimpseSize)/2
-            self._pad:resize(input:size(2), input:size(3)+padSize*2, input:size(4)+padSize*2):zero()
-            local center = self._pad:narrow(2,padSize,input:size(3)):narrow(3,padSize,input:size(4))
-            center:copy(inputSample)
-            self._crop:resize(input:size(2), glimpseSize, glimpseSize)
-            image.crop(self._crop, self._pad, xy:select(1,1)-1, xy:select(1,2)-1)
-            image.scale(dst, self._crop)
-         end
+         local glimpseSize = self.glimpseSize*(self.glimpseScale^(depth-1))
+         
+         -- add zero padding (glimpse could be partially out of bounds)
+         local padSize = glimpseSize/2
+         self._pad:resize(input:size(2), input:size(3)+padSize*2, input:size(4)+padSize*2):zero()
+         local center = self._pad:narrow(2,padSize,input:size(3)):narrow(3,padSize,input:size(4))
+         center:copy(inputSample)
+         
+         -- get coord of top-left corner of patch that will be cropped
+         local x, y = x-(glimpseSize/2)+padSize, y-(glimpseSize/2)+padSize
+        
+         -- crop it
+         self._crop:resize(input:size(2), glimpseSize, glimpseSize)
+         image.crop(self._crop, self._pad, x, y) -- crop is zero-indexed
+         image.scale(dst, self._crop)
       end
    end
    
@@ -107,6 +115,7 @@ function RVA:glimpseSensor(glimpse, input, location)
       cuglimpse:copy(glimpse)
       glimpse = cuglimpse
    end
+   
    glimpse:resize(input:size(1), self.glimpseDepth*input:size(2), self.glimpseSize, self.glimpseSize)
    return glimpse
 end
