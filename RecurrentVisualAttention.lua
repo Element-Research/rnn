@@ -189,7 +189,7 @@ function RVA:updateGradInput(input, gradOutput)
          locator:updateGradInput(self._initInput, locator.output)
       else
          -- Note : gradOutput is ignored by REINFORCE modules so we give locator.output as a dummy variable
-         local gradLocator = locator:updateGradInput(self.hidden[step-1], locator.output) 
+         local gradLocator = locator:updateGradInput(self.hidden[step-1], locator.output)
          self.gradHidden[step-1] = nn.rnn.recursiveCopy(self.gradHidden[step-1], gradLocator)
       end
    end
@@ -213,9 +213,25 @@ function RVA:accGradParameters(input, gradOutput, scale)
    assert(self.rnn.step - 1 == self.nStep, "inconsistent rnn steps")
    assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
    assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
+    
+   -- backward through the main and locator layers
+   for step=self.nStep,1,-1 do
+      local main, locator = self:getStepModule(step)
+      main:accGradParameters(self.hidden[step], gradOutput[step], scale)
+      
+      if step == 1 then
+         -- backward through initial starting location
+         locator:accGradParameters(self._initInput, locator.output, scale)
+      else
+         -- Note : gradOutput is ignored by REINFORCE modules so we give locator.output as a dummy variable
+         locator:accGradParameters(self.hidden[step-1], locator.output, scale)
+      end
+   end
+   
+   -- backward through the rnn layer
    for step=1,self.nStep do
       self.rnn.step = step + 1
-      self.rnn:accGradParameters(input, gradOutput[step], scale)
+      self.rnn:accGradParameters(input, self.gradHidden[step], scale)
    end
    -- back-propagate through time (BPTT)
    self.rnn:accGradParametersThroughTime()
@@ -225,12 +241,28 @@ function RVA:accUpdateGradParameters(input, gradOutput, lr)
    assert(self.rnn.step - 1 == self.nStep, "inconsistent rnn steps")
    assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
    assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
+    
+   -- backward through the main and locator layers
+   for step=self.nStep,1,-1 do
+      local main, locator = self:getStepModule(step)
+      main:accUpdateGradParameters(self.hidden[step], gradOutput[step], lr)
+      
+      if step == 1 then
+         -- backward through initial starting location
+         locator:accUpdateGradParameters(self._initInput, locator.output, lr)
+      else
+         -- Note : gradOutput is ignored by REINFORCE modules so we give locator.output as a dummy variable
+         locator:accUpdateGradParameters(self.hidden[step-1], locator.output, lr)
+      end
+   end
+   
+   -- backward through the rnn layer
    for step=1,self.nStep do
       self.rnn.step = step + 1
-      self.rnn:accGradParameters(input, gradOutput[step], 1)
+      self.rnn:accUpdateGradParameters(input, self.gradHidden[step], lr)
    end
    -- back-propagate through time (BPTT)
-   self.rnn:accUpdateGradParametersThroughTime(lr)
+   self.rnn:accUpdateGradParametersThroughTime()
 end
 
 -- annotates image with path taken by attention
@@ -265,4 +297,19 @@ function RVA:type(type)
    self._pad = nil
    self._byte = nil
    return nn.Sequencer.type(self, type)
+end
+
+function RVA:__tostring__()
+   local tab = '  '
+   local line = '\n'
+   local ext = '  |    '
+   local extlast = '       '
+   local last = '   ... -> '
+   local str = torch.type(self)
+   str = str .. ' {'
+   str = str .. line .. tab .. '(locator) : ' .. tostring(self.locator):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. '(  rnn  ) : ' .. tostring(self.rnn):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. '(  main ) : ' .. tostring(self.main):gsub(line, line .. tab .. ext)
+   str = str .. line .. '}'
+   return str
 end
