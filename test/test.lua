@@ -851,6 +851,32 @@ function rnntest.Sequencer()
       mytester:assertTensorEq(gradInputs3[step], lstm.gradInputs[step], 0.00001, "Sequencer LSTM gradInputs "..step)
    end
    mytester:assertTensorEq(gradOutputs[2], gradOutput1, 0.00001, "Sequencer lstm gradOutput modified error")
+   
+   -- test remember modes : 'both', 'eval' for training(), evaluate(), training()
+   local lstm = nn.LSTM(5,5)
+   local seq = nn.Sequencer(lstm)
+   local inputTrain = {torch.randn(5), torch.randn(5), torch.randn(5)}
+   local inputEval = {torch.randn(5)}
+
+   -- this shouldn't fail
+   local modes = {'both', 'eval'}
+   for i, mode in ipairs(modes) do
+     seq:remember(mode)
+
+     -- do one epoch of training
+     seq:training()
+     seq:forward(inputTrain)
+     seq:backward(inputTrain, inputTrain)
+
+     -- evaluate
+     seq:evaluate()
+     seq:forward(inputEval)
+
+     -- do another epoch of training
+     seq:training()
+     seq:forward(inputTrain)
+     seq:backward(inputTrain, inputTrain)
+   end
 end
 
 function rnntest.BiSequencer()
