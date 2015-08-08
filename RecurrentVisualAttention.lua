@@ -91,6 +91,9 @@ function RVA:glimpseSensor(glimpse, input, location)
       x, y = x*(input:size(3)-1), y*(input:size(4)-1)
       x = math.min(input:size(3)-1,math.max(0,x))
       y = math.min(input:size(4)-1,math.max(0,y))
+      if x < 2 or y < 2 or x > 25 or y > 25 then
+         print("xy : "..x..", "..y)
+      end
       
       -- for each depth of glimpse : pad, crop, downscale
       for depth=1,self.glimpseDepth do 
