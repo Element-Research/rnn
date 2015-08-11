@@ -1101,24 +1101,27 @@ function rnntest.RecurrentVisualAttention()
    -- output layer (actions)
    local locator = nn.Sequential()
    locator:add(nn.Linear(opt.hiddenSize, 2))
+   locator:add(nn.HardTanh())
    locator:add(nn.ReinforceNormal(2*opt.locatorStd)) -- uses REINFORCE learning rule
-   locator:add(nn.Clip(-1,1))
-
-   local classifier = nn.Sequential()
-   classifier:add(nn.Linear(opt.hiddenSize, opt.nClass))
-   classifier:add(nn.SoftMax())
+   locator:add(nn.HardTanh())
+   
+   local sensor = nn.SpatialGlimpse(opt.sensorPatchSize, opt.sensorDepth, opt.sensorScale)
 
    -- model is a reinforcement learning agent
-   local rva = nn.RecurrentVisualAttention(rnn, classifier, locator, opt.rho, {opt.hiddenSize})
-   rva:initGlimpseSensor(opt.sensorPatchSize, opt.sensorDepth, opt.sensorScale)
+   local rva = nn.RecurrentVisualAttention(rnn, sensor, locator, opt.rho, {opt.hiddenSize})
    
-   local input = torch.randn(opt.batchSize,3,opt.inputSize,opt.inputSize)
-   local location = torch.Tensor(opt.batchSize,2)
-   local glimpse = torch.Tensor()
+   local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
+   local gradOutput = {}
+   for step=1,opt.rho do
+      table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+   end
+   local reward = torch.Tensor(opt.batchSize):random(0,1)
    for i=1,100 do
-      -- we dont test anything, we just make sure it doesn't fail
-      location:uniform(-1,1)
-      rva:glimpseSensor(glimpse, input, location)
+      -- we dont test anything explicitly, we just make sure it doesn't fail
+      input:uniform(-0.5,0.5)
+      rva:forward(input)
+      rva:reinforce(reward)
+      rva:backward(input, gradOutput)
    end
 end
    

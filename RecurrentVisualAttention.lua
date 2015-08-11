@@ -65,7 +65,7 @@ function RVA:updateOutput(input)
          self.location[1] = locator:updateOutput(self._initInput)
       else
          -- sample location from previous hidden activation (rnn output)
-         self.location[step] = locator:updateOutput(self.hidden[step-1])
+         self.location[step] = locator:updateOutput(self.output[step-1])
       end
       local location = self.location[step]
       
@@ -84,7 +84,7 @@ function RVA:updateGradInput(input, gradOutput)
    assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
    assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
     
-   -- backward through the main and locator layers
+   -- backward through the locator
    for step=self.nStep,1,-1 do
       local sensor, locator = self:getStepModule(step)
       
@@ -100,7 +100,7 @@ function RVA:updateGradInput(input, gradOutput)
          locator:updateGradInput(self._initInput, locator.output)
       else
          -- Note : gradOutput is ignored by REINFORCE modules so we give locator.output as a dummy variable
-         local gradLocator = locator:updateGradInput(self.hidden[step-1], locator.output)
+         local gradLocator = locator:updateGradInput(self.output[step-1], locator.output)
          self.gradHidden[step-1] = nn.rnn.recursiveCopy(self.gradHidden[step-1], gradLocator)
       end
    end
@@ -115,7 +115,7 @@ function RVA:updateGradInput(input, gradOutput)
    
    for step=self.nStep,1,-1 do
       local sensor = self:getStepModule(step)
-      local gradInput = sensor:updateGradInput({input, self.location[step]}, self.rnn.gradInputs[step])[1]
+      local gradInput = sensor:updateGradInput({input, self.location[step]}, self.rnn.gradInputs[step][2])[1]
       if step == self.nStep then
          self.gradInput:resizeAs(gradInput):copy(gradInput)
       else
@@ -131,17 +131,16 @@ function RVA:accGradParameters(input, gradOutput, scale)
    assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
    assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
     
-   -- backward through the main and locator layers
+   -- backward through the locator layers
    for step=self.nStep,1,-1 do
-      local main, locator = self:getStepModule(step)
-      main:accGradParameters(self.hidden[step], gradOutput[step], scale)
-      
+      local sensor, locator = self:getStepModule(step)
+            
       if step == 1 then
          -- backward through initial starting location
          locator:accGradParameters(self._initInput, locator.output, scale)
       else
          -- Note : gradOutput is ignored by REINFORCE modules so we give locator.output as a dummy variable
-         locator:accGradParameters(self.hidden[step-1], locator.output, scale)
+         locator:accGradParameters(self.output[step-1], locator.output, scale)
       end
    end
    
@@ -155,7 +154,7 @@ function RVA:accGradParameters(input, gradOutput, scale)
    
    for step=self.nStep,1,-1 do
       local sensor = self:getStepModule(step)
-      sensor:accGradParameters({input, self.location[step]}, self.rnn.gradInputs[step], scale)
+      sensor:accGradParameters({input, self.location[step]}, self.rnn.gradInputs[step][2], scale)
    end
 end
 
@@ -164,17 +163,16 @@ function RVA:accUpdateGradParameters(input, gradOutput, lr)
    assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
    assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
     
-   -- backward through the main and locator layers
+   -- backward through the locator layers
    for step=self.nStep,1,-1 do
-      local main, locator = self:getStepModule(step)
-      main:accUpdateGradParameters(self.hidden[step], gradOutput[step], lr)
+      local sensor, locator = self:getStepModule(step)
       
       if step == 1 then
          -- backward through initial starting location
          locator:accUpdateGradParameters(self._initInput, locator.output, lr)
       else
          -- Note : gradOutput is ignored by REINFORCE modules so we give locator.output as a dummy variable
-         locator:accUpdateGradParameters(self.hidden[step-1], locator.output, lr)
+         locator:accUpdateGradParameters(self.output[step-1], locator.output, lr)
       end
    end
    
@@ -188,7 +186,7 @@ function RVA:accUpdateGradParameters(input, gradOutput, lr)
    
    for step=self.nStep,1,-1 do
       local sensor = self:getStepModule(step)
-      sensor:accUpdateGradParameters({input, self.location[step]}, self.rnn.gradInputs[step], lr)
+      sensor:accUpdateGradParameters({input, self.location[step]}, self.rnn.gradInputs[step][2], lr)
    end
 end
 
@@ -204,8 +202,8 @@ function RVA:reinforce(reward)
    
    self.rnn:reinforce(reward)
    for step=1,self.nStep do
-      local main, locator = self:getStepModule(step)
-      main:reinforce(reward)
+      local sensor, locator = self:getStepModule(step)
+      sensor:reinforce(reward)
       locator:reinforce(reward)
    end 
    
@@ -236,7 +234,7 @@ function RVA:__tostring__()
    str = str .. ' {'
    str = str .. line .. tab .. '(locator) : ' .. tostring(self.locator):gsub(line, line .. tab .. ext)
    str = str .. line .. tab .. '(  rnn  ) : ' .. tostring(self.rnn):gsub(line, line .. tab .. ext)
-   str = str .. line .. tab .. '(  main ) : ' .. tostring(self.main):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. '( sensor) : ' .. tostring(self.sensor):gsub(line, line .. tab .. ext)
    str = str .. line .. '}'
    return str
 end
