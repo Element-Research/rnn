@@ -232,9 +232,9 @@ function RVA:__tostring__()
    local last = '   ... -> '
    local str = torch.type(self)
    str = str .. ' {'
-   str = str .. line .. tab .. '(locator) : ' .. tostring(self.locator):gsub(line, line .. tab .. ext)
-   str = str .. line .. tab .. '(  rnn  ) : ' .. tostring(self.rnn):gsub(line, line .. tab .. ext)
-   str = str .. line .. tab .. '( sensor) : ' .. tostring(self.sensor):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. 'locator : ' .. tostring(self.locator):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. 'sensor  : ' .. tostring(self.sensor):gsub(line, line .. tab .. ext)
+   str = str .. line .. tab .. 'rnn     : ' .. tostring(self.rnn):gsub(line, line .. tab .. ext)
    str = str .. line .. '}'
    return str
 end
