@@ -1,3 +1,5 @@
+local _ = require 'moses'
+
 local AbstractRecurrent, parent
 if nn.AbstractRecurrent then -- prevent name conflicts with nnx
    AbstractRecurrent, parent = nn.AbstractRecurrent, nn.Container
