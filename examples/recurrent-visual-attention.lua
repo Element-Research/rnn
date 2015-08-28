@@ -114,7 +114,7 @@ rnn = nn.Recurrent(opt.hiddenSize, glimpse, recurrent, nn[opt.transfer](), 99999
 imageSize = ds:imageSize('h')
 assert(ds:imageSize('h') == ds:imageSize('w'))
 
--- actions (locator and speaker)
+-- actions (locator)
 locator = nn.Sequential()
 locator:add(nn.Linear(opt.hiddenSize, 2))
 locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
