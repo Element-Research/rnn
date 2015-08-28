@@ -6,7 +6,7 @@
 -- hyper-parameters such as the maximum number of steps, 
 -- action (actions sampling module like ReinforceNormal) and 
 ------------------------------------------------------------------------
-local RecurrentAttention, parent = torch.class("nn.RecurrentVisualAttention", "nn.Container")
+local RecurrentAttention, parent = torch.class("nn.RecurrentAttention", "nn.Container")
 
 function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    parent.__init(self)

@@ -1058,13 +1058,14 @@ function rnntest.SequencerCriterion()
    mytester:assert(sc.isStateless, "SequencerCriterion stateless error")
 end
 
-function rnntest.RecurrentVisualAttention()
+function rnntest.RecurrentAttention()
    if not pcall(function() require "image" end) then return end -- needs the image package
    local opt = {
-      sensorDepth = 3,
-      sensorHiddenSize = 20,
-      sensorPatchSize = 8,
+      glimpseDepth = 3,
+      glimpseHiddenSize = 20,
+      glimpsePatchSize = 8,
       locatorHiddenSize = 20,
+      imageHiddenSize = 20,
       hiddenSize = 20,
       rho = 5,
       locatorStd = 0.1,
@@ -1072,23 +1073,25 @@ function rnntest.RecurrentVisualAttention()
       nClass = 10,
       batchSize = 4
    }
-   -- glimpse network (input layer of the rnn)
-   local glimpseSensor = nn.Sequential()
-   glimpseSensor:add(nn.Collapse(3))
-   glimpseSensor:add(nn.Linear(1*(opt.sensorPatchSize^2)*opt.sensorDepth, opt.sensorHiddenSize))
-   glimpseSensor:add(nn.ReLU())
-
+   
+   -- glimpse network (rnn input layer) 
    local locationSensor = nn.Sequential()
+   locationSensor:add(nn.SelectTable(2))
    locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
    locationSensor:add(nn.ReLU())
 
-   local para = nn.ParallelTable()
-   para:add(locationSensor):add(glimpseSensor)
+   local glimpseSensor = nn.Sequential()
+   glimpseSensor:add(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale))
+   glimpseSensor:add(nn.Collapse(3))
+   glimpseSensor:add(nn.Linear(1*(opt.glimpsePatchSize^2)*opt.glimpseDepth, opt.glimpseHiddenSize))
+   glimpseSensor:add(nn.ReLU())
 
    local glimpse = nn.Sequential()
-   glimpse:add(para)
-   glimpse:add(nn.JoinTable(1, 1))
-   glimpse:add(nn.Linear(opt.sensorHiddenSize+opt.locatorHiddenSize, opt.hiddenSize))
+   glimpse:add(nn.ConcatTable():add(locationSensor):add(glimpseSensor))
+   glimpse:add(nn.JoinTable(1,1))
+   glimpse:add(nn.Linear(opt.glimpseHiddenSize+opt.locatorHiddenSize, opt.imageHiddenSize))
+   glimpse:add(nn.ReLU())
+   glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
 
    -- recurrent neural network
    local rnn = nn.Recurrent(
@@ -1105,10 +1108,8 @@ function rnntest.RecurrentVisualAttention()
    locator:add(nn.ReinforceNormal(2*opt.locatorStd)) -- uses REINFORCE learning rule
    locator:add(nn.HardTanh())
    
-   local sensor = nn.SpatialGlimpse(opt.sensorPatchSize, opt.sensorDepth, opt.sensorScale)
-
    -- model is a reinforcement learning agent
-   local rva = nn.RecurrentVisualAttention(rnn, sensor, locator, opt.rho, {opt.hiddenSize})
+   local rva = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
    
    local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
    local gradOutput = {}
