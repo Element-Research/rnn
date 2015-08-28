@@ -422,7 +422,7 @@ References :
   
   * A. [Recurrent Models of Visual Attention](http://papers.nips.cc/paper/5542-recurrent-models-of-visual-attention.pdf)
   * B. [Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning](http://incompleteideas.net/sutton/williams-92.pdf)
-
+  
 This module can be used to implement the Recurrent Attention Model (RAM) presented in Ref. A :
 ```lua
 ram = nn.RecurrentAttention(rnn, action, nStep, hiddenSize)
@@ -451,6 +451,8 @@ Therefore, the `action` module's outputs are only used internally, within the Re
 
 `hiddenSize` is the output size of the `rnn`. This variable is necessary 
 to generate the zero Tensor to sample an action for the first step (see above).
+
+A complete implementation of Ref. A is available [here](examples/recurrent-visual-attention.lua).
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##
