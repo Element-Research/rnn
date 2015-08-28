@@ -1084,6 +1084,74 @@ function rnntest.SequencerCriterion()
    mytester:assert(sc.isStateless, "SequencerCriterion stateless error")
 end
 
+function rnntest.RecurrentAttention()
+   if not pcall(function() require "image" end) then return end -- needs the image package
+   local opt = {
+      glimpseDepth = 3,
+      glimpseHiddenSize = 20,
+      glimpsePatchSize = 8,
+      locatorHiddenSize = 20,
+      imageHiddenSize = 20,
+      hiddenSize = 20,
+      rho = 5,
+      locatorStd = 0.1,
+      inputSize = 28,
+      nClass = 10,
+      batchSize = 4
+   }
+   
+   -- glimpse network (rnn input layer) 
+   local locationSensor = nn.Sequential()
+   locationSensor:add(nn.SelectTable(2))
+   locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
+   locationSensor:add(nn.ReLU())
+
+   local glimpseSensor = nn.Sequential()
+   glimpseSensor:add(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale))
+   glimpseSensor:add(nn.Collapse(3))
+   glimpseSensor:add(nn.Linear(1*(opt.glimpsePatchSize^2)*opt.glimpseDepth, opt.glimpseHiddenSize))
+   glimpseSensor:add(nn.ReLU())
+
+   local glimpse = nn.Sequential()
+   glimpse:add(nn.ConcatTable():add(locationSensor):add(glimpseSensor))
+   glimpse:add(nn.JoinTable(1,1))
+   glimpse:add(nn.Linear(opt.glimpseHiddenSize+opt.locatorHiddenSize, opt.imageHiddenSize))
+   glimpse:add(nn.ReLU())
+   glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
+
+   -- recurrent neural network
+   local rnn = nn.Recurrent(
+      opt.hiddenSize, 
+      glimpse,
+      nn.Linear(opt.hiddenSize, opt.hiddenSize), 
+      nn.ReLU(), 99999
+   )
+
+   -- output layer (actions)
+   local locator = nn.Sequential()
+   locator:add(nn.Linear(opt.hiddenSize, 2))
+   locator:add(nn.HardTanh())
+   locator:add(nn.ReinforceNormal(2*opt.locatorStd)) -- uses REINFORCE learning rule
+   locator:add(nn.HardTanh())
+   
+   -- model is a reinforcement learning agent
+   local rva = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
+   
+   local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
+   local gradOutput = {}
+   for step=1,opt.rho do
+      table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+   end
+   local reward = torch.Tensor(opt.batchSize):random(0,1)
+   for i=1,100 do
+      -- we dont test anything explicitly, we just make sure it doesn't fail
+      input:uniform(-0.5,0.5)
+      rva:forward(input)
+      rva:reinforce(reward)
+      rva:backward(input, gradOutput)
+   end
+end
+   
 function rnntest.LSTM_nn_vs_nngraph()
    local model = {}
    -- match the successful https://github.com/wojzaremba/lstm

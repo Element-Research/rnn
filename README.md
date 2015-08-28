@@ -12,12 +12,18 @@ This library includes documentation for the following objects:
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
+ * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
 
 
-## Example ##
-A very complete example with either the Penn Tree Bank or Google Billion Words datasets is available [here](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua). 
+<a name='rnn.examples'></a>
+## Examples ##
+
+The following are example training scripts using this package :
+
+  * [RNN/LSTM/BRNN/BLSTM training](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
+  * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset.
  
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
@@ -418,6 +424,44 @@ r = nn.Repeater(module, nStep)
 Argument `module` should be an `AbstractRecurrent` instance.
 This is useful for implementing models like [RCNNs](http://jmlr.org/proceedings/papers/v32/pinheiro14.pdf),
 which are repeatedly presented with the same input.
+
+<a name='rnn.RecurrentAttention'></a>
+## RecurrentAttention ##
+References :
+  
+  * A. [Recurrent Models of Visual Attention](http://papers.nips.cc/paper/5542-recurrent-models-of-visual-attention.pdf)
+  * B. [Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning](http://incompleteideas.net/sutton/williams-92.pdf)
+  
+This module can be used to implement the Recurrent Attention Model (RAM) presented in Ref. A :
+```lua
+ram = nn.RecurrentAttention(rnn, action, nStep, hiddenSize)
+```
+
+`rnn` is an [AbstractRecurrent](#rnn.AbstractRecurrent) instance. 
+Its input is `{x, z}` where `x` is the input to the `ram` and `z` is an 
+action sampled from the `action` module. 
+The output size of the `rnn` must be equal to `hiddenSize`.
+
+`action` is a [Module](https://github.com/torch/nn/blob/master/doc/module.md#nn.Module) 
+that uses a [REINFORCE module](https://github.com/nicholas-leonard/dpnn#nn.Reinforce) (ref. B) like 
+[ReinforceNormal](https://github.com/nicholas-leonard/dpnn#nn.ReinforceNormal), 
+[ReinforceCategorical](https://github.com/nicholas-leonard/dpnn#nn.ReinforceCategorical), or 
+[ReinforceBernoulli](https://github.com/nicholas-leonard/dpnn#nn.ReinforceBernoulli) 
+to sample actions given the previous time-step's output of the `rnn`. 
+During the first time-step, the `action` module is fed with a Tensor of zeros of size `input:size(1) x hiddenSize`.
+It is important to understand that the sampled actions do not receive gradients 
+backpropagated from the training criterion. 
+Instead, a reward is broadcast from a Reward Criterion like [VRClassReward](https://github.com/nicholas-leonard/dpnn#nn.VRClassReward) Criterion to 
+the `action`'s REINFORCE module, which will backprogate graidents computed from the `output` samples 
+and the `reward`. 
+Therefore, the `action` module's outputs are only used internally, within the RecurrentAttention module.
+
+`nStep` is the number of actions to sample, i.e. the number of elements in the `output` table.
+
+`hiddenSize` is the output size of the `rnn`. This variable is necessary 
+to generate the zero Tensor to sample an action for the first step (see above).
+
+A complete implementation of Ref. A is available [here](examples/recurrent-visual-attention.lua).
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##

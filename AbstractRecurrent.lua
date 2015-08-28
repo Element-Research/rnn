@@ -177,6 +177,10 @@ function AbstractRecurrent:evaluate()
    end)
 end
 
+function AbstractRecurrent:reinforce(reward)
+   error"Not Implemented"
+end
+
 -- backwards compatibility
 AbstractRecurrent.recursiveResizeAs = rnn.recursiveResizeAs
 AbstractRecurrent.recursiveSet = rnn.recursiveSet
