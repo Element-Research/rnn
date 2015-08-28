@@ -72,10 +72,10 @@ end
 function Sequencer:updateOutput(inputTable)
    assert(torch.type(inputTable) == 'table', "expecting input table")
    if self.isRecurrent then
+      -- Note that the Sequencer hijacks the rho attribute of the rnn
+      self.module.rho = #inputTable
       if self.train ~= false then -- training
-         if self._remember == 'train' or self._remember == 'both' then
-            self.module.rho = #inputTable
-         else
+         if not (self._remember == 'train' or self._remember == 'both') then
             self.module:forget()
          end
          self.output = {}
@@ -83,9 +83,7 @@ function Sequencer:updateOutput(inputTable)
             self.output[step] = self.module:updateOutput(input)
          end
       else -- evaluation
-         if self._remember == 'eval' or self._remember == 'both' then
-            self.module.rho = #inputTable
-         else
+         if not (self._remember == 'eval' or self._remember == 'both') then
             self.module:forget()
          end
          -- during evaluation, recurrent modules reuse memory (i.e. outputs)
@@ -129,7 +127,7 @@ function Sequencer:updateGradInput(inputTable, gradOutputTable)
       -- back-propagate through time (BPTT)
       self.module:updateGradInputThroughTime()
       assert(self.module.gradInputs, "recurrent module did not fill gradInputs")
-      assert(#inputTable == #self.module.gradInputs)
+      assert(#inputTable == #self.module.gradInputs, #inputTable.." ~= "..#self.module.gradInputs)
       for i=1,#inputTable do
          self.gradInput[i] = self.module.gradInputs[i]
       end

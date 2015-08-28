@@ -123,3 +123,18 @@ function rnn.recursiveType(param, type_str)
    end
    return param
 end
+
+function rnn.recursiveSum(t2)
+   local sum = 0
+   if torch.type(t2) == 'table' then
+      for key,_ in pairs(t2) do
+         sum = sum + rnn.recursiveSum(t2[key], val)
+      end
+   elseif torch.isTensor(t2) then
+      return t2:sum()
+   else
+      error("expecting tensor or table thereof. Got "
+           ..torch.type(t2).." instead")
+   end
+   return sum
+end
