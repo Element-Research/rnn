@@ -17,8 +17,13 @@ This library includes documentation for the following objects:
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
 
 
-## Example ##
-A very complete example with either the Penn Tree Bank or Google Billion Words datasets is available [here](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua). 
+<a name='rnn.examples'></a>
+## Examples ##
+
+The following are example training scripts using this package :
+
+  * [RNN/LSTM/BRNN/BLSTM training](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
+  * [Recurrent Moddel for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset.
  
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##

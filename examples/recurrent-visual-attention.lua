@@ -1,6 +1,11 @@
 require 'dp'
 require 'rnn'
 
+-- References :
+-- A. http://papers.nips.cc/paper/5542-recurrent-models-of-visual-attention.pdf
+-- B. http://incompleteideas.net/sutton/williams-92.pdf
+
+
 version = 9
 
 --[[command line arguments]]--
