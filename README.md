@@ -12,7 +12,7 @@ This library includes documentation for the following objects:
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
- * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for REINFORCE modules;
+ * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
  
@@ -434,13 +434,15 @@ action sampled from the `action` module.
 The output size of the `rnn` must be equal to `hiddenSize`.
 
 `action` is a [Module](https://github.com/torch/nn/blob/master/doc/module.md#nn.Module) 
-that uses a REINFORCE module (ref. B) like 
-[ReinforceNormal], [ReinforceCategorical], or [ReinforceBernoulli] 
+that uses a [REINFORCE module](https://github.com/nicholas-leonard/dpnn#nn.Reinforce) (ref. B) like 
+[ReinforceNormal](https://github.com/nicholas-leonard/dpnn#nn.ReinforceNormal), 
+[ReinforceCategorical](https://github.com/nicholas-leonard/dpnn#nn.ReinforceCategorical), or 
+[ReinforceBernoulli](https://github.com/nicholas-leonard/dpnn#nn.ReinforceBernoulli) 
 to sample actions given the previous time-step's output of the `rnn`. 
 During the first time-step, the `action` module is fed with a Tensor of zeros of size `input:size(1) x hiddenSize`.
 It is important to understand that the sampled actions do not receive gradients 
 backpropagated from the training criterion. 
-Instead, a reward is broadcast from a Reward Criterion like [VRClassRewardCriterion]() to 
+Instead, a reward is broadcast from a Reward Criterion like [VRClassReward](https://github.com/nicholas-leonard/dpnn#nn.VRClassReward) Criterion to 
 the `action`'s REINFORCE module, which will backprogate graidents computed from the `output` samples 
 and the `reward`. 
 Therefore, the `action` module's outputs are only used internally, within the RecurrentAttention module.
