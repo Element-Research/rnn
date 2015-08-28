@@ -111,7 +111,7 @@ function RecurrentAttention:updateGradInput(input, gradOutput)
    self.rnn:updateGradInputThroughTime()
    
    for step=self.nStep,1,-1 do
-      local gradInput = self.rnn.gradInputs[step][2]
+      local gradInput = self.rnn.gradInputs[step][1]
       if step == self.nStep then
          self.gradInput:resizeAs(gradInput):copy(gradInput)
       else
