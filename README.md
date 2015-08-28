@@ -23,7 +23,7 @@ This library includes documentation for the following objects:
 The following are example training scripts using this package :
 
   * [RNN/LSTM/BRNN/BLSTM training](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
-  * [Recurrent Moddel for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset.
+  * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset.
  
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
