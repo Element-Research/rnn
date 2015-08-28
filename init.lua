@@ -25,6 +25,7 @@ torch.include('rnn', 'Repeater.lua')
 torch.include('rnn', 'Sequencer.lua')
 torch.include('rnn', 'BiSequencer.lua')
 torch.include('rnn', 'BiSequencerLM.lua')
+torch.include('rnn', 'RecurrentAttention.lua')
 torch.include('rnn', 'RecurrentVisualAttention.lua')
 
 -- recurrent criterions:
