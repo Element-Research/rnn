@@ -202,6 +202,7 @@ while true do
    end
    local target = sequence:index(1, offsets)
    local err = criterion:forward(output, target)
+   print(err)
    local gradOutput = criterion:backward(output, target)
    -- the Recurrent layer is memorizing its gradOutputs (up to memSize)
    rnn:backward(input, gradOutput)
@@ -213,6 +214,7 @@ while true do
       -- 1. backward through feedback and input layers,
       -- 2. updates parameters
       r:updateParameters(lr)
+      rnn:zeroGradParameters()
    end
 end
 ```
@@ -225,6 +227,72 @@ such that an entire sequence (a table) can be presented with a single `forward/b
 This is actually the recommended approach as it allows RNNs to be stacked and makes the 
 rnn conform to the Module interface, i.e. a `forward`, `backward` and `updateParameters` are all 
 that is required ( `Sequencer` handles the `backwardThroughTime` internally ).
+
+The following example is similar to the previous one, except that 
+ 
+  * `updateInterval=rho` (a `Sequencer` constraint);
+  * the mean of the previous `rho` errors `err` is printed every `rho` time-steps (instead of printing the `err` of every time-step); and
+  * the model uses `Sequencers` to decorate each module such that `rho=5` time-steps can be `forward`,`backward` and updated for each batch (i.e. training loop):
+
+```lua
+require 'rnn'
+
+batchSize = 8
+rho = 5
+hiddenSize = 10
+nIndex = 10000
+-- RNN
+r = nn.Recurrent(
+   hiddenSize, nn.LookupTable(nIndex, hiddenSize), 
+   nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(), 
+   rho
+)
+
+rnn = nn.Sequential()
+rnn:add(nn.Sequencer(r))
+rnn:add(nn.Sequencer(nn.Linear(hiddenSize, nIndex)))
+rnn:add(nn.Sequencer(nn.LogSoftMax()))
+
+criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+
+-- dummy dataset (task is to predict next item, given previous)
+sequence = torch.randperm(nIndex)
+
+offsets = {}
+for i=1,batchSize do
+   table.insert(offsets, math.ceil(math.random()*batchSize))
+end
+offsets = torch.LongTensor(offsets)
+
+lr = 0.1
+i = 1
+while true do
+   -- prepare inputs and targets
+   local inputs, targets = {},{}
+   for step=1,rho do
+      -- a batch of inputs
+      table.insert(inputs, sequence:index(1, offsets))
+      -- incement indices
+      offsets:add(1)
+      for j=1,batchSize do
+         if offsets[j] > nIndex then
+            offsets[j] = 1
+         end
+      end
+      -- a batch of targets
+      table.insert(targets, sequence:index(1, offsets))
+   end
+   
+   local outputs = rnn:forward(inputs)
+   local err = criterion:forward(outputs, targets)
+   print(i, err/rho)
+   i = i + 1
+   local gradOutputs = criterion:backward(outputs, targets)
+   rnn:backward(inputs, gradOutputs)
+   rnn:updateParameters(lr)
+   rnn:zeroGradParameters()
+end
+```
 
 You should only think about using the `AbstractRecurrent` modules without 
 a `Sequencer` if you intend to use it for real-time prediction. 
