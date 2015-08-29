@@ -285,7 +285,7 @@ through inheritance by overriding the different factory methods :
   * `buildModel` : builds the actual LSTM model which is used internally (eq. 6).
   
 Note that we recommend decorating the `LSTM` with a `Sequencer` 
-(refer to [this](rnn.Recurrent.Sequencer) for details).
+(refer to [this](#rnn.Recurrent.Sequencer) for details).
   
 <a name='rnn.FastLSTM'></a>
 ## FastLSTM ##
