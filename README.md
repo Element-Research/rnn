@@ -22,9 +22,10 @@ This library includes documentation for the following objects:
 
 The following are example training scripts using this package :
 
+  * [RNN/LSTM](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
+  * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [RNN/LSTM/BRNN/BLSTM training](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
-  * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset.
- 
+  
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
 An abstract class inherited by [Recurrent](#rnn.Recurrent) and [LSTM](#rnn.LSTM).
@@ -216,7 +217,23 @@ while true do
 end
 ```
 
-Note that `nn.Recurrent` can be decorated with a [nn.Sequencer](#rnn.Sequencer) such that an entire sequence (a table) can be presented with a single `forward/backward` call.
+<a name='rnn.Recurrent.Sequencer`></a>
+### Decorate it with a Sequencer ###
+
+Note that any `AbstractRecurrent` instance can be decorated with a [Sequencer](#rnn.Sequencer) 
+such that an entire sequence (a table) can be presented with a single `forward/backward` call.
+This is actually the recommended approach as it allows RNNs to be stacked and makes the 
+rnn conform to the Module interface, i.e. a `forward`, `backward` and `updateParameters` are all 
+that is required ( `Sequencer` handles the `backwardThroughTime` internally ).
+
+You should only think about using the `AbstractRecurrent` modules without 
+a `Sequencer` if you intend to use it for real-time prediction. 
+Actually, you can even use an `AbstractRecurrent` instance decorated by a `Sequencer`
+for real time prediction by calling `Sequencer:remember()` and presenting each 
+time-step `input` as `{input}`.
+
+Other decorators can be used such as the [Repeater](#rnn.Repeater) or [RecurrentAttention](#rnn.RecurrentAttention).
+The `Sequencer` is only the most common one. 
 
 <a name='rnn.LSTM'></a>
 ## LSTM ##
@@ -266,6 +283,9 @@ through inheritance by overriding the different factory methods :
   * `buildCell` : builds the cell (eq. 4);
   * `buildOutputGate` : builds the output gate (eq. 5). Currently calls `buildGate`;
   * `buildModel` : builds the actual LSTM model which is used internally (eq. 6).
+  
+Note that we recommend decorating the `LSTM` with a `Sequencer` 
+(refer to [this](rnn.Recurrent.Sequencer) for details).
   
 <a name='rnn.FastLSTM'></a>
 ## FastLSTM ##
