@@ -217,7 +217,7 @@ while true do
 end
 ```
 
-<a name='rnn.Recurrent.Sequencer`></a>
+<a name='rnn.Recurrent.Sequencer'></a>
 ### Decorate it with a Sequencer ###
 
 Note that any `AbstractRecurrent` instance can be decorated with a [Sequencer](#rnn.Sequencer) 
