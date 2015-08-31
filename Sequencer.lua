@@ -226,6 +226,9 @@ function Sequencer:training()
       -- forget at the start of each training
       self:forget()
    end
+   for i,clone in pairs(self.sharedClones) do
+      clone:training()
+   end
    parent.training(self)
 end
 
@@ -235,6 +238,9 @@ function Sequencer:evaluate()
       self.output = {}
       -- forget at the start of each evaluation
       self:forget()
+   end
+   for i,clone in pairs(self.sharedClones) do
+      clone:evaluate()
    end
    parent.evaluate(self)
    assert(self.train == false)

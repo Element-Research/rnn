@@ -178,9 +178,19 @@ function RecurrentAttention:accUpdateGradParameters(input, gradOutput, lr)
    self.rnn:accUpdateGradParametersThroughTime()
 end
 
--- annotates image with path taken by attention
-function RecurrentAttention:annotate(input)
-   
+function RecurrentAttention:training()
+   for i,clone in pairs(self.sharedClones) do
+      clone:training()
+   end
+   parent.training(self)
+end
+
+function RecurrentAttention:evaluate()
+   for i,clone in pairs(self.sharedClones) do
+      clone:evaluate()
+   end
+   parent.evaluate(self)
+   assert(self.train == false)
 end
 
 function RecurrentAttention:reinforce(reward)
