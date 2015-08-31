@@ -38,7 +38,7 @@ cmd:option('--locatorStd', 0.11, 'stdev of gaussian location sampler (between 0 
 cmd:option('--glimpseHiddenSize', 128, 'size of glimpse hidden layer')
 cmd:option('--glimpsePatchSize', 8, 'size of glimpse patch at highest res (height = width)')
 cmd:option('--glimpseScale', 2, 'scale of successive patches w.r.t. original input image')
-cmd:option('--glimpseDepth', 3, 'number of concatenated downscaled patches')
+cmd:option('--glimpseDepth', 1, 'number of concatenated downscaled patches')
 cmd:option('--locatorHiddenSize', 128, 'size of locator hidden layer')
 cmd:option('--imageHiddenSize', 256, 'size of hidden layer combining glimpse and locator hiddens')
 

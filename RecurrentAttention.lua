@@ -11,7 +11,7 @@ local RecurrentAttention, parent = torch.class("nn.RecurrentAttention", "nn.Cont
 function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    parent.__init(self)
    require 'image'
-   assert(torch.isTypeOf(rnn, 'nn.Module') and rnn.forget)
+   assert(torch.isTypeOf(rnn, 'nn.AbstractRecurrent'))
    assert(torch.isTypeOf(action, 'nn.Module'))
    assert(torch.type(nStep) == 'number')
    assert(torch.type(hiddenSize) == 'table')
