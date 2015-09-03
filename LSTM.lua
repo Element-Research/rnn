@@ -144,8 +144,8 @@ end
 function LSTM:updateOutput(input)
    local prevOutput, prevCell
    if self.step == 1 then
-      prevOutput = self.zeroTensor
-      prevCell = self.zeroTensor
+      prevOutput = self.userPrevOutput or self.zeroTensor
+      prevCell = self.userPrevCell or self.zeroTensor
       if input:dim() == 2 then
          self.zeroTensor:resize(input:size(1), self.outputSize):zero()
       else
@@ -207,10 +207,10 @@ function LSTM:backwardThroughTime()
          end
          
          local scale = self.scales[step]
-         local output = (step == 1) and self.zeroTensor or self.outputs[step-1]
-         local cell = (step == 1) and self.zeroTensor or self.cells[step-1]
+         local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
+         local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
          local inputTable = {self.inputs[step], output, cell}
-         local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
+         local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
          local gradInputTable = recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
          gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
          if step > math.max(stop,1) then
@@ -244,10 +244,10 @@ function LSTM:updateGradInputThroughTime()
          gradOutput = self._gradOutputs[step]
       end
       
-      local output = (step == 1) and self.zeroTensor or self.outputs[step-1]
-      local cell = (step == 1) and self.zeroTensor or self.cells[step-1]
+      local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
+      local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
       local inputTable = {self.inputs[step], output, cell}
-      local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
+      local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
       local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
       gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
       if step > math.max(stop,1) then
@@ -268,11 +268,11 @@ function LSTM:accGradParametersThroughTime()
       
       -- backward propagate through this step
       local scale = self.scales[step]
-      local output = (step == 1) and self.zeroTensor or self.outputs[step-1]
-      local cell = (step == 1) and self.zeroTensor or self.cells[step-1]
+      local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
+      local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
       local inputTable = {self.inputs[step], output, cell}
       local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
-      local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
+      local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
       local gradOutputTable = {gradOutput, gradCell}
       recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
    end
@@ -290,11 +290,11 @@ function LSTM:accUpdateGradParametersThroughTime(lr)
       
       -- backward propagate through this step
       local scale = self.scales[step] 
-      local output = (step == 1) and self.zeroTensor or self.outputs[step-1]
-      local cell = (step == 1) and self.zeroTensor or self.cells[step-1]
+      local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
+      local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
       local inputTable = {self.inputs[step], output, cell}
       local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
-      local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
+      local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
       local gradOutputTable = {self.gradOutputs[step], gradCell}
       recurrentModule:accUpdateGradParameters(inputTable, gradOutputTable, lr*scale)
    end
