@@ -217,6 +217,7 @@ function LSTM:backwardThroughTime()
             self.gradCells[step-1] = gradCell
          end
          table.insert(self.gradInputs, 1, gradInput)
+         if self.userPrevOutput then self.userGradPrevOutput = gradPrevOutput end
       end
       return gradInput
    else
@@ -254,6 +255,7 @@ function LSTM:updateGradInputThroughTime()
          self.gradCells[step-1] = gradCell
       end
       table.insert(self.gradInputs, 1, gradInput)
+      if self.userPrevOutput then self.userGradPrevOutput = gradPrevOutput end
    end
    
    return gradInput
