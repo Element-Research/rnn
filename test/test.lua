@@ -1486,6 +1486,43 @@ function rnntest.LSTM_nn_vs_nngraph()
    end
 end
 
+function rnntest.Recurrent_checkgrad()
+   if not pcall(function() require 'optim' end) then return end
+
+   local hiddenSize = 2
+   local nIndex = 2
+   local r = nn.Recurrent(hiddenSize, nn.LookupTable(nIndex, hiddenSize),
+                    nn.Linear(hiddenSize, hiddenSize))
+
+   local rnn = nn.Sequential()
+   rnn:add(r)
+   rnn:add(nn.Linear(hiddenSize, nIndex))
+   rnn:add(nn.LogSoftMax())
+
+   local criterion = nn.ClassNLLCriterion()
+   local sequence = torch.Tensor{1, 2, 1, 2}:resize(4, 1)
+   local parameters, grads = rnn:getParameters()
+   
+   function f(x)
+      parameters:copy(x)
+      -- Do the forward prop
+      rnn:zeroGradParameters()
+      local err = 0
+      for i = 1, sequence:size(1) - 1 do
+         local output = rnn:forward(sequence[i])
+         err = err + criterion:forward(output, sequence[i + 1])
+         local gradOutput = criterion:backward(output, sequence[i + 1])
+         rnn:backward(sequence[i], gradOutput)
+      end
+      r:backwardThroughTime()
+      r:forget()
+      return err, grads
+   end
+
+   local err = optim.checkgrad(f, parameters:clone())
+   mytester:assert(err < 0.0001, "Recurrent optim.checkgrad error")
+end
+
 
 function rnn.test(tests)
    mytester = torch.Tester()
