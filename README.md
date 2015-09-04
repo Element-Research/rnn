@@ -213,7 +213,8 @@ while true do
       -- backpropagates through time (BPTT) :
       -- 1. backward through feedback and input layers,
       -- 2. updates parameters
-      r:updateParameters(lr)
+      rnn:backwardThroughTime()
+      rnn:updateParameters(lr)
       rnn:zeroGradParameters()
    end
 end
