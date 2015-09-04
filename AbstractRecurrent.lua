@@ -77,6 +77,8 @@ function AbstractRecurrent:backwardUpdateThroughTime(learningRate)
    return gradInput
 end
 
+-- this is only useful when calling updateParameters directly on the rnn
+-- Note that a call to updateParameters on an rnn container DOES NOT call this method
 function AbstractRecurrent:updateParameters(learningRate)
    if self.gradParametersAccumulated then
       for i=1,#self.modules do

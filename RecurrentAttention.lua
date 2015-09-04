@@ -178,6 +178,9 @@ function RecurrentAttention:accUpdateGradParameters(input, gradOutput, lr)
    self.rnn:accUpdateGradParametersThroughTime()
 end
 
+function RecurrentAttention:backwardThroughTime()
+end
+
 function RecurrentAttention:training()
    for i,clone in pairs(self.sharedClones) do
       clone:training()

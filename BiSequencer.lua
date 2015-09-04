@@ -62,3 +62,6 @@ function BiSequencer:__init(forward, backward, merge)
    self.output = {}
    self.gradInput = {}
 end
+
+function BiSequencer:backwardThroughTime()
+end

@@ -21,7 +21,7 @@ function Sequencer:__init(module)
       error"Sequencer: expecting nn.Module instance at arg 1"
    end
    self.module = module
-   self.isRecurrent = module.backwardThroughTime ~= nil
+   self.isRecurrent = torch.isTypeOf(module, "nn.AbstractRecurrent")
    self.modules[1] = module
    self.sharedClones = {}
    if not self.isRecurrent then
@@ -29,7 +29,7 @@ function Sequencer:__init(module)
       -- test that it doesn't contain a recurrent module :
       local err = false
       for i,modula in ipairs(module:listModules()) do
-         if modula.backwardThroughTime then
+         if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
             err = modula
             break
          end
@@ -201,6 +201,9 @@ function Sequencer:remember(remember)
    assert(_.contains({'both','eval','train','neither'}, self._remember), 
       "Sequencer : unrecognized value for remember : "..self._remember)
    return self
+end
+
+function Sequencer:backwardThroughTime()
 end
 
 function Sequencer:type(type)

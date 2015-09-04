@@ -16,7 +16,7 @@ function Repeater:__init(rnn, nStep)
    assert(torch.type(nStep) == 'number', "expecting number value for arg 2")
    self.nStep = nStep
    self.rnn = rnn
-   assert(rnn.backwardThroughTime, "expecting AbstractRecurrent instance for arg 1")
+   assert(torch.isTypeOf(rnn, "nn.AbstractRecurrent"), "expecting AbstractRecurrent instance for arg 1")
    self.modules[1] = rnn
    self.output = {}
 end
@@ -74,6 +74,9 @@ function Repeater:accUpdateGradParameters(input, gradOutput, lr)
    end
    -- back-propagate through time (BPTT)
    self.rnn:accUpdateGradParametersThroughTime(lr)
+end
+
+function Repeater:backwardThroughTime()
 end
 
 function Repeater:__tostring__()

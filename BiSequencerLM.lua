@@ -138,6 +138,9 @@ function BiSequencerLM:accUpdateGradParameters(input, gradOutput, lr)
    self._bwd:accUpdateGradParameters(_.last(input, nStep - 1), _.first(self._mergeGradInput[2], nStep - 1), lr)
 end
 
+function BiSequencerLM:backwardThroughTime()
+end
+
 BiSequencerLM.remember = nn.BiSequencerLM.remember
 BiSequencerLM.forget = nn.BiSequencerLM.forget
 

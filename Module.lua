@@ -19,3 +19,12 @@ function Module:remember(remember)
    end
    return self
 end
+
+-- Calls backwardThroughTime for all encapsulated modules
+function Module:backwardThroughTime()
+   if self.modules then
+      for i, module in ipairs(self.modules) do
+         module:backwardThroughTime()
+      end
+   end
+end
