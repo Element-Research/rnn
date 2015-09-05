@@ -1486,6 +1486,7 @@ function rnntest.LSTM_nn_vs_nngraph()
    end
 end
 
+-- https://github.com/Element-Research/rnn/issues/28
 function rnntest.Recurrent_checkgrad()
    if not pcall(function() require 'optim' end) then return end
 
