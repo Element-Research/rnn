@@ -96,14 +96,14 @@ function AbstractRecurrent:recycle(offset)
    offset = offset or 0
    -- pad rho with one extra time-step of memory (helps for Sequencer:remember()).
    -- also, rho could have been manually increased or decreased
-   local rho = math.max(self.rho+1, _.size(self.sharedClones))
+   local rho = math.max(self.rho+1, _.size(self.sharedClones) or 0)
    if self.step > rho + offset then
       assert(self.sharedClones[self.step] == nil)
       self.sharedClones[self.step] = self.sharedClones[self.step-rho]
       self.sharedClones[self.step-rho] = nil
    end
    
-   rho = math.max(self.rho+1, _.size(self.outputs))
+   rho = math.max(self.rho+1, _.size(self.outputs) or 0)
    if self.step > rho + offset then
       -- need to keep rho+1 of these
       assert(self.outputs[self.step] == nil)
@@ -111,7 +111,7 @@ function AbstractRecurrent:recycle(offset)
       self.outputs[self.step-rho-1] = nil
    end
    
-   rho = math.max(self.rho+1, _.size(self.inputs))
+   rho = math.max(self.rho+1, _.size(self.inputs) or 0)
    if self.step > rho then
       assert(self.inputs[self.step] == nil)
       assert(self.gradOutputs[self.step] == nil)

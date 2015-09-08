@@ -136,15 +136,6 @@ function Recurrent:backwardThroughTime()
          local scale = self.scales[1]
          gradInput = self.initialModule:backward(input, gradOutput, scale)
          table.insert(self.gradInputs, 1, gradInput)
-         
-         -- startModule's gradParams shouldn't be step-averaged
-         -- as it is used only once. So un-step-average it
-         local params, gradParams = self.startModule:parameters()
-         if gradParams then
-            for i,gradParam in ipairs(gradParams) do
-               gradParam:mul(rho)
-            end
-         end
       end
       self.gradParametersAccumulated = true
    else
@@ -214,15 +205,6 @@ function Recurrent:accGradParametersThroughTime()
       local gradOutput = (1 == self.step-1) and self.gradOutputs[1] or self._gradOutputs[1]
       local scale = self.scales[1]
       self.initialModule:accGradParameters(input, gradOutput, scale)
-      
-      -- startModule's gradParams shouldn't be step-averaged
-      -- as it is used only once. So un-step-average it
-      local params, gradParams = self.startModule:parameters()
-      if gradParams then
-         for i,gradParam in ipairs(gradParams) do
-            gradParam:mul(rho)
-         end
-      end
    end
    
    self.gradParametersAccumulated = true

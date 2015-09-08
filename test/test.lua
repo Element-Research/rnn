@@ -430,19 +430,15 @@ function rnntest.FastLSTM()
    ig[1]:copy(i2g[1]:narrow(1,1,inputSize))
    ig[2]:copy(i2g[2]:narrow(1,1,inputSize))
    ig[3]:copy(o2g[1]:narrow(1,1,inputSize))
-   ig[4]:copy(o2g[2]:narrow(1,1,inputSize))
    hg[1]:copy(i2g[1]:narrow(1,inputSize+1,inputSize))
    hg[2]:copy(i2g[2]:narrow(1,inputSize+1,inputSize))
    hg[3]:copy(o2g[1]:narrow(1,inputSize+1,inputSize))
-   hg[4]:copy(o2g[2]:narrow(1,inputSize+1,inputSize))
    fg[1]:copy(i2g[1]:narrow(1,inputSize*2+1,inputSize))
    fg[2]:copy(i2g[2]:narrow(1,inputSize*2+1,inputSize))
    fg[3]:copy(o2g[1]:narrow(1,inputSize*2+1,inputSize))
-   fg[4]:copy(o2g[2]:narrow(1,inputSize*2+1,inputSize))
    og[1]:copy(i2g[1]:narrow(1,inputSize*3+1,inputSize))
    og[2]:copy(i2g[2]:narrow(1,inputSize*3+1,inputSize))
    og[3]:copy(o2g[1]:narrow(1,inputSize*3+1,inputSize))
-   og[4]:copy(o2g[2]:narrow(1,inputSize*3+1,inputSize))
    
    local output1 = seq1:forward(input)
    local gradInput1 = seq1:backward(input, gradOutput)
@@ -1484,6 +1480,44 @@ function rnntest.LSTM_nn_vs_nngraph()
    for i=1,#params_ do
       mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph second update params err "..i)
    end
+end
+
+-- https://github.com/Element-Research/rnn/issues/28
+function rnntest.Recurrent_checkgrad()
+   if not pcall(function() require 'optim' end) then return end
+
+   local hiddenSize = 2
+   local nIndex = 2
+   local r = nn.Recurrent(hiddenSize, nn.LookupTable(nIndex, hiddenSize),
+                    nn.Linear(hiddenSize, hiddenSize))
+
+   local rnn = nn.Sequential()
+   rnn:add(r)
+   rnn:add(nn.Linear(hiddenSize, nIndex))
+   rnn:add(nn.LogSoftMax())
+
+   local criterion = nn.ClassNLLCriterion()
+   local sequence = torch.Tensor{1, 2, 1, 2}:resize(4, 1)
+   local parameters, grads = rnn:getParameters()
+   
+   function f(x)
+      parameters:copy(x)
+      -- Do the forward prop
+      rnn:zeroGradParameters()
+      local err = 0
+      for i = 1, sequence:size(1) - 1 do
+         local output = rnn:forward(sequence[i])
+         err = err + criterion:forward(output, sequence[i + 1])
+         local gradOutput = criterion:backward(output, sequence[i + 1])
+         rnn:backward(sequence[i], gradOutput)
+      end
+      r:backwardThroughTime()
+      r:forget()
+      return err, grads
+   end
+
+   local err = optim.checkgrad(f, parameters:clone())
+   mytester:assert(err < 0.0001, "Recurrent optim.checkgrad error")
 end
 
 
