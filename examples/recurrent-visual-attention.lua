@@ -55,7 +55,7 @@ cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'dont print anything to stdout')
 cmd:option('--xpPath', '', 'path to a previously saved model')
 cmd:text()
-opt = cmd:parse(arg or {})
+local opt = cmd:parse(arg or {})
 if not opt.silent then
    table.print(opt)
 end
@@ -71,6 +71,7 @@ ds = dp.Mnist()
 --[[Saved experiment]]--
 if opt.xpPath ~= '' then
    if opt.cuda then
+      require 'optim'
       require 'cunn'
       cutorch.setDevice(opt.useDevice)
    end
@@ -80,6 +81,7 @@ if opt.xpPath ~= '' then
    else
       xp:float()
    end
+   print"running"
    xp:run(ds)
    os.exit()
 end
@@ -232,5 +234,7 @@ if not opt.silent then
    print"Agent :"
    print(agent)
 end
+
+xp.opt = opt
 
 xp:run(ds)
