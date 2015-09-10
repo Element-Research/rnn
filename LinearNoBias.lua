@@ -36,7 +36,7 @@ end
 function LinearNoBias:updateOutput(input)
    if input:dim() == 1 then
       self.output:resize(self.weight:size(1))
-      self.output:addmv(1, self.weight, input)
+      self.output:mv(self.weight, input)
    elseif input:dim() == 2 then
       local nframe = input:size(1)
       local nElement = self.output:nElement()
