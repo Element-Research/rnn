@@ -47,8 +47,8 @@ function AbstractRecurrent:updateGradInput(input, gradOutput)
    if self.copyGradOutputs then
       self.gradOutputs[self.step-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
    else
-      self.gradOutputs[self.step-1] = self.gradOutputs[self.step-1] or gradOutput.new()
-      self.gradOutputs[self.step-1]:set(gradOutput)
+      self.gradOutputs[self.step-1] = self.gradOutputs[self.step-1] or nn.rnn.recursiveNew(gradOutput)
+      nn.rnn.recursiveSet(self.gradOutputs[self.step-1], gradOutput)
    end
 end
 
