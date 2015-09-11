@@ -138,3 +138,18 @@ function rnn.recursiveSum(t2)
    end
    return sum
 end
+
+function rnn.recursiveNew(t2)
+   if torch.type(t2) == 'table' then
+      local t1 = {}
+      for key,_ in pairs(t2) do
+         t1[key] = rnn.recursiveNew(t2[key])
+      end
+      return t1
+   elseif torch.isTensor(t2) then
+      return t2.new()
+   else
+      error("expecting tensor or table thereof. Got "
+           ..torch.type(t2).." instead")
+   end
+end
