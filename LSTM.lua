@@ -8,12 +8,8 @@
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
 ------------------------------------------------------------------------
-local LSTM, parent
-if nn.LSTM then -- prevent name conflicts with nnx
-   LSTM, parent = nn.LSTM, nn.AbstractRecurrent
-else
-   LSTM, parent = torch.class('nn.LSTM', 'nn.AbstractRecurrent')
-end
+assert(not nn.LSTM, "update nnx package : luarocks install nnx")
+local LSTM, parent = torch.class('nn.LSTM', 'nn.AbstractRecurrent')
 
 function LSTM:__init(inputSize, outputSize, rho, cell2gate)
    parent.__init(self, rho or 9999)

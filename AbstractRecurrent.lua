@@ -1,11 +1,7 @@
 local _ = require 'moses'
 
-local AbstractRecurrent, parent
-if nn.AbstractRecurrent then -- prevent name conflicts with nnx
-   AbstractRecurrent, parent = nn.AbstractRecurrent, nn.Container
-else
-   AbstractRecurrent, parent = torch.class('nn.AbstractRecurrent', 'nn.Container')
-end
+assert(not nn.AbstractRecurrent, "update nnx package : luarocks install nnx")
+local AbstractRecurrent, parent = torch.class('nn.AbstractRecurrent', 'nn.Container')
 
 function AbstractRecurrent:__init(rho)
    parent.__init(self)
@@ -179,8 +175,16 @@ function AbstractRecurrent:evaluate()
    end)
 end
 
+function AbstractRecurrent:sharedClone(shareParams, shareGradParams)
+   return self:includingSharedClones(function()
+      return parent.sharedClone(self, shareParams, shareGradParams)
+   end)
+end
+
 function AbstractRecurrent:reinforce(reward)
-   error"Not Implemented"
+   return self:includingSharedClones(function()
+      return parent.reinforce(self, reward)
+   end)
 end
 
 -- backwards compatibility

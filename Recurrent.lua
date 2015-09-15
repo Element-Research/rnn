@@ -14,12 +14,8 @@
 -- output attribute to keep track of their internal state between 
 -- forward and backward.
 ------------------------------------------------------------------------
-local Recurrent, parent
-if nn.Recurrent then -- prevent name conflicts with nnx
-   Recurrent, parent = nn.Recurrent, nn.AbstractRecurrent
-else
-   Recurrent, parent = torch.class('nn.Recurrent', 'nn.AbstractRecurrent')
-end
+assert(not nn.Recurrent, "update nnx package : luarocks install nnx")
+local Recurrent, parent = torch.class('nn.Recurrent', 'nn.AbstractRecurrent')
 
 function Recurrent:__init(start, input, feedback, transfer, rho, merge)
    parent.__init(self, rho or 5)

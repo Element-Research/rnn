@@ -12,7 +12,7 @@
 -- It is implemented by decorating a structure of modules that makes 
 -- use of 3 Sequencers for the forward, backward and merge modules.
 ------------------------------------------------------------------------
-local BiSequencer, parent = torch.class('nn.BiSequencer', 'nn.Decorator')
+local BiSequencer, parent = torch.class('nn.BiSequencer', 'nn.AbstractSequencer')
 
 function BiSequencer:__init(forward, backward, merge)
    
@@ -57,11 +57,20 @@ function BiSequencer:__init(forward, backward, merge)
    brnn:add(nn.ZipTable())
    brnn:add(self.mergeSeq)
    
-   parent.__init(self, brnn)
+   parent.__init(self)
    
    self.output = {}
    self.gradInput = {}
+   
+   self.module = brnn
+   -- so that it can be handled like a Container
+   self.modules[1] = brnn
 end
 
-function BiSequencer:backwardThroughTime()
-end
+-- multiple-inheritance
+BiSequencer.updateOutput = nn.Decorator.updateOutput
+BiSequencer.updateGradInput = nn.Decorator.updateGradInput
+BiSequencer.accGradParameters = nn.Decorator.accGradParameters
+BiSequencer.accUpdateGradParameters = nn.Decorator.accUpdateGradParameters
+BiSequencer.sharedAccUpdateGradParameters = nn.Decorator.sharedAccUpdateGradParameters
+BiSequencer.__tostring__ =  nn.Decorator.__tostring__

@@ -10,7 +10,7 @@
 -- Note : you shouldn't stack these for language modeling. 
 -- Instead, stack each fwd/bwd seqs and encapsulate these.
 ------------------------------------------------------------------------
-local BiSequencerLM, parent = torch.class('nn.BiSequencerLM', 'nn.Container')
+local BiSequencerLM, parent = torch.class('nn.BiSequencerLM', 'nn.AbstractSequencer')
 
 function BiSequencerLM:__init(forward, backward, merge)
    
@@ -137,12 +137,6 @@ function BiSequencerLM:accUpdateGradParameters(input, gradOutput, lr)
    self._fwd:accUpdateGradParameters(_.first(input, nStep - 1), _.last(self._mergeGradInput[1], nStep - 1), lr)
    self._bwd:accUpdateGradParameters(_.last(input, nStep - 1), _.first(self._mergeGradInput[2], nStep - 1), lr)
 end
-
-function BiSequencerLM:backwardThroughTime()
-end
-
-BiSequencerLM.remember = nn.BiSequencerLM.remember
-BiSequencerLM.forget = nn.BiSequencerLM.forget
 
 function BiSequencerLM:__tostring__()
    local tab = '  '

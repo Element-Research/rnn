@@ -8,12 +8,8 @@
 -- The sequences in a batch must have the same size.
 -- But the sequence length of each batch can vary.
 ------------------------------------------------------------------------
-local Sequencer, parent
-if nn.Sequencer then -- prevent name conflicts with nnx
-   Sequencer, parent = nn.Sequencer, nn.Container
-else
-   Sequencer, parent = torch.class('nn.Sequencer', 'nn.Container')
-end
+assert(not nn.Sequencer, "update nnx package : luarocks install nnx")
+local Sequencer, parent = torch.class('nn.Sequencer', 'nn.AbstractSequencer')
 
 function Sequencer:__init(module)
    parent.__init(self)
@@ -57,17 +53,6 @@ function Sequencer:__init(module)
    -- default is to forget previous inputs before each forward()
    self._remember = 'neither'
 end
-
-function Sequencer:getStepModule(step)
-   assert(step, "expecting step at arg 1")
-   local module = self.sharedClones[step]
-   if not module then
-      module = self.module:sharedClone()
-      self.sharedClones[step] = module
-   end
-   return module
-end
-
 
 function Sequencer:updateOutput(inputTable)
    assert(torch.type(inputTable) == 'table', "expecting input table")
@@ -203,22 +188,6 @@ function Sequencer:remember(remember)
    return self
 end
 
-function Sequencer:backwardThroughTime()
-end
-
-function Sequencer:type(type)
-   local modules = self.modules
-   self.modules = {}
-   for i,modules in ipairs{modules, self.sharedClones} do
-      for j, module in pairs(modules) do
-         table.insert(self.modules, module)
-      end
-   end
-   parent.type(self, type)
-   self.modules = modules
-   return self
-end
-
 function Sequencer:training()
    if self.isRecurrent and self.train == false then
       -- empty output table (tensor mem was managed by seq)
@@ -229,9 +198,6 @@ function Sequencer:training()
       -- forget at the start of each training
       self:forget()
    end
-   for i,clone in pairs(self.sharedClones) do
-      clone:training()
-   end
    parent.training(self)
 end
 
@@ -241,9 +207,6 @@ function Sequencer:evaluate()
       self.output = {}
       -- forget at the start of each evaluation
       self:forget()
-   end
-   for i,clone in pairs(self.sharedClones) do
-      clone:evaluate()
    end
    parent.evaluate(self)
    assert(self.train == false)

@@ -6,7 +6,7 @@ require 'rnn'
 -- B. http://incompleteideas.net/sutton/williams-92.pdf
 
 
-version = 9
+version = 10
 
 --[[command line arguments]]--
 cmd = torch.CmdLine()
