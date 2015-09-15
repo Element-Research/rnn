@@ -80,9 +80,9 @@ function RecurrentAttention:updateGradInput(input, gradOutput)
    for step=self.nStep,1,-1 do
       local action = self:getStepModule(step)
       
-      local gradOutput_, gradAction_ = gradOutput[step]
+      local gradOutput_ = gradOutput[step]
       if self.forwardActions then
-         gradOutput_, gradActions = unpack(gradOutput[step])
+         gradOutput_, gradAction_ = unpack(gradOutput[step])
       end
       
       if step == self.nStep then
