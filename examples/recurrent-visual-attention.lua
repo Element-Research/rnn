@@ -33,6 +33,7 @@ cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution b
 cmd:option('--rewardScale', 1, "scale of positive reward (negative is 0)")
 cmd:option('--unitPixels', 12, "the locator unit (1,1) maps to pixels (12,12), or (-1,-1) maps to (-12,-12)")
 cmd:option('--locatorStd', 0.11, 'stdev of gaussian location sampler (between 0 and 1) (low values may cause NaNs)')
+cmd:option('--deterministic', false, 'Reinforce modules forward inputs deterministically during evaluation')
 
 --[[ glimpse layer ]]--
 cmd:option('--glimpseHiddenSize', 128, 'size of glimpse hidden layer')
@@ -120,7 +121,8 @@ assert(ds:imageSize('h') == ds:imageSize('w'))
 locator = nn.Sequential()
 locator:add(nn.Linear(opt.hiddenSize, 2))
 locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
-locator:add(nn.ReinforceNormal(2*opt.locatorStd)) -- sample from normal, uses REINFORCE learning rule
+locator:add(nn.ReinforceNormal(2*opt.locatorStd, not opt.deterministic)) -- sample from normal, uses REINFORCE learning rule
+assert(locator:get(3).stochastic == not opt.deterministic, "Please update the dpnn package : luarocks install dpnn")
 locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
 locator:add(nn.MulConstant(opt.unitPixels/ds:imageSize("h")))
 
@@ -186,7 +188,6 @@ train = dp.Optimizer{
    sampler = dp.ShuffleSampler{
       epoch_size = opt.trainEpochSize, batch_size = opt.batchSize
    },
-   acc_update = opt.accUpdate,
    progress = opt.progress
 }
 
