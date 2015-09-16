@@ -19,6 +19,5 @@ AbstractSequencer.includingSharedClones = nn.AbstractRecurrent.includingSharedCl
 AbstractSequencer.type = nn.AbstractRecurrent.type
 AbstractSequencer.training = nn.AbstractRecurrent.training
 AbstractSequencer.evaluate = nn.AbstractRecurrent.evaluate
-AbstractSequencer.sharedClone = nn.AbstractRecurrent.sharedClone
 AbstractSequencer.reinforce = nn.AbstractRecurrent.reinforce
 

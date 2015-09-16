@@ -146,14 +146,17 @@ end
 
 function AbstractRecurrent:includingSharedClones(f)
    local modules = self.modules
+   local sharedClones = self.sharedClones
+   self.sharedClones = nil
    self.modules = {}
-   for i,modules in ipairs{modules, self.sharedClones} do
+   for i,modules in ipairs{modules, sharedClones} do
       for j, module in pairs(modules) do
          table.insert(self.modules, module)
       end
    end
    local r = f()
    self.modules = modules
+   self.sharedClones = sharedClones
    return r
 end
 
@@ -172,12 +175,6 @@ end
 function AbstractRecurrent:evaluate()
    return self:includingSharedClones(function()
       return parent.evaluate(self)
-   end)
-end
-
-function AbstractRecurrent:sharedClone(shareParams, shareGradParams)
-   return self:includingSharedClones(function()
-      return parent.sharedClone(self, shareParams, shareGradParams)
    end)
 end
 

@@ -68,9 +68,4 @@ function BiSequencer:__init(forward, backward, merge)
 end
 
 -- multiple-inheritance
-BiSequencer.updateOutput = nn.Decorator.updateOutput
-BiSequencer.updateGradInput = nn.Decorator.updateGradInput
-BiSequencer.accGradParameters = nn.Decorator.accGradParameters
-BiSequencer.accUpdateGradParameters = nn.Decorator.accUpdateGradParameters
-BiSequencer.sharedAccUpdateGradParameters = nn.Decorator.sharedAccUpdateGradParameters
-BiSequencer.__tostring__ =  nn.Decorator.__tostring__
+nn.Decorator.decorate(BiSequencer)
