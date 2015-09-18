@@ -6,7 +6,7 @@ require 'rnn'
 -- B. http://incompleteideas.net/sutton/williams-92.pdf
 
 
-version = 11
+version = 12
 
 --[[command line arguments]]--
 cmd = torch.CmdLine()
@@ -21,13 +21,16 @@ cmd:option('--saturateEpoch', 800, 'epoch at which linear decayed LR will reach 
 cmd:option('--momentum', 0.9, 'momentum')
 cmd:option('--maxOutNorm', -1, 'max norm each layers output neuron weights')
 cmd:option('--cutoffNorm', -1, 'max l2-norm of contatenation of all gradParam tensors')
-cmd:option('--batchSize', 32, 'number of examples per batch')
+cmd:option('--batchSize', 20, 'number of examples per batch')
 cmd:option('--cuda', false, 'use CUDA')
 cmd:option('--useDevice', 1, 'sets the device (GPU) to use')
 cmd:option('--maxEpoch', 2000, 'maximum number of epochs to run')
 cmd:option('--maxTries', 100, 'maximum number of epochs to try to find a better local minima for early-stopping')
 cmd:option('--transfer', 'ReLU', 'activation function')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
+cmd:option('--xpPath', '', 'path to a previously saved model')
+cmd:option('--progress', false, 'print progress bar')
+cmd:option('--silent', false, 'dont print anything to stdout')
 
 --[[ reinforce ]]--
 cmd:option('--rewardScale', 1, "scale of positive reward (negative is 0)")
@@ -49,12 +52,12 @@ cmd:option('--hiddenSize', 256, 'number of hidden units used in Simple RNN.')
 cmd:option('--dropout', false, 'apply dropout on hidden neurons')
 
 --[[ data ]]--
+cmd:option('--dataset', 'Mnist', 'which dataset to use : Mnist | TranslattedMnist | etc')
 cmd:option('--trainEpochSize', -1, 'number of train examples seen between each epoch')
 cmd:option('--validEpochSize', -1, 'number of valid examples used for early stopping and cross-validation') 
-cmd:option('--trainOnly', false, 'forget the validation and test sets, focus on the training set')
-cmd:option('--progress', false, 'print progress bar')
-cmd:option('--silent', false, 'dont print anything to stdout')
-cmd:option('--xpPath', '', 'path to a previously saved model')
+cmd:option('--noTest', false, 'dont propagate through the test set')
+cmd:option('--overwrite', false, 'overwrite checkpoint')
+
 cmd:text()
 local opt = cmd:parse(arg or {})
 if not opt.silent then
@@ -67,7 +70,15 @@ if opt.xpPath ~= '' then
 end
 
 --[[data]]--
-ds = dp.Mnist()
+if opt.dataset == 'TranslatedMnist' then
+   ds = torch.checkpoint(
+      paths.concat(dp.DATA_DIR, 'checkpoint/dp.TranslatedMnist.t7'),
+      function() return dp[opt.dataset]() end, 
+      opt.overwrite
+   )
+else
+   ds = dp[opt.dataset]()
+end
 
 --[[Saved experiment]]--
 if opt.xpPath ~= '' then
@@ -124,7 +135,7 @@ locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
 locator:add(nn.ReinforceNormal(2*opt.locatorStd, not opt.deterministic)) -- sample from normal, uses REINFORCE learning rule
 assert(locator:get(3).stochastic == not opt.deterministic, "Please update the dpnn package : luarocks install dpnn")
 locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
-locator:add(nn.MulConstant(opt.unitPixels/ds:imageSize("h")))
+locator:add(nn.MulConstant(opt.unitPixels*2/ds:imageSize("h")))
 
 attention = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
 
@@ -191,12 +202,13 @@ train = dp.Optimizer{
    progress = opt.progress
 }
 
-if not opt.trainOnly then
-   valid = dp.Evaluator{
-      feedback = dp.Confusion{output_module=nn.SelectTable(1)},  
-      sampler = dp.Sampler{epoch_size = opt.validEpochSize, batch_size = opt.batchSize},
-      progress = opt.progress
-   }
+
+valid = dp.Evaluator{
+   feedback = dp.Confusion{output_module=nn.SelectTable(1)},  
+   sampler = dp.Sampler{epoch_size = opt.validEpochSize, batch_size = opt.batchSize},
+   progress = opt.progress
+}
+if not opt.noTest then
    tester = dp.Evaluator{
       feedback = dp.Confusion{output_module=nn.SelectTable(1)},  
       sampler = dp.Sampler{batch_size = opt.batchSize} 
@@ -214,7 +226,7 @@ xp = dp.Experiment{
       dp.FileLogger(),
       dp.EarlyStopper{
          max_epochs = opt.maxTries, 
-         error_report={opt.trainOnly and 'optimizer' or 'validator','feedback','confusion','accuracy'},
+         error_report={'validator','feedback','confusion','accuracy'},
          maximize = true
       }
    },
