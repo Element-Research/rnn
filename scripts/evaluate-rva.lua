@@ -73,6 +73,12 @@ targets = ds:get('test','targets', 'b')
 
 input = inputs:narrow(1,1,10)
 model:training() -- otherwise the rnn doesn't save intermediate time-step states
+if not opt.stochastic then
+   for i=1,#ra.actions do
+      local rn = ra:getStepModule(i):findModules('nn.ReinforceNormal')[1]
+      rn.stdev = 0 -- deterministic
+   end
+end
 output = model:forward(input)
 
 function drawBox(img, bbox, channel)
