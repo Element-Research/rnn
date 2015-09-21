@@ -6,11 +6,10 @@
 -- hyper-parameters such as the maximum number of steps, 
 -- action (actions sampling module like ReinforceNormal) and 
 ------------------------------------------------------------------------
-local RecurrentAttention, parent = torch.class("nn.RecurrentAttention", "nn.Container")
+local RecurrentAttention, parent = torch.class("nn.RecurrentAttention", "nn.AbstractSequencer")
 
 function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    parent.__init(self)
-   require 'image'
    assert(torch.isTypeOf(rnn, 'nn.AbstractRecurrent'))
    assert(torch.isTypeOf(action, 'nn.Module'))
    assert(torch.type(nStep) == 'number')
@@ -24,7 +23,7 @@ function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    self.nStep = nStep
    
    self.modules = {self.rnn, self.action}
-   self.sharedClones = {self.action} -- action clones
+   self.sharedClones = {self.action:sharedClone()} -- action clones
    
    self.output = {} -- rnn output
    self.actions = {} -- action output
@@ -32,17 +31,6 @@ function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    self.forwardActions = false
    
    self.gradHidden = {}
-end
-
-function RecurrentAttention:getStepModule(step)
-   assert(step, "expecting step at arg 1")
-   local module = self.sharedClones[step]
-   if not module then
-      module = self.sharedClones[1]:sharedClone()
-      self.sharedClones[step] = module
-   end
-   -- return main, action 
-   return module
 end
 
 function RecurrentAttention:updateOutput(input)
@@ -80,9 +68,9 @@ function RecurrentAttention:updateGradInput(input, gradOutput)
    for step=self.nStep,1,-1 do
       local action = self:getStepModule(step)
       
-      local gradOutput_, gradAction_ = gradOutput[step]
+      local gradOutput_ = gradOutput[step]
       if self.forwardActions then
-         gradOutput_, gradActions = unpack(gradOutput[step])
+         gradOutput_, gradAction_ = unpack(gradOutput[step])
       end
       
       if step == self.nStep then
@@ -178,49 +166,13 @@ function RecurrentAttention:accUpdateGradParameters(input, gradOutput, lr)
    self.rnn:accUpdateGradParametersThroughTime()
 end
 
-function RecurrentAttention:backwardThroughTime()
-end
-
-function RecurrentAttention:training()
-   for i,clone in pairs(self.sharedClones) do
-      clone:training()
-   end
-   parent.training(self)
-end
-
-function RecurrentAttention:evaluate()
-   for i,clone in pairs(self.sharedClones) do
-      clone:evaluate()
-   end
-   parent.evaluate(self)
-   assert(self.train == false)
-end
-
-function RecurrentAttention:reinforce(reward)
-   if torch.type(reward) == 'table' then
-      error"Sequencer Error : step-wise rewards not yet supported"
-   end
-   
-   self.rnn:reinforce(reward)
-   for step=1,self.nStep do
-      local action = self:getStepModule(step)
-      action:reinforce(reward)
-   end 
-   
-   local modules = self.modules
-   self.modules = nil
-   local ret = parent.reinforce(self, reward)
-   self.modules = modules
-   return ret
-end
-
 function RecurrentAttention:type(type)
    self._input = nil
    self._actions = nil
    self._crop = nil
    self._pad = nil
    self._byte = nil
-   return nn.Sequencer.type(self, type)
+   return parent.type(self, type)
 end
 
 function RecurrentAttention:__tostring__()

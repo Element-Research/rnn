@@ -14,12 +14,8 @@
 -- output attribute to keep track of their internal state between 
 -- forward and backward.
 ------------------------------------------------------------------------
-local Recurrent, parent
-if nn.Recurrent then -- prevent name conflicts with nnx
-   Recurrent, parent = nn.Recurrent, nn.AbstractRecurrent
-else
-   Recurrent, parent = torch.class('nn.Recurrent', 'nn.AbstractRecurrent')
-end
+assert(not nn.Recurrent, "update nnx package : luarocks install nnx")
+local Recurrent, parent = torch.class('nn.Recurrent', 'nn.AbstractRecurrent')
 
 function Recurrent:__init(start, input, feedback, transfer, rho, merge)
    parent.__init(self, rho or 5)
@@ -99,7 +95,6 @@ end
 
 -- not to be confused with the hit movie Back to the Future
 function Recurrent:backwardThroughTime()
-   assert(self.step > 1, "expecting at least one updateOutput")
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    local gradInput
@@ -263,37 +258,20 @@ end
 function Recurrent:includingSharedClones(f)
    local modules = self.modules
    self.modules = {}
-   for i,modules in ipairs{modules, self.sharedClones, {self.initialModule}} do
+   local sharedClones = self.sharedClones
+   self.sharedClones = nil
+   local initModule = self.initialModule
+   self.initialModule = nil
+   for i,modules in ipairs{modules, sharedClones, {initModule}} do
       for j, module in pairs(modules) do
          table.insert(self.modules, module)
       end
    end
    local r = f()
    self.modules = modules
+   self.sharedClones = sharedClones
+   self.initialModule = initModule 
    return r
-end
-
-function Recurrent:reinforce(reward)
-   if torch.type(reward) == 'table' then
-      error"Recurrent Error : step-wise rewards not yet supported"
-   end
-   
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
-   for step=self.step-1,math.max(stop,2),-1 do
-      local recurrentModule = self:getStepModule(step)
-      recurrentModule:reinforce(reward)
-   end
-   
-   if stop <= 1 then      
-      self.initialModule:reinforce(reward)
-   end
-   
-   local modules = self.modules
-   self.modules = nil
-   local ret = nn.Container.reinforce(self, reward)
-   self.modules = modules
-   return ret
 end
 
 function Recurrent:__tostring__()

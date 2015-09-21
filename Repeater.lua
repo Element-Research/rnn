@@ -4,12 +4,8 @@
 -- presented with the same input for nStep time steps.
 -- The output is a table of nStep outputs of the rnn.
 ------------------------------------------------------------------------
-local Repeater, parent
-if nn.Repeater then -- prevent name conflicts with nnx
-   Repeater, parent = nn.Repeater, nn.Container
-else
-   Repeater, parent = torch.class('nn.Repeater', 'nn.Container')
-end
+assert(not nn.Repeater, "update nnx package : luarocks install nnx")
+local Repeater, parent = torch.class('nn.Repeater', 'nn.AbstractSequencer')
 
 function Repeater:__init(rnn, nStep)
    parent.__init(self)
@@ -74,9 +70,6 @@ function Repeater:accUpdateGradParameters(input, gradOutput, lr)
    end
    -- back-propagate through time (BPTT)
    self.rnn:accUpdateGradParametersThroughTime(lr)
-end
-
-function Repeater:backwardThroughTime()
 end
 
 function Repeater:__tostring__()
