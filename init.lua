@@ -3,6 +3,8 @@ require 'dpnn'
 -- create global rnn table:
 rnn = {}
 
+unpack = unpack or table.unpack
+
 torch.include('rnn', 'recursiveUtils.lua')
 
 -- extensions to nn.Module
