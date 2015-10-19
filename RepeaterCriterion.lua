@@ -4,12 +4,8 @@
 -- same target (the target is repeated). 
 -- Useful for nn.Repeater and nn.Sequencer.
 ------------------------------------------------------------------------
-local RepeaterCriterion, parent
-if nn.RepeaterCriterion then -- prevent name conflicts with nnx
-   RepeaterCriterion, parent = nn.RepeaterCriterion, nn.Criterion
-else
-   RepeaterCriterion, parent = torch.class('nn.RepeaterCriterion', 'nn.Criterion')
-end
+assert(not nn.RepeaterCriterion, "update nnx package : luarocks install nnx")
+local RepeaterCriterion, parent = torch.class('nn.RepeaterCriterion', 'nn.Criterion')
 
 function RepeaterCriterion:__init(criterion)
    parent.__init(self)
