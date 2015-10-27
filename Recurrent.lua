@@ -193,7 +193,7 @@ function Recurrent:accGradParametersThroughTime(timeStep, rho)
       -- backward propagate through this step
       local input = self.inputs[step]
       local output = self.outputs[step-1]
-      local gradOutput = (step == timeStep-1) and self.gradOutputs[step] or self._gradOutputs[step]
+      local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
 
       local scale = self.scales[step]
       recurrentModule:accGradParameters({input, output}, gradOutput, scale)
@@ -202,7 +202,7 @@ function Recurrent:accGradParametersThroughTime(timeStep, rho)
    if stop <= 1 then
       -- backward propagate through first step
       local input = self.inputs[1]
-      local gradOutput = (1 == timeStep-1) and self.gradOutputs[1] or self._gradOutputs[1]
+      local gradOutput = (1 == self.step-1) and self.gradOutputs[1] or self._gradOutputs[1]
       local scale = self.scales[1]
       self.initialModule:accGradParameters(input, gradOutput, scale)
    end
@@ -231,10 +231,10 @@ function Recurrent:accUpdateGradParametersThroughInitialModule(lr, rho)
 end
 
 function Recurrent:accUpdateGradParametersThroughTime(lr, timeStep, rho)
-   assert(not (timeStep or rho), "Not Implemented")
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
-   for step=self.step-1,math.max(stop,2),-1 do
+   timeStep = timeStep or self.step
+   local rho = math.min(rho or self.rho, timeStep-1)
+   local stop = timeStep - rho
+   for step=timeStep-1,math.max(stop,2),-1 do
       local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
