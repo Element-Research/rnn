@@ -89,33 +89,36 @@ function Recurrent:updateOutput(input)
    self.outputs[self.step] = output
    self.output = output
    self.step = self.step + 1
+   self.gradPrevOutput = nil
+   self.backStep = nil
    self.gradParametersAccumulated = false
    return self.output
 end
 
 -- not to be confused with the hit movie Back to the Future
-function Recurrent:backwardThroughTime()
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
+function Recurrent:backwardThroughTime(timeStep, timeRho)
+   timeStep = timeStep or self.step
+   local rho = math.min(timeRho or self.rho, timeStep-1)
+   local stop = timeStep - rho
    local gradInput
    if self.fastBackward then
       self.gradInputs = {}
-      local gradPrevOutput
-      for step=self.step-1,math.max(stop, 2),-1 do
+      for step=timeStep-1,math.max(stop, 2),-1 do
          local recurrentModule = self:getStepModule(step)
          
          -- backward propagate through this step
          local input = self.inputs[step]
          local output = self.outputs[step-1]
          local gradOutput = self.gradOutputs[step] 
-         if gradPrevOutput then
-            self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradPrevOutput)
+         if self.gradPrevOutput then
+            self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
             nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
             gradOutput = self._gradOutputs[step]
          end
          local scale = self.scales[step]
          
-         gradInput, gradPrevOutput = unpack(recurrentModule:backward({input, output}, gradOutput, scale))
+         gradInput, self.gradPrevOutput = unpack(recurrentModule:backward({input, output}, gradOutput, scale))
+         
          table.insert(self.gradInputs, 1, gradInput)
       end
       
@@ -123,8 +126,8 @@ function Recurrent:backwardThroughTime()
          -- backward propagate through first step
          local input = self.inputs[1]
          local gradOutput = self.gradOutputs[1]
-         if gradPrevOutput then
-            self._gradOutputs[1] = nn.rnn.recursiveCopy(self._gradOutputs[1], gradPrevOutput)
+         if self.gradPrevOutput then
+            self._gradOutputs[1] = nn.rnn.recursiveCopy(self._gradOutputs[1], self.gradPrevOutput)
             nn.rnn.recursiveAdd(self._gradOutputs[1], gradOutput)
             gradOutput = self._gradOutputs[1]
          end
@@ -134,32 +137,33 @@ function Recurrent:backwardThroughTime()
       end
       self.gradParametersAccumulated = true
    else
-      gradInput = self:updateGradInputThroughTime()
-      self:accGradParametersThroughTime()
+      gradInput = self:updateGradInputThroughTime(timeStep, timeRho)
+      self:accGradParametersThroughTime(timeStep, timeRho)
    end
    return gradInput
 end
 
-function Recurrent:updateGradInputThroughTime()
+function Recurrent:updateGradInputThroughTime(timeStep, rho)
    assert(self.step > 1, "expecting at least one updateOutput")
+   timeStep = timeStep or self.step
    self.gradInputs = {}
-   local gradInput, gradPrevOutput
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
-   for step=self.step-1,math.max(stop,2),-1 do
+   local gradInput
+   local rho = math.min(rho or self.rho, timeStep-1)
+   local stop = timeStep - rho
+   for step=timeStep-1,math.max(stop,2),-1 do
       local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local input = self.inputs[step]
       local output = self.outputs[step-1]
       local gradOutput = self.gradOutputs[step]
-      if gradPrevOutput then
-         self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradPrevOutput)
+      if self.gradPrevOutput then
+         self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
          nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
          gradOutput = self._gradOutputs[step]
       end
       
-      gradInput, gradPrevOutput = unpack(recurrentModule:updateGradInput({input, output}, gradOutput))
+      gradInput, self.gradPrevOutput = unpack(recurrentModule:updateGradInput({input, output}, gradOutput))
       table.insert(self.gradInputs, 1, gradInput)
    end
    
@@ -167,8 +171,8 @@ function Recurrent:updateGradInputThroughTime()
       -- backward propagate through first step
       local input = self.inputs[1]
       local gradOutput = self.gradOutputs[1]
-      if gradPrevOutput then
-         self._gradOutputs[1] = nn.rnn.recursiveCopy(self._gradOutputs[1], gradPrevOutput)
+      if self.gradPrevOutput then
+         self._gradOutputs[1] = nn.rnn.recursiveCopy(self._gradOutputs[1], self.gradPrevOutput)
          nn.rnn.recursiveAdd(self._gradOutputs[1], gradOutput)
          gradOutput = self._gradOutputs[1]
       end
@@ -179,16 +183,17 @@ function Recurrent:updateGradInputThroughTime()
    return gradInput
 end
 
-function Recurrent:accGradParametersThroughTime()
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
-   for step=self.step-1,math.max(stop,2),-1 do
+function Recurrent:accGradParametersThroughTime(timeStep, rho)
+   timeStep = timeStep or self.step
+   local rho = math.min(rho or self.rho, timeStep-1)
+   local stop = timeStep - rho
+   for step=timeStep-1,math.max(stop,2),-1 do
       local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local input = self.inputs[step]
       local output = self.outputs[step-1]
-      local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
+      local gradOutput = (step == timeStep-1) and self.gradOutputs[step] or self._gradOutputs[step]
 
       local scale = self.scales[step]
       recurrentModule:accGradParameters({input, output}, gradOutput, scale)
@@ -197,7 +202,7 @@ function Recurrent:accGradParametersThroughTime()
    if stop <= 1 then
       -- backward propagate through first step
       local input = self.inputs[1]
-      local gradOutput = (1 == self.step-1) and self.gradOutputs[1] or self._gradOutputs[1]
+      local gradOutput = (1 == timeStep-1) and self.gradOutputs[1] or self._gradOutputs[1]
       local scale = self.scales[1]
       self.initialModule:accGradParameters(input, gradOutput, scale)
    end
@@ -225,7 +230,8 @@ function Recurrent:accUpdateGradParametersThroughInitialModule(lr, rho)
    transferModule:accUpdateGradParameters(startModule.output, gradOutput, lr*scale)
 end
 
-function Recurrent:accUpdateGradParametersThroughTime(lr)
+function Recurrent:accUpdateGradParametersThroughTime(lr, timeStep, rho)
+   assert(not (timeStep or rho), "Not Implemented")
    local rho = math.min(self.rho, self.step-1)
    local stop = self.step - rho
    for step=self.step-1,math.max(stop,2),-1 do

@@ -28,3 +28,17 @@ function Module:backwardThroughTime()
       end
    end
 end
+
+function Module:stepClone(shareParams, shareGradParams, clones, pointers)
+   return self:sharedClone(shareParams, shareGradParams, clones, pointers, true)
+end
+
+-- notifies all AbstractRecurrent instances not wrapped by an AbstractSequencer
+-- that the backward calls will be handled online (in reverse order of forward time).
+function Module:backwardOnline(online)
+   if self.modules then
+      for i, module in ipairs(self.modules) do
+         module:backwardOnline(online)
+      end
+   end
+end
