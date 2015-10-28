@@ -787,7 +787,7 @@ function rnntest.Sequencer()
    end
    testRemember(nn.Recurrent(outputSize, nn.Linear(outputSize, outputSize), feedbackModule:clone(), transferModule:clone(), nSteps7:max()))
    testRemember(nn.LSTM(outputSize, outputSize, nSteps7:max()))
-  
+
    -- test in evaluation mode
    rnn3:evaluate()
    local outputs4 = rnn3:forward(inputs)
@@ -1104,10 +1104,49 @@ function rnntest.Repeater()
    mytester:assert(#outputs3 == #rnn.gradInputs, "Repeater gradInputs size err")
    local gradInput = rnn.gradInputs[1]:clone():zero()
    for step,output in ipairs(outputs) do
-      mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
+      mytester:assertTensorEq(outputs3[step], output, 0.00001, "Repeater output "..step)
       gradInput:add(rnn.gradInputs[step])
    end
    mytester:assertTensorEq(gradInput3, gradInput, 0.00001, "Repeater gradInput err")
+   
+   -- test with Recursor
+   
+   local inputModule = nn.Linear(inputSize, outputSize)
+   local transferModule = nn.Sigmoid()
+   -- test MLP feedback Module (because of Module:representations())
+   local feedbackModule = nn.Linear(outputSize, outputSize)
+   -- rho = nSteps
+   local rnn = nn.Recurrent(outputSize, inputModule, feedbackModule, transferModule, nSteps)
+   local rnn2 = rnn:clone()
+   
+   local rnn3 = nn.Repeater(rnn, nSteps)
+   local rnn4 = nn.Repeater(nn.Sequential():add(nn.Identity()):add(rnn2), nSteps)
+   
+   rnn3:zeroGradParameters()
+   rnn4:zeroGradParameters()
+   
+   local outputs = rnn3:forward(input)
+   local outputs2 = rnn4:forward(input)
+   
+   local gradInput = rnn3:backward(input, gradOutputs)
+   local gradInput2 = rnn4:backward(input, gradOutputs)
+   
+   mytester:assert(#outputs == #outputs2, "Repeater output size err")
+   for i=1,#outputs do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Repeater(Recursor) output err")
+   end
+   mytester:assertTensorEq(gradInput, gradInput2, 0.000001, "Repeater(Recursor) gradInput err")
+   
+   rnn3:updateParameters(1)
+   rnn4:updateParameters(1)
+   
+   local params, gradParams = rnn3:parameters()
+   local params2, gradParams2 = rnn4:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Repeater(Recursor) param err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Repeater(Recursor) gradParam err "..i)
+   end
 end
 
 function rnntest.SequencerCriterion()
@@ -1725,6 +1764,7 @@ function rnntest.Recursor()
    end
    
    -- USE CASE 3. Sequencer(Recursor)
+   
    local re2 = nn.LSTM(inputSize, outputSize)
    local seq = nn.Sequencer(nn.Recursor(re2:clone()))
    
@@ -1759,6 +1799,52 @@ function rnntest.Recursor()
       mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Sequencer(Recursor(LSTM)) updateParameter err "..i)
       mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Sequencer(Recursor(LSTM)) accGradParams err "..i)
    end
+   
+   -- USE CASE 4. Recursor(Recursor(LSTM))
+   
+   local rnn = nn.LSTM(inputSize, outputSize)
+   local re2 = rnn:clone()
+   local re = nn.Recursor(nn.Recursor(nn.Sequential():add(rnn)))
+   re:zeroGradParameters()
+   re2:zeroGradParameters()
+   
+   local outputs, outputs2 = {}, {}
+   local gradInputs = {}
+   
+   for i=1,rho do
+      -- forward
+      table.insert(outputs, re:forward(inputs[i]))
+      table.insert(outputs2, re2:forward(inputs[i]))
+      -- backward
+      re2:backward(inputs[i], gradOutputs[i])
+   end
+   
+   re2:updateGradInputThroughTime()
+   re2:accGradParametersThroughTime()
+   re2:updateParameters(0.1)
+   
+   -- recursor requires reverse-time-step order during backward
+   for i=rho,1,-1 do
+      gradInputs[i] = re:backward(inputs[i], gradOutputs[i])
+   end
+   
+   for i=1,rho do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Recursor(Recursor(LSTM)) fwd err "..i)
+      mytester:assertTensorEq(gradInputs[i], re2.gradInputs[i], 0.0000001, "Recursor(Recursor(LSTM)) bwd err "..i)
+   end
+   
+   re:updateParameters(0.1)
+   
+   local params, gradParams = rnn:parameters()
+   local params2, gradParams2 = re2:parameters()
+   
+   mytester:assert(#params == #params2, "Recursor(Recursor(LSTM)) #params err")
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Recursor(Recursor(LSTM)) updateParameter err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recursor(Recursor(LSTM)) accGradParams err "..i)
+   end
+   
+   
 end
 
 
