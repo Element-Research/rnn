@@ -21,6 +21,8 @@ function Repeater:__init(module, rho)
 end
 
 function Repeater:updateOutput(input)
+   self.module = self.module or self.rnn -- backwards compatibility
+
    self.module:forget()
    -- TODO make copy outputs optional
    for step=1,self.rho do

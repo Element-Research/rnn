@@ -27,7 +27,6 @@ function Sequencer:__init(module)
       if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
          modula.copyInputs = false
          modula.copyGradOutputs = false
-         break
       end
    end
    
