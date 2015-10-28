@@ -42,3 +42,12 @@ function Module:backwardOnline(online)
       end
    end
 end
+
+-- set the maximum number of backpropagation through time (BPTT) time-steps
+function Module:maxBPTTstep(rho)
+   if self.modules then
+      for i, module in ipairs(self.modules) do
+         module:maxBPTTstep(rho)
+      end
+   end
+end

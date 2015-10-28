@@ -179,7 +179,8 @@ function LSTM:updateOutput(input)
    
    self.step = self.step + 1
    self.gradPrevOutput = nil
-   self.backStep = nil
+   self.updateGradInputStep = nil
+   self.accGradParametersStep = nil
    self.gradParametersAccumulated = false
    -- note that we don't return the cell, just the output
    return self.output

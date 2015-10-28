@@ -24,6 +24,10 @@ function AbstractSequencer:backwardOnline(online)
    return
 end
 
+-- AbstractSequence handles its own rho internally (dynamically)
+function AbstractSequencer:maxBPTTstep(rho)
+end
+
 AbstractSequencer.includingSharedClones = nn.AbstractRecurrent.includingSharedClones
 AbstractSequencer.type = nn.AbstractRecurrent.type
 AbstractSequencer.training = nn.AbstractRecurrent.training

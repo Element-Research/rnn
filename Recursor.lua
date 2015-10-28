@@ -13,6 +13,7 @@ function Recursor:__init(module, rho)
    self.recurrentModule:backwardOnline()
    self.onlineBackward = true
    
+   self.module = module
    self.modules = {module}
 end
 
@@ -36,6 +37,8 @@ function Recursor:updateOutput(input)
    self.outputs[self.step] = output
    self.output = output
    self.step = self.step + 1
+   self.updateGradInputStep = nil
+   self.accGradParametersStep = nil
    self.gradParametersAccumulated = false
    return self.output
 end
@@ -124,6 +127,17 @@ end
 
 function Recursor:backwardOnline(online)
    assert(oneline ~= false, "Recursor only supports online backwards")
+end
+
+function Recursor:forget(offset)
+   parent.forget(self, offset)
+   nn.Module.forget(self)
+   return self
+end
+
+function Recursor:maxBPTTstep(rho)
+   self.rho = rho
+   nn.Module.maxBPTTstep(self, rho)
 end
 
 Recursor.__tostring__ = nn.Decorator.__tostring__

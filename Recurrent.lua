@@ -90,7 +90,8 @@ function Recurrent:updateOutput(input)
    self.output = output
    self.step = self.step + 1
    self.gradPrevOutput = nil
-   self.backStep = nil
+   self.updateGradInputStep = nil
+   self.accGradParametersStep = nil
    self.gradParametersAccumulated = false
    return self.output
 end
@@ -162,7 +163,7 @@ function Recurrent:updateGradInputThroughTime(timeStep, rho)
          nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
          gradOutput = self._gradOutputs[step]
       end
-      
+
       gradInput, self.gradPrevOutput = unpack(recurrentModule:updateGradInput({input, output}, gradOutput))
       table.insert(self.gradInputs, 1, gradInput)
    end
