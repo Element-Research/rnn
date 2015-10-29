@@ -1,6 +1,7 @@
 local AbstractSequencer, parent = torch.class("nn.AbstractSequencer", "nn.Container")
 
 function AbstractSequencer:getStepModule(step)
+   -- DEPRECATED 27 Oct 2015. Wrap your internal modules into a Recursor instead.
    assert(self.sharedClones, "no sharedClones for type "..torch.type(self))
    assert(step, "expecting step at arg 1")
    local module = self.sharedClones[step]

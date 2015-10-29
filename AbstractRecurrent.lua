@@ -94,7 +94,7 @@ end
 function AbstractRecurrent:accUpdateGradParametersThroughTime(lr, step, rho)
 end
 
-function AbstractRecurrent:backwardUpdateThroughTime(learningRate, step, rho)
+function AbstractRecurrent:backwardUpdateThroughTime(learningRate)
    local gradInput = self:updateGradInputThroughTime()
    self:accUpdateGradParametersThroughTime(learningRate)
    return gradInput
