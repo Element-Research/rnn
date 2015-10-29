@@ -11,8 +11,7 @@ Modules that consider successive calls to `forward` different time-steps in a se
   * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
 
-Modules that decorate `AbstractRecurrent` instances and recurse through 
-entire sequences during a single call to `forward` :
+Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
