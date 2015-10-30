@@ -127,6 +127,7 @@ end
 
 function Recursor:backwardOnline(online)
    assert(oneline ~= false, "Recursor only supports online backwards")
+   parent.backwardOnline(self)
 end
 
 function Recursor:forget(offset)

@@ -41,7 +41,6 @@ end
 function AbstractRecurrent:updateGradInput(input, gradOutput)      
    if self.onlineBackward then
       -- updateGradInput will be called in reverse order of time
-      -- BPTT for one time-step (rho = 1)
       self.updateGradInputStep = self.updateGradInputStep or self.step
       if self.copyGradOutputs then
          self.gradOutputs[self.updateGradInputStep-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.updateGradInputStep-1] , gradOutput)
@@ -49,7 +48,10 @@ function AbstractRecurrent:updateGradInput(input, gradOutput)
          self.gradOutputs[self.updateGradInputStep-1] = self.gradOutputs[self.updateGradInputStep-1] or nn.rnn.recursiveNew(gradOutput)
          nn.rnn.recursiveSet(self.gradOutputs[self.updateGradInputStep-1], gradOutput)
       end
+      
+      -- BPTT for one time-step (rho = 1)
       self.gradInput = self:updateGradInputThroughTime(self.updateGradInputStep, 1)
+      
       self.updateGradInputStep = self.updateGradInputStep - 1
       assert(self.gradInput, "Missing gradInput")
       return self.gradInput
@@ -68,11 +70,13 @@ end
 function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
    if self.onlineBackward then
       -- accGradParameters will be called in reverse order of time
-      -- BPTT for one time-step (rho = 1)
       assert(self.updateGradInputStep < self.step, "Missing updateGradInput")
       self.accGradParametersStep = self.accGradParametersStep or self.step
-      self.scales[self.accGradParametersStep] = scale or 1
+      self.scales[self.accGradParametersStep-1] = scale or 1
+      
+      -- BPTT for one time-step (rho = 1)
       self:accGradParametersThroughTime(self.accGradParametersStep, 1)
+      
       self.accGradParametersStep = self.accGradParametersStep - 1
    else
       -- Back-Propagate Through Time (BPTT) happens in updateParameters()

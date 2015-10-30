@@ -1490,6 +1490,7 @@ function rnntest.RecurrentAttention()
       mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention(Recursor), param err "..i)
       mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention(Recursor), gradParam err "..i)
    end
+   
 end
    
 function rnntest.LSTM_nn_vs_nngraph()
@@ -2015,7 +2016,13 @@ function rnntest.Recursor()
    -- USE CASE 3. Sequencer(Recursor)
    
    local re2 = nn.LSTM(inputSize, outputSize)
-   local seq = nn.Sequencer(nn.Recursor(re2:clone()))
+   local lstm2 = re2:clone()
+   local rec = nn.Recursor(lstm2)
+   local seq = nn.Sequencer(rec)
+   mytester:assert(not rec.copyInputs)
+   mytester:assert(not rec.copyGradOutputs)
+   mytester:assert(not lstm2.copyInputs)
+   mytester:assert(not lstm2.copyGradOutputs)
    
    seq:zeroGradParameters()
    re2:zeroGradParameters()
