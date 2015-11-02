@@ -20,6 +20,12 @@ function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    self.rnn = (not torch.isTypeOf(rnn, 'nn.AbstractRecurrent')) and nn.Recursor(rnn) or rnn
    -- backprop through time (BPTT) will be done online (in reverse order of forward)
    self.rnn:backwardOnline()
+   for i,modula in ipairs(self.rnn:listModules()) do
+      if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
+         modula.copyInputs = false
+         modula.copyGradOutputs = false
+      end
+   end
    
    -- samples an x,y actions for each example
    self.action =  (not torch.isTypeOf(action, 'nn.AbstractRecurrent')) and nn.Recursor(action) or action 
