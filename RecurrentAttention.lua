@@ -10,20 +10,30 @@ local RecurrentAttention, parent = torch.class("nn.RecurrentAttention", "nn.Abst
 
 function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    parent.__init(self)
-   assert(torch.isTypeOf(rnn, 'nn.AbstractRecurrent'))
    assert(torch.isTypeOf(action, 'nn.Module'))
    assert(torch.type(nStep) == 'number')
    assert(torch.type(hiddenSize) == 'table')
    assert(torch.type(hiddenSize[1]) == 'number', "Does not support table hidden layers" )
    
    self.rnn = rnn
-   self.rnn.copyInputs = true
-   self.action = action -- samples an x,y actions for each example
+   -- we can decorate the module with a Recursor to make it AbstractRecurrent
+   self.rnn = (not torch.isTypeOf(rnn, 'nn.AbstractRecurrent')) and nn.Recursor(rnn) or rnn
+   -- backprop through time (BPTT) will be done online (in reverse order of forward)
+   self.rnn:backwardOnline()
+   for i,modula in ipairs(self.rnn:listModules()) do
+      if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
+         modula.copyInputs = false
+         modula.copyGradOutputs = false
+      end
+   end
+   
+   -- samples an x,y actions for each example
+   self.action =  (not torch.isTypeOf(action, 'nn.AbstractRecurrent')) and nn.Recursor(action) or action 
+   self.action:backwardOnline()
    self.hiddenSize = hiddenSize
    self.nStep = nStep
    
    self.modules = {self.rnn, self.action}
-   self.sharedClones = {self.action:sharedClone()} -- action clones
    
    self.output = {} -- rnn output
    self.actions = {} -- action output
@@ -35,20 +45,19 @@ end
 
 function RecurrentAttention:updateOutput(input)
    self.rnn:forget()
+   self.action:forget()
    local nDim = input:dim()
    
    for step=1,self.nStep do
-      -- we maintain a copy of action (with shared params) for each time-step
-      local action = self:getStepModule(step)
       
       if step == 1 then
          -- sample an initial starting actions by forwarding zeros through the action
          self._initInput = self._initInput or input.new()
          self._initInput:resize(input:size(1),table.unpack(self.hiddenSize)):zero()
-         self.actions[1] = action:updateOutput(self._initInput)
+         self.actions[1] = self.action:updateOutput(self._initInput)
       else
          -- sample actions from previous hidden activation (rnn output)
-         self.actions[step] = action:updateOutput(self.output[step-1])
+         self.actions[step] = self.action:updateOutput(self.output[step-1])
       end
       
       -- rnn handles the recurrence internally
@@ -64,13 +73,19 @@ function RecurrentAttention:updateGradInput(input, gradOutput)
    assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
    assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
     
-   -- backward through the action
+   -- back-propagate through time (BPTT)
    for step=self.nStep,1,-1 do
-      local action = self:getStepModule(step)
-      
-      local gradOutput_ = gradOutput[step]
+      -- 1. backward through the action layer
+      local gradOutput_, gradAction_ = gradOutput[step]
       if self.forwardActions then
          gradOutput_, gradAction_ = unpack(gradOutput[step])
+      else
+         -- Note : gradOutput is ignored by REINFORCE modules so we give a zero Tensor instead
+         self._gradAction = self._gradAction or self.action.output.new()
+         if not self._gradAction:isSameSizeAs(self.action.output) then
+            self._gradAction:resizeAs(self.action.output):zero()
+         end
+         gradAction_ = self._gradAction
       end
       
       if step == self.nStep then
@@ -82,24 +97,14 @@ function RecurrentAttention:updateGradInput(input, gradOutput)
       
       if step == 1 then
          -- backward through initial starting actions
-         action:updateGradInput(self._initInput, gradAction_ or action.output)
+         self.action:updateGradInput(self._initInput, gradAction_)
       else
-         -- Note : gradOutput is ignored by REINFORCE modules so we give action.output as a dummy variable
-         local gradAction = action:updateGradInput(self.output[step-1], gradAction_ or action.output)
+         local gradAction = self.action:updateGradInput(self.output[step-1], gradAction_)
          self.gradHidden[step-1] = nn.rnn.recursiveCopy(self.gradHidden[step-1], gradAction)
       end
-   end
-   
-   -- backward through the rnn layer
-   for step=1,self.nStep do
-      self.rnn.step = step + 1
-      self.rnn:updateGradInput(input, self.gradHidden[step])
-   end
-   -- back-propagate through time (BPTT)
-   self.rnn:updateGradInputThroughTime()
-   
-   for step=self.nStep,1,-1 do
-      local gradInput = self.rnn.gradInputs[step][1]
+      
+      -- 2. backward through the rnn layer
+      local gradInput = self.rnn:updateGradInput(input, self.gradHidden[step])[1]
       if step == self.nStep then
          self.gradInput:resizeAs(gradInput):copy(gradInput)
       else
@@ -114,28 +119,22 @@ function RecurrentAttention:accGradParameters(input, gradOutput, scale)
    assert(self.rnn.step - 1 == self.nStep, "inconsistent rnn steps")
    assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
    assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
-    
-   -- backward through the action layers
+   
+   -- back-propagate through time (BPTT)
    for step=self.nStep,1,-1 do
-      local action = self:getStepModule(step)
-      local gradAction_ = self.forwardActions and gradOutput[step][2] or nil
+      -- 1. backward through the action layer
+      local gradAction_ = self.forwardActions and gradOutput[step][2] or self._gradAction
             
       if step == 1 then
          -- backward through initial starting actions
-         action:accGradParameters(self._initInput, gradAction_ or action.output, scale)
+         self.action:accGradParameters(self._initInput, gradAction_, scale)
       else
-         -- Note : gradOutput is ignored by REINFORCE modules so we give action.output as a dummy variable
-         action:accGradParameters(self.output[step-1], gradAction_ or action.output, scale)
+         self.action:accGradParameters(self.output[step-1], gradAction_, scale)
       end
-   end
-   
-   -- backward through the rnn layer
-   for step=1,self.nStep do
-      self.rnn.step = step + 1
+      
+      -- 2. backward through the rnn layer
       self.rnn:accGradParameters(input, self.gradHidden[step], scale)
    end
-   -- back-propagate through time (BPTT)
-   self.rnn:accGradParametersThroughTime()
 end
 
 function RecurrentAttention:accUpdateGradParameters(input, gradOutput, lr)
@@ -145,25 +144,20 @@ function RecurrentAttention:accUpdateGradParameters(input, gradOutput, lr)
     
    -- backward through the action layers
    for step=self.nStep,1,-1 do
-      local action = self:getStepModule(step)
-      local gradAction_ = self.forwardActions and gradOutput[step][2] or nil
+      -- 1. backward through the action layer
+      local gradAction_ = self.forwardActions and gradOutput[step][2] or self._gradAction
       
       if step == 1 then
          -- backward through initial starting actions
-         action:accUpdateGradParameters(self._initInput, gradAction_ or action.output, lr)
+         self.action:accUpdateGradParameters(self._initInput, gradAction_, lr)
       else
          -- Note : gradOutput is ignored by REINFORCE modules so we give action.output as a dummy variable
-         action:accUpdateGradParameters(self.output[step-1], gradAction_ or action.output, lr)
+         self.action:accUpdateGradParameters(self.output[step-1], gradAction_, lr)
       end
-   end
-   
-   -- backward through the rnn layer
-   for step=1,self.nStep do
-      self.rnn.step = step + 1
+      
+      -- 2. backward through the rnn layer
       self.rnn:accUpdateGradParameters(input, self.gradHidden[step], lr)
    end
-   -- back-propagate through time (BPTT)
-   self.rnn:accUpdateGradParametersThroughTime()
 end
 
 function RecurrentAttention:type(type)

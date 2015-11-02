@@ -18,6 +18,7 @@ function SequencerCriterion:__init(criterion)
          "Its modules can also be similarly decorated with a Sequencer.")
    end
    self.gradInput = {}
+   self._gradInput = {}
 end
 
 function SequencerCriterion:updateOutput(inputTable, targetTable)
@@ -30,7 +31,15 @@ end
 
 function SequencerCriterion:updateGradInput(inputTable, targetTable)
    for i,input in ipairs(inputTable) do
-      self.gradInput[i] = nn.rnn.recursiveCopy(self.gradInput[i], self.criterion:backward(input, targetTable[i]))
+      self.gradInput[i] = nn.rnn.recursiveCopy(
+         self.gradInput[i] or table.remove(self._gradInput, 1), 
+         self.criterion:backward(input, targetTable[i])
+      )
+   end
+   -- remove extra gradInput tensors (save for later)
+   for i=#inputTable+1,#self.gradInput do
+      table.insert(self._gradInput, self.gradInput[i])
+      self.gradInput[i] = nil
    end
    
    if #inputTable >= 3 and not self.isStateless then

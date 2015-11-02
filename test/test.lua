@@ -287,7 +287,7 @@ function rnntest.Recurrent_TestTable()
       mlp:forward{input, input:clone()}
       mlp:backward({input, input:clone()}, {err, err:clone()})
    end
-   mlp:backwardThroughTime(learningRate)
+   mlp:backwardThroughTime()
 end
 
 function rnntest.LSTM()
@@ -455,12 +455,12 @@ end
 
 function rnntest.Sequencer()
    local batchSize = 4
-   local dictSize = 100
+   local inputSize = 3
    local outputSize = 7
    local nSteps = 5 
    
    -- test with recurrent module
-   local inputModule = nn.LookupTable(dictSize, outputSize)
+   local inputModule = nn.Linear(inputSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
    local feedbackModule = nn.Euclidean(outputSize, outputSize)
@@ -471,7 +471,7 @@ function rnntest.Sequencer()
    
    local inputs, outputs, gradOutputs = {}, {}, {}
    for step=1,nSteps do
-      inputs[step] = torch.IntTensor(batchSize):random(1,dictSize)
+      inputs[step] = torch.randn(batchSize, inputSize)
       outputs[step] = rnn:forward(inputs[step]):clone()
       gradOutputs[step] = torch.randn(batchSize, outputSize)
       rnn:backward(inputs[step], gradOutputs[step])
@@ -481,22 +481,29 @@ function rnntest.Sequencer()
    local gradOutput1 = gradOutputs[1]:clone()
    local rnn3 = nn.Sequencer(rnn2)
    local outputs3 = rnn3:forward(inputs)
-   local gradInputs3 = rnn3:backward(inputs, gradOutputs)
    mytester:assert(#outputs3 == #outputs, "Sequencer output size err")
-   mytester:assert(#gradInputs3 == #rnn.gradInputs, "Sequencer gradInputs size err")
    for step,output in ipairs(outputs) do
       mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
+   end
+   local gradInputs3 = rnn3:backward(inputs, gradOutputs)
+  
+   mytester:assert(#gradInputs3 == #rnn.gradInputs, "Sequencer gradInputs size err")
+   mytester:assert(gradInputs3[1]:nElement() ~= 0) 
+   
+   for step,output in ipairs(outputs) do
       mytester:assertTensorEq(gradInputs3[step], rnn.gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
    end
    mytester:assertTensorEq(gradOutputs[1], gradOutput1, 0.00001, "Sequencer rnn gradOutput modified error")
    
    local nSteps7 = torch.Tensor{5,4,5,3,7,3,3,3}
    local function testRemember(rnn)
+      rnn:zeroGradParameters()
       -- test remember for training mode (with variable length)
       local rnn7 = rnn:clone()
       rnn7:zeroGradParameters()
       local rnn8 = rnn7:clone()
       local rnn9 = rnn7:clone()
+      local rnn10 = nn.Recursor(rnn7:clone())
       
       local inputs7, outputs9 = {}, {}
       for step=1,nSteps7:sum() do
@@ -533,7 +540,8 @@ function rnntest.Sequencer()
             rnn7:backward(inputs7[step], gradOutputs7[step])
             step = step + 1
          end
-         rnn7.rho = nSteps7[i]
+         rnn7:maxBPTTstep(nSteps7[i])
+         rnn7.fastBackward = false
          rnn7:backwardThroughTime()
          for i=1,#rnn7.gradInputs do
             table.insert(gradInputs7, rnn7.gradInputs[i]:clone())
@@ -541,6 +549,60 @@ function rnntest.Sequencer()
          rnn7:updateParameters(1)
          rnn7:zeroGradParameters()
       end
+      
+      -- nn.Recursor 
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(outputs9[step], rnn10:forward(inputs7[step]), 0.000001, "Recursor "..torch.type(rnn10).." remember forward err "..step)
+            step = step + 1
+         end
+      end
+      
+      rnn10:forget()
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(outputs9[step], rnn10:forward(inputs7[step]), 0.000001, "Recursor "..torch.type(rnn10).." remember forward2 err "..step)
+            step = step + 1
+         end
+      end
+      
+      rnn10:forget()
+      
+      local step = 1
+      local outputs10, gradOutputs10, gradInputs10 = {}, {}, {}
+      for i=1,nSteps7:size(1) do
+         local start = step
+         local nStep = 0
+         for j=1,nSteps7[i] do
+            outputs10[step] = rnn10:forward(inputs7[step]):clone()
+            step = step + 1
+            nStep = nStep + 1
+         end
+         rnn10:maxBPTTstep(nSteps7[i])
+         local nStep2 = 0
+         for s=step-1,start,-1 do
+            gradInputs10[s] = rnn10:backward(inputs7[s], gradOutputs7[s]):clone()
+            nStep2 = nStep2 + 1
+         end
+         assert(nStep == nStep2)
+         rnn10:updateParameters(1)
+         rnn10:zeroGradParameters()
+      end
+      
+      local step = 1
+      for i=1,nSteps7:size(1) do
+         for j=1,nSteps7[i] do
+            mytester:assertTensorEq(gradInputs10[step], gradInputs7[step], 0.0000001, "Recursor "..torch.type(rnn7).." remember variable backward err "..i.." "..j)
+            mytester:assertTensorEq(outputs10[step], outputs7[step], 0.0000001, "Recursor "..torch.type(rnn7).." remember variable forward err "..i.." "..j)
+            step = step + 1
+         end
+      end
+      
+      -- nn.Sequencer
       
       local seq = nn.Sequencer(rnn8)
       seq:remember('both')
@@ -724,8 +786,8 @@ function rnntest.Sequencer()
       end
    end
    testRemember(nn.Recurrent(outputSize, nn.Linear(outputSize, outputSize), feedbackModule:clone(), transferModule:clone(), nSteps7:max()))
-   --testRemember(nn.LSTM(outputSize, outputSize, nSteps7:max()))
-   
+   testRemember(nn.LSTM(outputSize, outputSize, nSteps7:max()))
+
    -- test in evaluation mode
    rnn3:evaluate()
    local outputs4 = rnn3:forward(inputs)
@@ -785,12 +847,6 @@ function rnntest.Sequencer()
          mytester:assertTensorEq(gradInputs2[step], gradInputs[step], 0.00001, "Sequencer gradInputs "..step)
       end
    end
-   
-   mytester:assertError(function()
-      local mlp = nn.Sequential()
-      mlp:add(rnn)
-      local seq = nn.Sequencer(mlp)
-   end, "Sequencer non-recurrent mixed with recurrent error error")
    
    local inputs3, gradOutputs3 = {}, {}
    for i=1,#inputs do
@@ -1048,10 +1104,49 @@ function rnntest.Repeater()
    mytester:assert(#outputs3 == #rnn.gradInputs, "Repeater gradInputs size err")
    local gradInput = rnn.gradInputs[1]:clone():zero()
    for step,output in ipairs(outputs) do
-      mytester:assertTensorEq(outputs3[step], output, 0.00001, "Sequencer output "..step)
+      mytester:assertTensorEq(outputs3[step], output, 0.00001, "Repeater output "..step)
       gradInput:add(rnn.gradInputs[step])
    end
    mytester:assertTensorEq(gradInput3, gradInput, 0.00001, "Repeater gradInput err")
+   
+   -- test with Recursor
+   
+   local inputModule = nn.Linear(inputSize, outputSize)
+   local transferModule = nn.Sigmoid()
+   -- test MLP feedback Module (because of Module:representations())
+   local feedbackModule = nn.Linear(outputSize, outputSize)
+   -- rho = nSteps
+   local rnn = nn.Recurrent(outputSize, inputModule, feedbackModule, transferModule, nSteps)
+   local rnn2 = rnn:clone()
+   
+   local rnn3 = nn.Repeater(rnn, nSteps)
+   local rnn4 = nn.Repeater(nn.Sequential():add(nn.Identity()):add(rnn2), nSteps)
+   
+   rnn3:zeroGradParameters()
+   rnn4:zeroGradParameters()
+   
+   local outputs = rnn3:forward(input)
+   local outputs2 = rnn4:forward(input)
+   
+   local gradInput = rnn3:backward(input, gradOutputs)
+   local gradInput2 = rnn4:backward(input, gradOutputs)
+   
+   mytester:assert(#outputs == #outputs2, "Repeater output size err")
+   for i=1,#outputs do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Repeater(Recursor) output err")
+   end
+   mytester:assertTensorEq(gradInput, gradInput2, 0.000001, "Repeater(Recursor) gradInput err")
+   
+   rnn3:updateParameters(1)
+   rnn4:updateParameters(1)
+   
+   local params, gradParams = rnn3:parameters()
+   local params2, gradParams2 = rnn4:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Repeater(Recursor) param err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Repeater(Recursor) gradParam err "..i)
+   end
 end
 
 function rnntest.SequencerCriterion()
@@ -1081,7 +1176,196 @@ function rnntest.SequencerCriterion()
 end
 
 function rnntest.RecurrentAttention()
+   -- so basically, I know that this works because I used it to 
+   -- reproduce a paper's results. So all future RecurrentAttention
+   -- versions should match the behavior of this RATest class.
+   -- Yeah, its ugly, but it's a unit test, so kind of hidden :
+   local RecurrentAttention, parent = torch.class("nn.RATest", "nn.AbstractSequencer")
+
+   function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
+      parent.__init(self)
+      assert(torch.isTypeOf(rnn, 'nn.AbstractRecurrent'))
+      assert(torch.isTypeOf(action, 'nn.Module'))
+      assert(torch.type(nStep) == 'number')
+      assert(torch.type(hiddenSize) == 'table')
+      assert(torch.type(hiddenSize[1]) == 'number', "Does not support table hidden layers" )
+      
+      self.rnn = rnn
+      self.rnn.copyInputs = true
+      self.action = action -- samples an x,y actions for each example
+      self.hiddenSize = hiddenSize
+      self.nStep = nStep
+      
+      self.modules = {self.rnn, self.action}
+      self.sharedClones = {self.action:sharedClone()} -- action clones
+      
+      self.output = {} -- rnn output
+      self.actions = {} -- action output
+      
+      self.forwardActions = false
+      
+      self.gradHidden = {}
+   end
+
+   function RecurrentAttention:updateOutput(input)
+      self.rnn:forget()
+      local nDim = input:dim()
+      
+      for step=1,self.nStep do
+         -- we maintain a copy of action (with shared params) for each time-step
+         local action = self:getStepModule(step)
+         
+         if step == 1 then
+            -- sample an initial starting actions by forwarding zeros through the action
+            self._initInput = self._initInput or input.new()
+            self._initInput:resize(input:size(1),table.unpack(self.hiddenSize)):zero()
+            self.actions[1] = action:updateOutput(self._initInput)
+         else
+            -- sample actions from previous hidden activation (rnn output)
+            self.actions[step] = action:updateOutput(self.output[step-1])
+         end
+         
+         -- rnn handles the recurrence internally
+         local output = self.rnn:updateOutput{input, self.actions[step]}
+         self.output[step] = self.forwardActions and {output, self.actions[step]} or output
+      end
+      
+      return self.output
+   end
+
+   function RecurrentAttention:updateGradInput(input, gradOutput)
+      assert(self.rnn.step - 1 == self.nStep, "inconsistent rnn steps")
+      assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
+      assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
+       
+      -- backward through the action
+      for step=self.nStep,1,-1 do
+         local action = self:getStepModule(step)
+         
+         local gradOutput_, gradAction_ = gradOutput[step], action.output:clone():zero()
+         if self.forwardActions then
+            gradOutput_, gradAction_ = unpack(gradOutput[step])
+         end
+         
+         if step == self.nStep then
+            self.gradHidden[step] = nn.rnn.recursiveCopy(self.gradHidden[step], gradOutput_)
+         else
+            -- gradHidden = gradOutput + gradAction
+            nn.rnn.recursiveAdd(self.gradHidden[step], gradOutput_)
+         end
+         
+         if step == 1 then
+            -- backward through initial starting actions
+            action:updateGradInput(self._initInput, gradAction_ or action.output)
+         else
+            -- Note : gradOutput is ignored by REINFORCE modules so we give action.output as a dummy variable
+            local gradAction = action:updateGradInput(self.output[step-1], gradAction_)
+            self.gradHidden[step-1] = nn.rnn.recursiveCopy(self.gradHidden[step-1], gradAction)
+         end
+      end
+      
+      -- backward through the rnn layer
+      for step=1,self.nStep do
+         self.rnn.step = step + 1
+         self.rnn:updateGradInput(input, self.gradHidden[step])
+      end
+      -- back-propagate through time (BPTT)
+      self.rnn:updateGradInputThroughTime()
+      
+      for step=self.nStep,1,-1 do
+         local gradInput = self.rnn.gradInputs[step][1]
+         if step == self.nStep then
+            self.gradInput:resizeAs(gradInput):copy(gradInput)
+         else
+            self.gradInput:add(gradInput)
+         end
+      end
+
+      return self.gradInput
+   end
+
+   function RecurrentAttention:accGradParameters(input, gradOutput, scale)
+      assert(self.rnn.step - 1 == self.nStep, "inconsistent rnn steps")
+      assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
+      assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
+       
+      -- backward through the action layers
+      for step=self.nStep,1,-1 do
+         local action = self:getStepModule(step)
+         local gradAction_ = self.forwardActions and gradOutput[step][2] or action.output:clone():zero()
+               
+         if step == 1 then
+            -- backward through initial starting actions
+            action:accGradParameters(self._initInput, gradAction_, scale)
+         else
+            -- Note : gradOutput is ignored by REINFORCE modules so we give action.output as a dummy variable
+            action:accGradParameters(self.output[step-1], gradAction_, scale)
+         end
+      end
+      
+      -- backward through the rnn layer
+      for step=1,self.nStep do
+         self.rnn.step = step + 1
+         self.rnn:accGradParameters(input, self.gradHidden[step], scale)
+      end
+      -- back-propagate through time (BPTT)
+      self.rnn:accGradParametersThroughTime()
+   end
+
+   function RecurrentAttention:accUpdateGradParameters(input, gradOutput, lr)
+      assert(self.rnn.step - 1 == self.nStep, "inconsistent rnn steps")
+      assert(torch.type(gradOutput) == 'table', "expecting gradOutput table")
+      assert(#gradOutput == self.nStep, "gradOutput should have nStep elements")
+       
+      -- backward through the action layers
+      for step=self.nStep,1,-1 do
+         local action = self:getStepModule(step)
+         local gradAction_ = self.forwardActions and gradOutput[step][2] or action.output:clone():zero()
+         
+         if step == 1 then
+            -- backward through initial starting actions
+            action:accUpdateGradParameters(self._initInput, gradAction_, lr)
+         else
+            -- Note : gradOutput is ignored by REINFORCE modules so we give action.output as a dummy variable
+            action:accUpdateGradParameters(self.output[step-1], gradAction_, lr)
+         end
+      end
+      
+      -- backward through the rnn layer
+      for step=1,self.nStep do
+         self.rnn.step = step + 1
+         self.rnn:accUpdateGradParameters(input, self.gradHidden[step], lr)
+      end
+      -- back-propagate through time (BPTT)
+      self.rnn:accUpdateGradParametersThroughTime()
+   end
+
+   function RecurrentAttention:type(type)
+      self._input = nil
+      self._actions = nil
+      self._crop = nil
+      self._pad = nil
+      self._byte = nil
+      return parent.type(self, type)
+   end
+
+   function RecurrentAttention:__tostring__()
+      local tab = '  '
+      local line = '\n'
+      local ext = '  |    '
+      local extlast = '       '
+      local last = '   ... -> '
+      local str = torch.type(self)
+      str = str .. ' {'
+      str = str .. line .. tab .. 'action : ' .. tostring(self.action):gsub(line, line .. tab .. ext)
+      str = str .. line .. tab .. 'rnn     : ' .. tostring(self.rnn):gsub(line, line .. tab .. ext)
+      str = str .. line .. '}'
+      return str
+   end
+
+
    if not pcall(function() require "image" end) then return end -- needs the image package
+   
    local opt = {
       glimpseDepth = 3,
       glimpseHiddenSize = 20,
@@ -1109,6 +1393,7 @@ function rnntest.RecurrentAttention()
    glimpseSensor:add(nn.ReLU())
 
    local glimpse = nn.Sequential()
+   --glimpse:add(nn.PrintSize("preglimpse"))
    glimpse:add(nn.ConcatTable():add(locationSensor):add(glimpseSensor))
    glimpse:add(nn.JoinTable(1,1))
    glimpse:add(nn.Linear(opt.glimpseHiddenSize+opt.locatorHiddenSize, opt.imageHiddenSize))
@@ -1127,25 +1412,85 @@ function rnntest.RecurrentAttention()
    local locator = nn.Sequential()
    locator:add(nn.Linear(opt.hiddenSize, 2))
    locator:add(nn.HardTanh())
-   locator:add(nn.ReinforceNormal(2*opt.locatorStd)) -- uses REINFORCE learning rule
-   locator:add(nn.HardTanh())
    
    -- model is a reinforcement learning agent
-   local rva = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
+   local rva2 = nn.RATest(rnn:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
+   local rva = nn.RecurrentAttention(rnn:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
    
    local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
    local gradOutput = {}
    for step=1,opt.rho do
       table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
    end
-   local reward = torch.Tensor(opt.batchSize):random(0,1)
-   for i=1,100 do
-      -- we dont test anything explicitly, we just make sure it doesn't fail
-      input:uniform(-0.5,0.5)
-      rva:forward(input)
-      rva:reinforce(reward)
-      rva:backward(input, gradOutput)
+   
+   -- now we compare to the nn.RATest class (which, we know, works)
+   rva:zeroGradParameters()
+   rva2:zeroGradParameters()
+   
+   local output = rva:forward(input)
+   local output2 = rva2:forward(input)
+   
+   mytester:assert(#output == #output2, "RecurrentAttention #output err")
+   for i=1,#output do
+      mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention output err "..i)
    end
+   
+   local gradInput = rva:backward(input, gradOutput)
+   local gradInput2 = rva2:backward(input, gradOutput)
+   
+   mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention gradInput err")
+   
+   rva:updateParameters(1)
+   rva2:updateParameters(1)
+   
+   local params, gradParams = rva:parameters()
+   local params2, gradParams2 = rva2:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention, param err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention, gradParam err "..i)
+   end
+   
+   -- test with explicit recursor
+   
+   -- model is a reinforcement learning agent
+   local rva2 = nn.RATest(rnn:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
+   local rva = nn.RecurrentAttention(nn.Recursor(rnn:clone()), locator:clone(), opt.rho, {opt.hiddenSize})
+   
+   local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
+   local gradOutput = {}
+   for step=1,opt.rho do
+      table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+   end
+   
+   -- now we compare to the nn.RATest class (which, we know, works)
+   rva:zeroGradParameters()
+   rva2:zeroGradParameters()
+   
+   local output = rva:forward(input)
+   local output2 = rva2:forward(input)
+   
+   mytester:assert(#output == #output2, "RecurrentAttention(Recursor) #output err")
+   for i=1,#output do
+      mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention(Recursor) output err "..i)
+   end
+   
+   local gradInput = rva:backward(input, gradOutput)
+   local gradInput2 = rva2:backward(input, gradOutput)
+   
+   mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention(Recursor) gradInput err")
+   
+   rva:updateParameters(1)
+   rva2:updateParameters(1)
+   
+   local params, gradParams = rva:parameters()
+   local params2, gradParams2 = rva2:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention(Recursor), param err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention(Recursor), gradParam err "..i)
+   end
+   
 end
    
 function rnntest.LSTM_nn_vs_nngraph()
@@ -1555,6 +1900,207 @@ function rnntest.LSTM_checkgrad()
 
    local err = optim.checkgrad(f, parameters:clone())
    mytester:assert(err < 0.0001, "LSTM optim.checkgrad error")
+end
+
+function rnntest.Recursor()
+   local batchSize = 4
+   local inputSize = 3
+   local hiddenSize = 12
+   local outputSize = 7
+   local rho = 5 
+   
+   -- USE CASE 1. Recursor(Recurrent)
+   
+   local inputModule = nn.Linear(inputSize, outputSize)
+   local transferModule = nn.Sigmoid()
+   -- test MLP feedback Module (because of Module:representations())
+   local feedbackModule = nn.Sequential()
+   feedbackModule:add(nn.Linear(outputSize, hiddenSize))
+   feedbackModule:add(nn.Sigmoid())
+   feedbackModule:add(nn.Linear(hiddenSize, outputSize))
+   local start = nn.Add(outputSize)
+   
+   local rnn = nn.Recurrent(start, nn.Identity(), feedbackModule, transferModule:clone(), rho)
+   local re = nn.Recursor(nn.Sequential():add(inputModule):add(rnn), rho)
+   re:zeroGradParameters()
+   
+   local re2 = nn.Recurrent(start:clone(), inputModule:clone(), feedbackModule:clone(), transferModule:clone(), rho)
+   re2:zeroGradParameters()
+   
+   local inputs = {}
+   local gradOutputs = {}
+   local outputs, outputs2 = {}, {}
+   local gradInputs = {}
+   
+   for i=1,rho do
+      table.insert(inputs, torch.randn(batchSize, inputSize))
+      table.insert(gradOutputs, torch.randn(batchSize, outputSize))
+      -- forward
+      table.insert(outputs, re:forward(inputs[i]))
+      table.insert(outputs2, re2:forward(inputs[i]))
+      -- backward
+      re2:backward(inputs[i], gradOutputs[i])
+   end
+   
+   re2:backwardThroughTime()
+   re2:updateParameters(0.1)
+   
+   -- recursor requires reverse-time-step order during backward
+   for i=rho,1,-1 do
+      gradInputs[i] = re:backward(inputs[i], gradOutputs[i])
+   end
+   
+   for i=1,rho do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Recursor(Recurrent) fwd err "..i)
+      mytester:assertTensorEq(gradInputs[i], re2.gradInputs[i], 0.0000001, "Recursor(Recurrent) bwd err "..i)
+   end
+   
+   re:updateParameters(0.1)
+   
+   local mlp = nn.Container():add(rnn.feedbackModule):add(rnn.startModule):add(inputModule)
+   local mlp2 = nn.Container():add(re2.feedbackModule):add(re2.startModule):add(re2.inputModule)
+   
+   local params, gradParams = mlp:parameters()
+   local params2, gradParams2 = mlp2:parameters()
+   
+   mytester:assert(#params == #params2, "Recursor(Recurrent) #params err")
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Recursor(Recurrent) updateParameter err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recursor(Recurrent) accGradParams err "..i)
+   end
+   
+   -- USE CASE 2. Recursor(LSTM)
+   
+   local rnn = nn.LSTM(inputSize, outputSize)
+   local re2 = rnn:clone()
+   local re = nn.Recursor(nn.Sequential():add(rnn))
+   re:zeroGradParameters()
+   re2:zeroGradParameters()
+   
+   local outputs, outputs2 = {}, {}
+   local gradInputs = {}
+   
+   for i=1,rho do
+      -- forward
+      table.insert(outputs, re:forward(inputs[i]))
+      table.insert(outputs2, re2:forward(inputs[i]))
+      -- backward
+      re2:backward(inputs[i], gradOutputs[i])
+   end
+   
+   re2:updateGradInputThroughTime()
+   re2:accGradParametersThroughTime()
+   re2:updateParameters(0.1)
+   
+   -- recursor requires reverse-time-step order during backward
+   for i=rho,1,-1 do
+      gradInputs[i] = re:backward(inputs[i], gradOutputs[i])
+   end
+   
+   for i=1,rho do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Recursor(LSTM) fwd err "..i)
+      mytester:assertTensorEq(gradInputs[i], re2.gradInputs[i], 0.0000001, "Recursor(LSTM) bwd err "..i)
+   end
+   
+   re:updateParameters(0.1)
+   
+   local params, gradParams = rnn:parameters()
+   local params2, gradParams2 = re2:parameters()
+   
+   mytester:assert(#params == #params2, "Recursor(LSTM) #params err")
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Recursor(LSTM) updateParameter err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recursor(LSTM) accGradParams err "..i)
+   end
+   
+   -- USE CASE 3. Sequencer(Recursor)
+   
+   local re2 = nn.LSTM(inputSize, outputSize)
+   local lstm2 = re2:clone()
+   local rec = nn.Recursor(lstm2)
+   local seq = nn.Sequencer(rec)
+   mytester:assert(not rec.copyInputs)
+   mytester:assert(not rec.copyGradOutputs)
+   mytester:assert(not lstm2.copyInputs)
+   mytester:assert(not lstm2.copyGradOutputs)
+   
+   seq:zeroGradParameters()
+   re2:zeroGradParameters()
+   
+   local outputs = seq:forward(inputs)
+   local gradInputs = seq:backward(inputs, gradOutputs)
+   
+   local outputs2 = {}
+   for i=1,rho do
+      table.insert(outputs2, re2:forward(inputs[i]))
+      re2:backward(inputs[i], gradOutputs[i])
+   end
+   
+   re2:updateGradInputThroughTime()
+   re2:accGradParametersThroughTime()
+   re2:updateParameters(0.1)
+   
+   for i=1,rho do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Sequencer(Recursor(LSTM)) fwd err "..i)
+      mytester:assertTensorEq(gradInputs[i], re2.gradInputs[i], 0.0000001, "Sequencer(Recursor(LSTM)) bwd err "..i)
+   end
+   
+   seq:updateParameters(0.1)
+   
+   local params, gradParams = seq:parameters()
+   local params2, gradParams2 = re2:parameters()
+   
+   mytester:assert(#params == #params2, "Sequencer(Recursor(LSTM)) #params err")
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Sequencer(Recursor(LSTM)) updateParameter err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Sequencer(Recursor(LSTM)) accGradParams err "..i)
+   end
+   
+   -- USE CASE 4. Recursor(Recursor(LSTM))
+   
+   local rnn = nn.LSTM(inputSize, outputSize)
+   local re2 = rnn:clone()
+   local re = nn.Recursor(nn.Recursor(nn.Sequential():add(rnn)))
+   re:zeroGradParameters()
+   re2:zeroGradParameters()
+   
+   local outputs, outputs2 = {}, {}
+   local gradInputs = {}
+   
+   for i=1,rho do
+      -- forward
+      table.insert(outputs, re:forward(inputs[i]))
+      table.insert(outputs2, re2:forward(inputs[i]))
+      -- backward
+      re2:backward(inputs[i], gradOutputs[i])
+   end
+   
+   re2:updateGradInputThroughTime()
+   re2:accGradParametersThroughTime()
+   re2:updateParameters(0.1)
+   
+   -- recursor requires reverse-time-step order during backward
+   for i=rho,1,-1 do
+      gradInputs[i] = re:backward(inputs[i], gradOutputs[i])
+   end
+   
+   for i=1,rho do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Recursor(Recursor(LSTM)) fwd err "..i)
+      mytester:assertTensorEq(gradInputs[i], re2.gradInputs[i], 0.0000001, "Recursor(Recursor(LSTM)) bwd err "..i)
+   end
+   
+   re:updateParameters(0.1)
+   
+   local params, gradParams = rnn:parameters()
+   local params2, gradParams2 = re2:parameters()
+   
+   mytester:assert(#params == #params2, "Recursor(Recursor(LSTM)) #params err")
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Recursor(Recursor(LSTM)) updateParameter err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recursor(Recursor(LSTM)) accGradParams err "..i)
+   end
+   
+   
 end
 
 

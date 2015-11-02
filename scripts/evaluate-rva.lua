@@ -56,7 +56,7 @@ sg = model:findModules('nn.SpatialGlimpse')[1]
 
 -- stochastic or deterministic
 for i=1,#ra.actions do
-   local rn = ra:getStepModule(i):findModules('nn.ReinforceNormal')[1]
+   local rn = ra.action:getStepModule(i):findModules('nn.ReinforceNormal')[1]
    rn.stochastic = opt.stochastic
 end
 
@@ -75,7 +75,7 @@ input = inputs:narrow(1,1,10)
 model:training() -- otherwise the rnn doesn't save intermediate time-step states
 if not opt.stochastic then
    for i=1,#ra.actions do
-      local rn = ra:getStepModule(i):findModules('nn.ReinforceNormal')[1]
+      local rn = ra.action:getStepModule(i):findModules('nn.ReinforceNormal')[1]
       rn.stdev = 0 -- deterministic
    end
 end

@@ -19,6 +19,7 @@ function AbstractRecurrent:__init(rho)
    self.scales = {}
    
    self.gradParametersAccumulated = false
+   self.onlineBackward = false
    self.step = 1
    
    -- stores internal states of Modules at different time-steps
@@ -31,40 +32,70 @@ function AbstractRecurrent:getStepModule(step)
    assert(step, "expecting step at arg 1")
    local recurrentModule = self.sharedClones[step]
    if not recurrentModule then
-      recurrentModule = self.recurrentModule:sharedClone()
+      recurrentModule = self.recurrentModule:stepClone()
       self.sharedClones[step] = recurrentModule
    end
    return recurrentModule
 end
 
-function AbstractRecurrent:updateGradInput(input, gradOutput)
-   -- Back-Propagate Through Time (BPTT) happens in updateParameters()
-   -- for now we just keep a list of the gradOutputs
-   if self.copyGradOutputs then
-      self.gradOutputs[self.step-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
+function AbstractRecurrent:updateGradInput(input, gradOutput)      
+   if self.onlineBackward then
+      -- updateGradInput will be called in reverse order of time
+      self.updateGradInputStep = self.updateGradInputStep or self.step
+      if self.copyGradOutputs then
+         self.gradOutputs[self.updateGradInputStep-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.updateGradInputStep-1] , gradOutput)
+      else
+         self.gradOutputs[self.updateGradInputStep-1] = self.gradOutputs[self.updateGradInputStep-1] or nn.rnn.recursiveNew(gradOutput)
+         nn.rnn.recursiveSet(self.gradOutputs[self.updateGradInputStep-1], gradOutput)
+      end
+      
+      -- BPTT for one time-step (rho = 1)
+      self.gradInput = self:updateGradInputThroughTime(self.updateGradInputStep, 1)
+      
+      self.updateGradInputStep = self.updateGradInputStep - 1
+      assert(self.gradInput, "Missing gradInput")
+      return self.gradInput
    else
-      self.gradOutputs[self.step-1] = self.gradOutputs[self.step-1] or nn.rnn.recursiveNew(gradOutput)
-      nn.rnn.recursiveSet(self.gradOutputs[self.step-1], gradOutput)
+      -- Back-Propagate Through Time (BPTT) happens in updateParameters()
+      -- for now we just keep a list of the gradOutputs
+      if self.copyGradOutputs then
+         self.gradOutputs[self.step-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.step-1] , gradOutput)
+      else
+         self.gradOutputs[self.step-1] = self.gradOutputs[self.step-1] or nn.rnn.recursiveNew(gradOutput)
+         nn.rnn.recursiveSet(self.gradOutputs[self.step-1], gradOutput)
+      end
    end
 end
 
 function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
-   -- Back-Propagate Through Time (BPTT) happens in updateParameters()
-   -- for now we just keep a list of the scales
-   self.scales[self.step-1] = scale or 1
+   if self.onlineBackward then
+      -- accGradParameters will be called in reverse order of time
+      assert(self.updateGradInputStep < self.step, "Missing updateGradInput")
+      self.accGradParametersStep = self.accGradParametersStep or self.step
+      self.scales[self.accGradParametersStep-1] = scale or 1
+      
+      -- BPTT for one time-step (rho = 1)
+      self:accGradParametersThroughTime(self.accGradParametersStep, 1)
+      
+      self.accGradParametersStep = self.accGradParametersStep - 1
+   else
+      -- Back-Propagate Through Time (BPTT) happens in updateParameters()
+      -- for now we just keep a list of the scales
+      self.scales[self.step-1] = scale or 1
+   end
 end
 
-function AbstractRecurrent:backwardThroughTime()
+function AbstractRecurrent:backwardThroughTime(step, rho)
    return self.gradInput
 end
 
-function AbstractRecurrent:updateGradInputThroughTime()
+function AbstractRecurrent:updateGradInputThroughTime(step, rho)
 end
 
-function AbstractRecurrent:accGradParametersThroughTime()
+function AbstractRecurrent:accGradParametersThroughTime(step, rho)
 end
 
-function AbstractRecurrent:accUpdateGradParametersThroughTime(lr)
+function AbstractRecurrent:accUpdateGradParametersThroughTime(lr, step, rho)
 end
 
 function AbstractRecurrent:backwardUpdateThroughTime(learningRate)
@@ -182,6 +213,22 @@ function AbstractRecurrent:reinforce(reward)
    return self:includingSharedClones(function()
       return parent.reinforce(self, reward)
    end)
+end
+
+function AbstractRecurrent:sharedClone(shareParams, shareGradParams, clones, pointers, stepClone)
+   if stepClone then 
+      return self 
+   else
+      return parent.sharedClone(self, shareParams, shareGradParams, clones, pointers, stepClone)
+   end
+end
+
+function AbstractRecurrent:backwardOnline(online)
+   self.onlineBackward = (online == nil) and true or online
+end
+
+function AbstractRecurrent:maxBPTTstep(rho)
+   self.rho = rho
 end
 
 -- backwards compatibility

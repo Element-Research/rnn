@@ -16,33 +16,20 @@ function Sequencer:__init(module)
    if not torch.isTypeOf(module, 'nn.Module') then
       error"Sequencer: expecting nn.Module instance at arg 1"
    end
-   self.module = module
-   self.isRecurrent = torch.isTypeOf(module, "nn.AbstractRecurrent")
-   self.modules[1] = module
-   self.sharedClones = {}
-   if not self.isRecurrent then
-      self.sharedClones[1] = self.module
-      -- test that it doesn't contain a recurrent module :
-      local err = false
-      for i,modula in ipairs(module:listModules()) do
-         if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
-            err = modula
-            break
-         end
+   
+   -- we can decorate the module with a Recursor to make it AbstractRecurrent
+   self.module = (not torch.isTypeOf(module, 'nn.AbstractRecurrent')) and nn.Recursor(module) or module
+   -- backprop through time (BPTT) will be done online (in reverse order of forward)
+   self.module:backwardOnline()
+   self.modules = {self.module}
+   
+   for i,modula in ipairs(self.module:listModules()) do
+      if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
+         modula.copyInputs = false
+         modula.copyGradOutputs = false
       end
-      
-      if err then
-         error("Sequencer: non-recurrent Module should not contain a "..
-         "nested recurrent Modules. Recurrent module is "..torch.type(err)..
-         ". Use a Sequencer instance for each recurrent module. "..
-         "And encapsulate the rest of the non-recurrent modules into "..
-         "one or many Sequencers. Yes you can encapsulate many non-recurrent"..
-         " modules in a single Sequencer (as long as they don't include recurrent modules.") 
-      end
-   else
-      self.module.copyInputs = false
-      self.module.copyGradOutputs = false
    end
+   
    self.output = {}
    
    -- table of buffers used for evaluation
@@ -56,123 +43,72 @@ end
 
 function Sequencer:updateOutput(inputTable)
    assert(torch.type(inputTable) == 'table', "expecting input table")
-   if self.isRecurrent then
-      -- Note that the Sequencer hijacks the rho attribute of the rnn
-      self.module.rho = #inputTable
-      if self.train ~= false then -- training
-         if not (self._remember == 'train' or self._remember == 'both') then
-            self.module:forget()
-         end
-         self.output = {}
-         for step, input in ipairs(inputTable) do
-            self.output[step] = self.module:updateOutput(input)
-         end
-      else -- evaluation
-         if not (self._remember == 'eval' or self._remember == 'both') then
-            self.module:forget()
-         end
-         -- during evaluation, recurrent modules reuse memory (i.e. outputs)
-         -- so we need to copy each output into our own
-         for step, input in ipairs(inputTable) do
-            self.output[step] = nn.rnn.recursiveCopy(
-               self.output[step] or table.remove(self._output, 1), 
-               self.module:updateOutput(input)
-            )
-         end
-         -- remove extra output tensors (save for later)
-         for i=#inputTable+1,#self.output do
-            table.insert(self._output, self.output[i])
-            self.output[i] = nil
-         end
+
+   -- Note that the Sequencer hijacks the rho attribute of the rnn
+   self.module:maxBPTTstep(#inputTable)
+   if self.train ~= false then -- training
+      if not (self._remember == 'train' or self._remember == 'both') then
+         self.module:forget()
       end
-   else
       self.output = {}
       for step, input in ipairs(inputTable) do
-         -- set output states for this step
-         local module = self:getStepModule(step)
-         
-         -- forward propagate this step
-         self.output[step] = module:updateOutput(input)
+         self.output[step] = self.module:updateOutput(input)
+      end
+   else -- evaluation
+      if not (self._remember == 'eval' or self._remember == 'both') then
+         self.module:forget()
+      end
+      -- during evaluation, recurrent modules reuse memory (i.e. outputs)
+      -- so we need to copy each output into our own table
+      for step, input in ipairs(inputTable) do
+         self.output[step] = nn.rnn.recursiveCopy(
+            self.output[step] or table.remove(self._output, 1), 
+            self.module:updateOutput(input)
+         )
+      end
+      -- remove extra output tensors (save for later)
+      for i=#inputTable+1,#self.output do
+         table.insert(self._output, self.output[i])
+         self.output[i] = nil
       end
    end
+   
    return self.output
 end
 
 function Sequencer:updateGradInput(inputTable, gradOutputTable)
+   assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
+   assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
+   
+   -- back-propagate through time (BPTT)
    self.gradInput = {}
-   if self.isRecurrent then
-      assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
-      assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
-      local i = 1
-      for step=self.module.step-#inputTable+1,self.module.step do
-         self.module.step = step
-         self.module:updateGradInput(inputTable[i], gradOutputTable[i])
-         i = i + 1
-      end
-      -- back-propagate through time (BPTT)
-      self.module:updateGradInputThroughTime()
-      assert(self.module.gradInputs, "recurrent module did not fill gradInputs")
-      assert(#inputTable == #self.module.gradInputs, #inputTable.." ~= "..#self.module.gradInputs)
-      for i=1,#inputTable do
-         self.gradInput[i] = self.module.gradInputs[i]
-      end
-      assert(#self.gradInput == #inputTable, "missing gradInputs (rho is too low?)")
-   else
-      for step, input in ipairs(inputTable) do
-         -- set the output/gradOutput states for this step
-         local module = self:getStepModule(step)
-         
-         -- backward propagate this step
-         self.gradInput[step] = module:updateGradInput(input, gradOutputTable[step])
-      end
+   for step=#gradOutputTable,1,-1 do
+      self.gradInput[step] = self.module:updateGradInput(inputTable[step], gradOutputTable[step])
    end
+   
+   assert(#inputTable == #self.gradInput, #inputTable.." ~= "..#self.gradInput)
+
    return self.gradInput
 end
 
 function Sequencer:accGradParameters(inputTable, gradOutputTable, scale)
-   if self.isRecurrent then
-      assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
-      assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
-      local i = 1
-      for step=self.module.step-#inputTable+1,self.module.step do
-         self.module.step = step
-         self.module:accGradParameters(inputTable[i], gradOutputTable[i], scale)
-         i = i + 1
-      end
-      -- back-propagate through time (BPTT)
-      self.module:accGradParametersThroughTime()
-   else
-      for step, input in ipairs(inputTable) do
-         -- set the output/gradOutput states for this step
-         local module = self:getStepModule(step)
-         
-         -- accumulate parameters for this step
-         module:accGradParameters(input, gradOutputTable[step], scale)
-      end
-   end
+   assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
+   assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
+   
+   -- back-propagate through time (BPTT)
+   for step=#gradOutputTable,1,-1 do
+      self.module:accGradParameters(inputTable[step], gradOutputTable[step], scale)
+   end   
 end
 
 function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
-   if self.isRecurrent then
-      assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
-      assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
-      local i = 1
-      for step=self.module.step-#inputTable+1,self.module.step do
-         self.module.step = step
-         self.module:accGradUpdateParameters(inputTable[i], gradOutputTable[i], lr)
-         i = i + 1
-      end
-      -- back-propagate through time (BPTT)
-      self.module:accUpdateGradParametersThroughTime(lr)
-   else
-      for step, input in ipairs(inputTable) do
-         -- set the output/gradOutput states for this step
-         local module = self:getStepModule(step)
-         
-         -- accumulate parameters for this step
-         module:accUpdateGradParameters(input, gradOutputTable[step], lr)
-      end
-   end
+   assert(torch.type(gradOutputTable) == 'table', "expecting gradOutput table")
+   assert(#gradOutputTable == #inputTable, "gradOutput should have as many elements as input")
+   
+   -- back-propagate through time (BPTT)
+   for step=#gradOutputTable,1,-1 do
+      self.module:accUpdateGradParameters(inputTable[step], gradOutputTable[step], lr)
+   end     
 end
 
 -- Toggle to feed long sequences using multiple forwards.
@@ -189,7 +125,7 @@ function Sequencer:remember(remember)
 end
 
 function Sequencer:training()
-   if self.isRecurrent and self.train == false then
+   if self.train == false then
       -- empty output table (tensor mem was managed by seq)
       for i,output in ipairs(self.output) do
          table.insert(self._output, output)
@@ -202,7 +138,7 @@ function Sequencer:training()
 end
 
 function Sequencer:evaluate()
-   if self.isRecurrent and self.train ~= false then
+   if self.train ~= false then
       -- empty output table (tensor mem was managed by rnn)
       self.output = {}
       -- forget at the start of each evaluation

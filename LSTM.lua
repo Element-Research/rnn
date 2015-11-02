@@ -178,26 +178,30 @@ function LSTM:updateOutput(input)
    self.cell = cell
    
    self.step = self.step + 1
+   self.gradPrevOutput = nil
+   self.updateGradInputStep = nil
+   self.accGradParametersStep = nil
    self.gradParametersAccumulated = false
    -- note that we don't return the cell, just the output
    return self.output
 end
 
-function LSTM:backwardThroughTime()
+function LSTM:backwardThroughTime(timeStep, rho)
    assert(self.step > 1, "expecting at least one updateOutput")
    self.gradInputs = {} -- used by Sequencer, Repeater
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
+   timeStep = timeStep or self.step
+   local rho = math.min(rho or self.rho, timeStep-1)
+   local stop = timeStep - rho
+   
    if self.fastBackward then
-      local gradPrevOutput
-      for step=self.step-1,math.max(stop,1),-1 do
+      for step=timeStep-1,math.max(stop,1),-1 do
          -- set the output/gradOutput states of current Module
          local recurrentModule = self:getStepModule(step)
          
          -- backward propagate through this step
          local gradOutput = self.gradOutputs[step]
-         if gradPrevOutput then
-            self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradPrevOutput)
+         if self.gradPrevOutput then
+            self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
             nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
             gradOutput = self._gradOutputs[step]
          end
@@ -208,13 +212,12 @@ function LSTM:backwardThroughTime()
          local inputTable = {self.inputs[step], output, cell}
          local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
          local gradInputTable = recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
-         gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
-         if step > math.max(stop,1) then
-            self.gradCells[step-1] = gradCell
-         end
+         gradInput, self.gradPrevOutput, gradCell = unpack(gradInputTable)
+         self.gradCells[step-1] = gradCell
          table.insert(self.gradInputs, 1, gradInput)
-         if self.userPrevOutput then self.userGradPrevOutput = gradPrevOutput end
+         if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
       end
+      self.gradParametersAccumulated = true
       return gradInput
    else
       local gradInput = self:updateGradInputThroughTime()
@@ -223,20 +226,22 @@ function LSTM:backwardThroughTime()
    end
 end
 
-function LSTM:updateGradInputThroughTime()
+function LSTM:updateGradInputThroughTime(timeStep, rho)
    assert(self.step > 1, "expecting at least one updateOutput")
    self.gradInputs = {}
-   local gradInput, gradPrevOutput
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
-   for step=self.step-1,math.max(stop,1),-1 do
+   local gradInput
+   timeStep = timeStep or self.step
+   local rho = math.min(rho or self.rho, timeStep-1)
+   local stop = timeStep - rho
+
+   for step=timeStep-1,math.max(stop,1),-1 do
       -- set the output/gradOutput states of current Module
       local recurrentModule = self:getStepModule(step)
       
       -- backward propagate through this step
       local gradOutput = self.gradOutputs[step]
-      if gradPrevOutput then
-         self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradPrevOutput)
+      if self.gradPrevOutput then
+         self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
          nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
          gradOutput = self._gradOutputs[step]
       end
@@ -246,21 +251,21 @@ function LSTM:updateGradInputThroughTime()
       local inputTable = {self.inputs[step], output, cell}
       local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
       local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
-      gradInput, gradPrevOutput, gradCell = unpack(gradInputTable)
-      if step > math.max(stop,1) then
-         self.gradCells[step-1] = gradCell
-      end
+      gradInput, self.gradPrevOutput, gradCell = unpack(gradInputTable)
+      self.gradCells[step-1] = gradCell
       table.insert(self.gradInputs, 1, gradInput)
-      if self.userPrevOutput then self.userGradPrevOutput = gradPrevOutput end
+      if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
    end
    
    return gradInput
 end
 
-function LSTM:accGradParametersThroughTime()
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
-   for step=self.step-1,math.max(stop,1),-1 do
+function LSTM:accGradParametersThroughTime(timeStep, rho)
+   timeStep = timeStep or self.step
+   local rho = math.min(rho or self.rho, timeStep-1)
+   local stop = timeStep - rho
+   
+   for step=timeStep-1,math.max(stop,1),-1 do
       -- set the output/gradOutput states of current Module
       local recurrentModule = self:getStepModule(step)
       
@@ -279,10 +284,12 @@ function LSTM:accGradParametersThroughTime()
    return gradInput
 end
 
-function LSTM:accUpdateGradParametersThroughTime(lr)
-   local rho = math.min(self.rho, self.step-1)
-   local stop = self.step - rho
-   for step=self.step-1,math.max(stop,1),-1 do
+function LSTM:accUpdateGradParametersThroughTime(lr, timeStep, rho)
+   timeStep = timeStep or self.step
+   local rho = math.min(rho or self.rho, timeStep-1)
+   local stop = timeStep - rho
+   
+   for step=timeStep-1,math.max(stop,1),-1 do
       -- set the output/gradOutput states of current Module
       local recurrentModule = self:getStepModule(step)
       

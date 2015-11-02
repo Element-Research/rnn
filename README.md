@@ -4,15 +4,22 @@ This is a Recurrent Neural Network library that extends Torch's nn.
 You can use it to build RNNs, LSTMs, BRNNs, BLSTMs, and so forth and so on.
 This library includes documentation for the following objects:
 
+Modules that consider successive calls to `forward` different time-steps in a sequence :
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : an abstract class inherited by Recurrent and LSTM;
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
   * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
+ * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
+
+Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
+ * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
  * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
+ 
+Criterions used for handling sequential inputs and targets :
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
 
@@ -63,18 +70,36 @@ Again, the actual BPTT happens in the `updateParameters`,
 `backwardThroughTime` or `backwardUpdateThroughTime` methods.
 So this method just keeps a copy of the `scales` for later.
 
-### backwardThroughTime() ###
+<a name='rnn.AbstractRecurrent.backwardThroughTime'></a>
+### backwardThroughTime([step, rho]) ###
 This method calls `updateGradInputThroughTime` followed by `accGradParametersThroughTime`.
-This is where the actual BPTT happens.
+This is where the actual BPTT happens. 
 
-### updateGradInputThroughTime() ###
+Argument `step` specifies that the BPTT should only happen 
+starting from time-step `step` (which defaults to `self.step`, i.e. the current time-step).
+Argument `rho` specifies for how many time-steps the BPTT should happen 
+(which defaults to `self.rho`). 
+For example, supposing we called `updageOutput` 5 times (so `self.step=6`), 
+if we want to backpropagate through step 5 only, we can call :
+
+```lua
+rnn:backwardThroughTime(6, 1)
+```
+
+### updateGradInputThroughTime([step, rho]) ###
 Iteratively calls `updateGradInput` for all time-steps in reverse order 
 (from the end to the start of the sequence). Returns the `gradInput` of 
 the first time-step.
 
-### accGradParametersThroughTime() ###
+See [backwardThroughTime](#rnn.AbstractRecurrent.backwardThroughTime) for an 
+explanation of optional arguments `step` and `rho`.
+
+### accGradParametersThroughTime([step, rho]) ###
 Iteratively calls `accGradParameters` for all time-steps in reverse order 
 (from the end to the start of the sequence). 
+
+See [backwardThroughTime](#rnn.AbstractRecurrent.backwardThroughTime) for an 
+explanation of optional arguments `step` and `rho`.
 
 ### accUpdateGradParametersThroughTime(learningRate) ###
 Iteratively calls `accUpdateGradParameters` for all time-steps in reverse order 
@@ -107,6 +132,85 @@ Otherwise, the previous state will be used to activate the next, which
 will often lead to instability. This is caused by the previous state being
 the result of now changed parameters. It is also good practice to call 
 `forget` at the start of each new sequence.
+
+<a name='rnn.AbstractRecurrent.maxBPTTstep'></a>
+###  maxBPTTstep(rho) ###
+This method sets the maximum number of time-steps for which to perform 
+backpropagation through time (BPTT). So say you set this to `rho = 3` time-steps,
+feed-forward for 4 steps, and then backpropgate, only the last 3 steps will be 
+used for the backpropagation. If your AbstractRecurrent instance is wrapped 
+by a [Sequencer](#rnn.Sequencer), this will be handled auto-magically by the Sequencer.
+Otherwise, setting this value to a large value (i.e. 9999999), is good for most, if not all, cases.
+
+<a name='rnn.AbstractRecurrent.backwardOnline'></a>
+### backwardOnline([online]) ###
+Call this method with `online=true` (the default) to make calls to 
+`backward` (including `updateGradInput` and `accGradParameters`) 
+perform backpropagation through time. This requires that calls to 
+these `backward` methods be performed in the opposite order of the 
+`forward` calls.
+
+So for example, given the following data and `rnn` :
+```lua
+-- backpropagate every 5 time steps
+rho = 5
+
+-- generate some dummy inputs and gradOutputs sequences
+inputs, gradOutputs = {}, {}
+for step=1,rho do
+   inputs[step] = torch.randn(3,10)
+   gradOutputs[step] = torch.randn(3,10)
+end
+
+-- an AbstractRecurrent instance
+rnn = nn.LSTM(10,10)
+```
+
+We could feed-forward and backpropagate through time like this :
+
+```lua
+for step=1,rho do
+   rnn:forward(inputs[step])
+   rnn:backward(inputs[step], gradOutputs[step])
+end
+rnn:backwardThroughTime()
+rnn:udpateParameters(0.1)
+rnn:forget()
+```
+
+In the above example, each call to `backward` only saves the sequence of 
+`gradOutput` Tensors. It is the call to `backwardThroughTime()` that 
+actually does the backpropagation through time.
+
+Alternatively, we could backpropagate through time *online*.
+To do so, we need to activate this feature by calling the `backwardOnline` method
+(once, at the start of training). Then we will make calls to `backward` in 
+reverse order of the calls to `forward`. Each such call will backpropagate 
+through a time-step, begining at the last time-step, ending at the first.
+So the above example can be implemented like this instead :
+
+```lua
+rnn:backwardOnline()
+-- forward
+for step=1,rho do
+   rnn:forward(inputs[step])
+end
+
+-- backward (in reverse order of forward calls)
+gradInputs = {}
+for step=rho,1,-1 do
+   gradInputs[step] = rnn:backward(inputs[step], gradOutputs[step])
+end
+
+rnn:udpateParameters(0.1)
+rnn:forget()
+```
+
+Also notice that `backwardOnline` makes the calls to `backward` generate 
+a `gradInput` for every time-step. Whereas without this, these 
+would only be made available via the `rnn.gradInputs` table after the 
+call to `backwardThroughTime()`.
+
 
 ### training() ###
 In training mode, the network remembers all previous `rho` (number of time-steps)
@@ -212,13 +316,63 @@ while true do
    if i % updateInterval == 0 then
       -- backpropagates through time (BPTT) :
       -- 1. backward through feedback and input layers,
-      -- 2. updates parameters
       rnn:backwardThroughTime()
+      -- 2. updates parameters
       rnn:updateParameters(lr)
       rnn:zeroGradParameters()
+      -- 3. reset the internal time-step counter
+      rnn:forget()
    end
 end
 ```
+
+Another option, is to perform the backpropagation through time using 
+the normal Module interface. The only requirement is that you 
+wrap your rnn into a [Recursor](#rnn.Recursor) and
+call `backwardOnline()` and then call `backward` 
+in reverse order of the `forward` calls:
+
+```lua
+rnn = nn.Recursor(rnn, rho)
+rnn:backwardOnline()
+
+i=1
+inputs, outputs, targets = {}, {}
+while true do
+   -- a batch of inputs
+   local input = sequence:index(1, offsets)
+   local output = rnn:forward(input)
+   -- incement indices
+   offsets:add(1)
+   for j=1,batchSize do
+      if offsets[j] > nIndex then
+         offsets[j] = 1
+      end
+   end
+   local target = sequence:index(1, offsets)
+   local err = criterion:forward(output, target)
+   
+   -- save these for the BPTT
+   table.insert(inputs, input)
+   table.insert(outputs, output)
+   table.insert(targets, target)
+   
+   i = i + 1
+   -- note that updateInterval < rho
+   if i % updateInterval == 0 then
+      for step=updateInterval,1,-1 do
+         local gradOutput = criterion:backward(outputs[step], targets[step])
+         rnn:backward(inputs[step], gradOutput)
+      end
+      rnn:updateParameters(lr)
+      rnn:zeroGradParameters()
+      
+      inputs, outputs, targets = {}, {}, {}
+   end
+end
+```
+
+This is basically what a `Sequencer` does internally.
 
 <a name='rnn.Recurrent.Sequencer'></a>
 ### Decorate it with a Sequencer ###
@@ -228,6 +382,10 @@ such that an entire sequence (a table) can be presented with a single `forward/b
 This is actually the recommended approach as it allows RNNs to be stacked and makes the 
 rnn conform to the Module interface, i.e. a `forward`, `backward` and `updateParameters` are all 
 that is required ( `Sequencer` handles the `backwardThroughTime` internally ).
+
+```lua
+seq = nn.Sequencer(module)
+```
 
 The following example is similar to the previous one, except that 
  
@@ -242,17 +400,17 @@ batchSize = 8
 rho = 5
 hiddenSize = 10
 nIndex = 10000
--- RNN
-r = nn.Recurrent(
-   hiddenSize, nn.LookupTable(nIndex, hiddenSize), 
-   nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(), 
-   rho
-)
 
-rnn = nn.Sequential()
-rnn:add(nn.Sequencer(r))
-rnn:add(nn.Sequencer(nn.Linear(hiddenSize, nIndex)))
-rnn:add(nn.Sequencer(nn.LogSoftMax()))
+mlp = nn.Sequential()
+   :add(nn.Recurrent(
+      hiddenSize, nn.LookupTable(nIndex, hiddenSize), 
+      nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(), 
+      rho
+   )
+   :add(nn.Linear(hiddenSize, nIndex))
+   :add(nn.LogSoftMax())
+
+rnn = nn.Sequencer(mlp)
 
 criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
 
@@ -361,6 +519,12 @@ Note that we recommend decorating the `LSTM` with a `Sequencer`
 
 A faster version of the [LSTM](#rnn.LSTM). 
 Basically, the input, forget and output gates, as well as the hidden state are computed at one fell swoop.
+
+<a name='rnn.AbstractSequencer'></a>
+## AbstractSequencer ##
+This abastract class implements a light interface shared by 
+subclasses like : `Sequencer`, `Repeater`, `RecurrentAttention`, `BiSequencer` and so on.
+
   
 <a name='rnn.Sequencer'></a>
 ## Sequencer ##
@@ -373,10 +537,10 @@ seq = nn.Sequencer(module)
 ```
 
 This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) 
-used to abstract away the intricacies of AbstractRecurrent `modules`. While the latter 
-require a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
-the Sequencer forwards an input sequence (a table) into an output sequence (a table of the same length).
-It also takes care of calling `forget`, `backwardThroughTime` and other such AbstractRecurrent-specific methods.
+used to abstract away the intricacies of `AbstractRecurrent` modules. While an `AbstractRecurrent` instance 
+requires that a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
+the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
+It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
 
 For example, `rnn` : an instance of nn.AbstractRecurrent, can forward an `input` sequence one forward at a time:
 ```lua
@@ -397,9 +561,17 @@ The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent 
 input to produce an output table of the same length. 
 This is especially useful for processing variable length sequences (tables).
 
-Note that for now, it is only possible to decorate either recurrent or non-recurrent Modules. 
-Specifically, it cannot handle non-recurrent Modules containing recurrent Modules. 
-Instead, either Modules should be encapsulated by its own `Sequencer`. This may change in the future.
+Internally, the `Sequencer` expects the decorated `module` to be an 
+`AbstractRecurrent` instance. When this is not the case, the `module` 
+is automatically decorated with a [Recursor](#rnn.Recursor) module, which makes it 
+conform to the `AbstractRecurrent` interface. 
+
+Note : this is due a recent update (27 Oct 2015), as before this 
+`AbstractRecurrent` and and non-`AbstractRecurrent` instances needed to 
+be decorated by their own `Sequencer`. The recent update, which introduced the 
+`Recursor` decorator, allows a single `Sequencer` to wrap any type of module, 
+`AbstractRecurrent`, non-`AbstractRecurrent` or a composite structure of both types.
+Nevertheless, existing code shouldn't be affected by the change.
 
 ### remember([mode]) ###
 When `mode='both'` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
@@ -414,6 +586,91 @@ Accepted values for argument `mode` are as follows :
 
 ### forget() ###
 Calls the decorated AbstractRecurrent module's `forget` method.
+
+<a name='rnn.Recursor'></a>
+## Recursor ##
+
+This module recorates a `module` to be used within an `AbstractSequencer` instance.
+It does this by making the decorated module conform to the `AbstractRecurrent` interface,
+which like the `LSTM` and `Recurrent` classes, this class inherits. 
+
+```lua
+rec = nn.Recursor(module[, rho])
+```
+
+For each successive call to `updateOutput` (i.e. `forward`), this 
+decorator will create a `stepClone()` of the decorated `module`. 
+So for each time-step, it clones the `module`. Both the clone and 
+original share parameters and gradients w.r.t. parameters. However, for 
+modules that already conform to the `AbstractRecurrent` interface, 
+the clone and original module are one in the same (i.e. no clone).
+
+Examples :
+
+Let's assume I want to stack two LSTMs. I could use two sequencers :
+
+```lua
+lstm = nn.Sequential()
+   :add(nn.Sequencer(nn.LSTM(100,100)))
+   :add(nn.Sequencer(nn.LSTM(100,100)))
+```
+
+Using a `Recursor`, I make the same model with a single `Sequencer` :
+
+```lua
+lstm = nn.Sequencer(
+   nn.Recursor(
+      nn.Sequential()
+         :add(nn.LSTM(100,100))
+         :add(nn.LSTM(100,100))
+      )
+   )
+```
+
+Actually, the `Sequencer` will wrap any non-`AbstractRecurrent` module automatically, 
+so I could simplify this further to :
+
+```lua
+lstm = nn.Sequencer(
+   nn.Sequential()
+      :add(nn.LSTM(100,100))
+      :add(nn.LSTM(100,100))
+   )
+```
+
+I can also add a `Linear` between the two `LSTM`s. In this case,
+a `Linear` will be cloned (and have its parameters shared) for each time-step,
+while the `LSTM`s will do whatever cloning internally :
+
+```lua
+lstm = nn.Sequencer(
+   nn.Sequential()
+      :add(nn.LSTM(100,100))
+      :add(nn.Linear(100,100))
+      :add(nn.LSTM(100,100))
+   )
+```
+
+`AbstractRecurrent` instances like `Recursor`, `Recurrent` and `LSTM` are 
+expcted to manage time-steps internally. Non-`AbstractRecurrent` instances
+can be wrapped by a `Recursor` to have the same behavior. 
+
+Every call to `forward` on an `AbstractRecurrent` instance like `Recursor` 
+will increment the `self.step` attribute by 1, using a shared parameter clone
+for each successive time-step (for a maximum of `rho` time-steps, which defaults to 9999999).
+In this way, with the help of [backwardOnline](#rnn.AbstractRecurrent.backwardOnline) 
+we can then call `backward` in reverse order of the `forward` calls 
+to perform backpropagation through time (BPTT). Which is exactly what 
+[AbstractSequencer](#rnn.AbstractSequencer) instances do internally.
+The `backward` call, which is actually divided into calls to `updateGradInput` and 
+`accGradParameters`, decrements by 1 the `self.udpateGradInputStep` and `self.accGradParametersStep`
+respectively, starting at `self.step`.
+Successive calls to `backward` will decrement these counters and use them to 
+backpropagate through the appropriate internall step-wise shared-parameter clones.
+
+Anyway, in most cases, you will not have to deal with the `Recursor` object directly as
+`AbstractSequencer` instances automatically decorate non-`AbstractRecurrent` instances
+with a `Recursor` in their constructors.
 
 <a name='rnn.BiSequencer'></a>
 ## BiSequencer ##
