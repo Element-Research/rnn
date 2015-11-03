@@ -174,7 +174,7 @@ for step=1,rho do
    rnn:backward(inputs[step], gradOutputs[step])
 end
 rnn:backwardThroughTime()
-rnn:udpateParameters(0.1)
+rnn:updateParameters(0.1)
 rnn:forget()
 ```
 
@@ -202,7 +202,7 @@ for step=rho,1,-1 do
    gradInputs[step] = rnn:backward(inputs[step], gradOutputs[step])
 end
 
-rnn:udpateParameters(0.1)
+rnn:updateParameters(0.1)
 rnn:forget()
 ```
 
