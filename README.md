@@ -32,6 +32,7 @@ The following are example training scripts using this package :
   * [RNN/LSTM](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [RNN/LSTM/BRNN/BLSTM training](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
+  * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7.
   
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
