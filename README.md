@@ -10,6 +10,7 @@ Modules that consider successive calls to `forward` different time-steps in a se
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
   * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
+ * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
 
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
@@ -521,73 +522,6 @@ Note that we recommend decorating the `LSTM` with a `Sequencer`
 A faster version of the [LSTM](#rnn.LSTM). 
 Basically, the input, forget and output gates, as well as the hidden state are computed at one fell swoop.
 
-<a name='rnn.AbstractSequencer'></a>
-## AbstractSequencer ##
-This abastract class implements a light interface shared by 
-subclasses like : `Sequencer`, `Repeater`, `RecurrentAttention`, `BiSequencer` and so on.
-
-  
-<a name='rnn.Sequencer'></a>
-## Sequencer ##
-
-The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
-to be applied from left to right, on each element of the input sequence.
-
-```lua
-seq = nn.Sequencer(module)
-```
-
-This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) 
-used to abstract away the intricacies of `AbstractRecurrent` modules. While an `AbstractRecurrent` instance 
-requires that a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
-the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
-It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
-
-For example, `rnn` : an instance of nn.AbstractRecurrent, can forward an `input` sequence one forward at a time:
-```lua
-input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
-rnn:forward(input[1])
-rnn:forward(input[2])
-rnn:forward(input[3])
-```
-
-Equivalently, we can use a Sequencer to forward the entire `input` sequence at once:
-
-```lua
-seq = nn.Sequencer(rnn)
-seq:forward(input)
-```
-
-The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent instances) and apply it to each 
-input to produce an output table of the same length. 
-This is especially useful for processing variable length sequences (tables).
-
-Internally, the `Sequencer` expects the decorated `module` to be an 
-`AbstractRecurrent` instance. When this is not the case, the `module` 
-is automatically decorated with a [Recursor](#rnn.Recursor) module, which makes it 
-conform to the `AbstractRecurrent` interface. 
-
-Note : this is due a recent update (27 Oct 2015), as before this 
-`AbstractRecurrent` and and non-`AbstractRecurrent` instances needed to 
-be decorated by their own `Sequencer`. The recent update, which introduced the 
-`Recursor` decorator, allows a single `Sequencer` to wrap any type of module, 
-`AbstractRecurrent`, non-`AbstractRecurrent` or a composite structure of both types.
-Nevertheless, existing code shouldn't be affected by the change.
-
-### remember([mode]) ###
-When `mode='both'` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
-each call to `forward`, which is the default behavior of the class. 
-This behavior is only applicable to decorated AbstractRecurrent `modules`.
-Accepted values for argument `mode` are as follows :
-
- * 'eval' only affects evaluation (recommended for RNNs)
- * 'train' only affects training
- * 'neither' affects neither training nor evaluation (default behavior of the class)
- * 'both' affects both training and evaluation (recommended for LSTMs)
-
-### forget() ###
-Calls the decorated AbstractRecurrent module's `forget` method.
-
 <a name='rnn.Recursor'></a>
 ## Recursor ##
 
@@ -672,6 +606,132 @@ backpropagate through the appropriate internall step-wise shared-parameter clone
 Anyway, in most cases, you will not have to deal with the `Recursor` object directly as
 `AbstractSequencer` instances automatically decorate non-`AbstractRecurrent` instances
 with a `Recursor` in their constructors.
+
+<a name='rnn.Recurrence'></a>
+## Recurrence ##
+
+A extremely general container for implementing pretty much any type of recurrence.
+
+```lua
+rnn = nn.Recurrence(recurrentModule, outputSize, nInputDim, [rho])
+```
+
+Unlike [Recurrent](#rnn.Recurrent), this module doesn't manage a separate 
+modules like `inputModule`, `startModule`, `mergeModule` and the like.
+Instead, it only manages a single `recurrentModule`, which should 
+output a Tensor or table : `output(t)` 
+given an input table : `{input(t), output(t-1)}`.
+Using a mix of `Recursor` (say, via `Sequencer`) with `Recurrence`, one can implement 
+pretty much any type of recurrent neural network, including LSTMs and RNNs.
+
+For the first step, the `Recurrence` forwards a Tensor (or table thereof)
+of zeros through the recurrent layer (like LSTM, unlike Recurrent).
+So it needs to know the `outputSize`, which is either a number or 
+`torch.LongStorage`, or table thereof. The batch dimension should be 
+excluded from the `outputSize`. Instead, the size of the batch dimension 
+(i.e. number of samples) will be extrapolated from the `input` using 
+the `nInputDim` argument. For example, say that our input is a Tensor of size 
+`4 x 3` where `4` is the number of samples, then `nInputDim` should be `1`.
+As another example, if our input is a table of table [...] of tensors 
+where the first tensor (depth first) is the same as in the previous example,
+then our `nInputDim` is also `1`.
+
+
+As an example, let's use `Sequencer` and `Recurrence` 
+to build a Simple RNN for language modeling :
+
+```lua
+rho = 5
+hiddenSize = 10
+outputSize = 5 -- num classes
+nIndex = 10000
+
+-- recurrent module
+rm = nn.Sequential()
+   :add(nn.ParallelTable()
+      :add(nn.LookupTable(nIndex, hiddenSize))
+      :add(nn.Linear(hiddenSize, hiddenSize)))
+   :add(nn.CAddTable())
+   :add(nn.Sigmoid())
+
+rnn = nn.Sequencer(
+   nn.Sequential()
+      :add(nn.Recurrence(rm, hiddenSize, 1))
+      :add(nn.Linear(hiddenSize, outputSize))
+      :add(nn.LogSoftMax())
+)
+```
+
+Note : We could very well reimplement the `LSTM` module using the
+newer `Recursor` and `Recurrent` modules, but that would mean 
+breaking backwards compatibility for existing models saved on disk.
+
+<a name='rnn.AbstractSequencer'></a>
+## AbstractSequencer ##
+This abastract class implements a light interface shared by 
+subclasses like : `Sequencer`, `Repeater`, `RecurrentAttention`, `BiSequencer` and so on.
+
+  
+<a name='rnn.Sequencer'></a>
+## Sequencer ##
+
+The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
+to be applied from left to right, on each element of the input sequence.
+
+```lua
+seq = nn.Sequencer(module)
+```
+
+This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) 
+used to abstract away the intricacies of `AbstractRecurrent` modules. While an `AbstractRecurrent` instance 
+requires that a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
+the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
+It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
+
+For example, `rnn` : an instance of nn.AbstractRecurrent, can forward an `input` sequence one forward at a time:
+```lua
+input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
+rnn:forward(input[1])
+rnn:forward(input[2])
+rnn:forward(input[3])
+```
+
+Equivalently, we can use a Sequencer to forward the entire `input` sequence at once:
+
+```lua
+seq = nn.Sequencer(rnn)
+seq:forward(input)
+```
+
+The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent instances) and apply it to each 
+input to produce an output table of the same length. 
+This is especially useful for processing variable length sequences (tables).
+
+Internally, the `Sequencer` expects the decorated `module` to be an 
+`AbstractRecurrent` instance. When this is not the case, the `module` 
+is automatically decorated with a [Recursor](#rnn.Recursor) module, which makes it 
+conform to the `AbstractRecurrent` interface. 
+
+Note : this is due a recent update (27 Oct 2015), as before this 
+`AbstractRecurrent` and and non-`AbstractRecurrent` instances needed to 
+be decorated by their own `Sequencer`. The recent update, which introduced the 
+`Recursor` decorator, allows a single `Sequencer` to wrap any type of module, 
+`AbstractRecurrent`, non-`AbstractRecurrent` or a composite structure of both types.
+Nevertheless, existing code shouldn't be affected by the change.
+
+### remember([mode]) ###
+When `mode='both'` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
+each call to `forward`, which is the default behavior of the class. 
+This behavior is only applicable to decorated AbstractRecurrent `modules`.
+Accepted values for argument `mode` are as follows :
+
+ * 'eval' only affects evaluation (recommended for RNNs)
+ * 'train' only affects training
+ * 'neither' affects neither training nor evaluation (default behavior of the class)
+ * 'both' affects both training and evaluation (recommended for LSTMs)
+
+### forget() ###
+Calls the decorated AbstractRecurrent module's `forget` method.
 
 <a name='rnn.BiSequencer'></a>
 ## BiSequencer ##
