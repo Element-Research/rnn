@@ -2100,7 +2100,124 @@ function rnntest.Recursor()
       mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recursor(Recursor(LSTM)) accGradParams err "..i)
    end
    
+end
+
+function rnntest.Recurrence()
+   local batchSize = 4
+   local inputSize = 10
+   local outputSize = 12
+   local rho = 3
+
+   -- 1. compare to LSTM
+   local lstm2 = nn.LSTM(inputSize, outputSize)
+   local rm = lstm2.recurrentModule:clone()
+   local seq2 = nn.Sequencer(lstm2)
    
+   rm:insert(nn.FlattenTable(), 1)
+   local recurrence = nn.Recurrence(rm, {{outputSize}, {outputSize}}, 1)
+   local lstm = nn.Sequential():add(recurrence):add(nn.SelectTable(1))
+   local seq = nn.Sequencer(lstm)
+   
+   local inputs, gradOutputs = {}, {}
+   for i=1,rho do
+      table.insert(inputs, torch.randn(batchSize, inputSize))
+      table.insert(gradOutputs, torch.randn(batchSize, outputSize))
+   end
+   
+   seq:zeroGradParameters()
+   seq2:zeroGradParameters()
+   
+   local outputs = seq:forward(inputs)
+   local outputs2 = seq2:forward(inputs)
+   
+   for i=1,rho do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Recurrence fwd err "..i)
+   end
+   
+   local gradInputs = seq:backward(inputs, gradOutputs)
+   local gradInputs2 = seq2:backward(inputs, gradOutputs)
+   
+   for i=1,rho do
+      mytester:assertTensorEq(gradInputs[i], gradInputs2[i], 0.0000001, "Recurrence bwd err "..i)
+   end
+   
+   seq:updateParameters(0.1)
+   seq2:updateParameters(0.1)
+   
+   local params, gradParams = seq:parameters()
+   local params2, gradParams2 = seq2:parameters()
+   
+   mytester:assert(#params == #params2, "Recurrence #params err")
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Recurrence updateParameter err "..i)
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recurrence accGradParams err "..i)
+   end
+   
+   -- 2. compare to simple RNN
+   
+   local nIndex = 50
+   local hiddenSize = 20
+   
+   local inputLayer = nn.LookupTable(nIndex, hiddenSize)
+   local feedbackLayer = nn.Linear(hiddenSize, hiddenSize)
+   local outputLayer = nn.Linear(hiddenSize, outputSize)
+   
+   local rnn = nn.Recurrent(hiddenSize, inputLayer, feedbackLayer, nn.Sigmoid(), 99999 )
+   rnn.startModule:share(rnn.feedbackModule, 'bias')
+   
+   -- just so the params are aligned
+   local seq2_ = nn.Sequential()
+      :add(nn.ParallelTable()
+         :add(inputLayer)
+         :add(feedbackLayer))
+      :add(outputLayer)
+   
+   local seq2 = nn.Sequencer(nn.Sequential():add(rnn):add(outputLayer):add(nn.LogSoftMax()))
+   
+   local rm = nn.Sequential()
+   :add(nn.ParallelTable()
+      :add(inputLayer:clone())
+      :add(feedbackLayer:clone()))
+   :add(nn.CAddTable())
+   :add(nn.Sigmoid())
+
+   local seq = nn.Sequencer(nn.Sequential()
+      :add(nn.Recurrence(rm, hiddenSize, 0))
+      :add(outputLayer:clone())
+      :add(nn.LogSoftMax()))
+   
+   local inputs, gradOutputs = {}, {}
+   for i=1,rho do
+      table.insert(inputs, torch.IntTensor(batchSize):random(1,nIndex))
+      table.insert(gradOutputs, torch.randn(batchSize, outputSize))
+   end
+   
+   seq:zeroGradParameters()
+   seq2:zeroGradParameters()
+   
+   local outputs = seq:forward(inputs)
+   local outputs2 = seq2:forward(inputs)
+   
+   for i=1,rho do
+      mytester:assertTensorEq(outputs[i], outputs2[i], 0.0000001, "Recurrence RNN fwd err "..i)
+   end
+   
+   seq:backward(inputs, gradOutputs)
+   seq2:backward(inputs, gradOutputs)
+   
+   seq:updateParameters(0.1)
+   seq2:updateParameters(0.1)
+   
+   local params, gradParams = seq:parameters()
+   local params2, gradParams2 = seq2_:parameters()
+   
+   mytester:assert(#params == #params2, "Recurrence RNN #params err")
+   for i=1,#params do
+      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "Recurrence RNN updateParameter err "..i)
+      if i~= 3 then -- the gradBias isn't shared (else udpated twice)
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recurrence RNN accGradParams err "..i)
+      end
+   end
 end
 
 
