@@ -1,12 +1,7 @@
 ------------------------------------------------------------------------
 --[[ MaskZero ]]--
--- Decorator that zeroes the output state of the encapsulated module
--- for inputs which are zero vectors
-
--- Emcapsulated module must have the signature of one of the 
--- AbstractRecurrent's recurrentModule implementation :
--- LSTM: output, cell = unpack(recurrentModule:updateOutput{input, prevOutput, prevCell})
--- Recurrent: output = recurrentModule:updateOutput{input, self.output}
+-- Decorator that zeroes the output rows of the encapsulated module
+-- for commensurate input rows which are tensors of zeros
 
 -- Zero vectors (i.e. padding) must be at the beginning of the sequence
 -- because this decorator will otherwise reset the recurrentModule
@@ -15,38 +10,77 @@
 ------------------------------------------------------------------------
 local MaskZero, parent = torch.class("nn.MaskZero", "nn.Decorator")
 
-function MaskZero:updateOutput(input)
-   self.output = self.module:updateOutput(input)
-   
-   -- recurrent module input is always the first one
-   local rmi = input[1]
-   -- build mask once
-   local vectorDim = rmi:dim() -- works for batch and non batch
-   self._zeroMask = torch.norm(rmi, 2, vectorDim):eq(0)
-   -- building mask with code bellow is slower
-   -- self._zeroMask = torch.eq(({torch.min(rmi, vectorDim)})[1], ({torch.max(rmi, vectorDim)})[1])
+function MaskZero:__init(module, nInputDim)
+   parent.__init(self, module)
+   assert(torch.type(nInputDim) == 'number', 'Expecting nInputDim number at arg 1')
+   self.nInputDim = nInputDim
+end
 
-   -- build mask and use for output (and cell)
-   if torch.type(self.output) == 'table' then
-   	-- LSTM
-   	self._zeroMask = self._zeroMask:expandAs(self.output[1])
-   	-- output
-   	self.output[1]:maskedFill(self._zeroMask, 0)
-   	-- cell: i think zeroing the cell is also mandatory
-   	self.output[2]:maskedFill(self._zeroMask, 0)
+function MaskZero:recursiveGetFirst(input)
+   if torch.type(input) == 'table' then
+      return self:recursiveGetFirst(input[1])
    else
-   	-- Recurrent
-   	self._zeroMask = self._zeroMask:expandAs(self.output)
-   	-- output only
-   	self.output:maskedFill(self._zeroMask, 0)
+      assert(torch.isTensor(input))
+      return input
    end
+end
+
+function MaskZero:recursiveMask(output, input, mask)
+   if torch.type(input) == 'table' then
+      output = torch.type(output) == 'table' and output or {}
+      for k,v in ipairs(input) do
+         output[k] = self:recursiveMask(output[k], v, mask)
+      end
+   else
+      assert(torch.isTensor(input))
+      output = torch.isTensor(output) and output or input.new()
+   	
+   	local zeroMask = mask:expandAs(input)
+      output:resizeAs(input):copy(input)
+   	output:maskedFill(zeroMask, 0)
+   end
+   return output
+end
+
+function MaskZero:updateOutput(input)   
+   -- recurrent module input is always the first one
+   local rmi = self:recursiveGetFirst(input)
+   local vectorDim
+   if rmi:dim() == self.nInputDim then
+      vectorDim = 1
+      rmi = rmi:view(-1) -- collapse dims
+   elseif rmi:dim() - 1 == self.nInputDim then
+      vectorDim = 2
+      rmi = rmi:view(rmi:size(1), -1) -- collapse non-batch dims
+   else
+      error("nInputDim error: "..rmi:dim()..", "..self.nInputDim)
+   end
+   
+   -- build mask
+   local vectorDim = rmi:dim() 
+   self._zeroMask = self._zeroMak or rmi.new()
+   self._zeroMask:norm(rmi, 2, vectorDim)
+   self.zeroMask = self.zeroMask or ((torch.type(rmi) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
+   self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)
+   
+   -- forward through decorated module
+   local output = self.module:updateOutput(input)
+
+   self.output = self:recursiveMask(self.output, output, self.zeroMask)
    return self.output
 end
 
 function MaskZero:updateGradInput(input, gradOutput)
-   self.gradInput = self.module:updateGradInput(input, gradOutput)
-   for i=1, #self.gradInput do 
-   	self.gradInput[i]:maskedFill(self._zeroMask, 0)
-   end
+   -- zero gradOutputs before backpropagating through decorated module
+   self.gradOutput = self:recursiveMask(self.gradOutput, gradOutput, self.zeroMask)
+   
+   self.gradInput = self.module:updateGradInput(input, self.gradOutput)
    return self.gradInput
+end
+
+function MaskZero:type(type, ...)
+   self.zeroMask = nil
+   self._zeroMask = nil
+   
+   return parent.type(self, type, ...)
 end

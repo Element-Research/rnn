@@ -19,7 +19,10 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
  * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
- 
+
+Miscellaneous modules :
+ * [MaskZero](#rnn.MaskZero) : zeroes the `output` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
+
 Criterions used for handling sequential inputs and targets :
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
@@ -55,10 +58,17 @@ to obtain copies of the internal `recurrentModule`. These copies share
 `parameters` and `gradParameters` but each have their own `output`, `gradInput` 
 and any other intermediate states. 
 
-### maskZero() ###
-Decorates the implementing recurrent module with MaskZero. Recurrent module output
-will be zeroed for input data which is a zero vector. This makes possible to pad
-sequences with different lengths in the same batch with zero vectors.
+### maskZero(nInputDim) ###
+Decorates the internal `recurrentModule` with [MaskZero](#rnn.MaskZero). 
+The `output` Tensor (or table thereof) of the `recurrentModule`
+will have each row (samples) zeroed when the commensurate row of the `input` 
+is a tensor of zeros. 
+
+The `nInputDim` argument must specify the number of non-batch dims 
+in the first Tensor of the `input`. In the case of an `input` table,
+the first Tensor is the first one encountered when doing a depth-first search.
+
+Calling this method makes it possible to pad sequences with different lengths in the same batch with zero vectors.
 Warning: padding must come before any real data in the input sequence (padding
 after the real data is not supported and will yield unpredictable results without failing).
 
@@ -876,6 +886,25 @@ Therefore, the `action` module's outputs are only used internally, within the Re
 to generate the zero Tensor to sample an action for the first step (see above).
 
 A complete implementation of Ref. A is available [here](examples/recurrent-visual-attention.lua).
+
+<a name='rnn.MaskZero'></a>
+## MaskZero ##
+This module zeroes the `output` rows of the decorated module 
+for commensurate `input` rows which are tensors of zeros.
+
+```lua
+mz = nn.MaskZero(module, nInputDim)
+```
+
+The `output` Tensor (or table thereof) of the decorated `module`
+will have each row (samples) zeroed when the commensurate row of the `input` 
+is a tensor of zeros. 
+
+The `nInputDim` argument must specify the number of non-batch dims 
+in the first Tensor of the `input`. In the case of an `input` table,
+the first Tensor is the first one encountered when doing a depth-first search.
+
+This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##

@@ -2223,7 +2223,7 @@ end
 -- mock Recurrent and LSTM recurrentModules for UT
 -- must be stateless
 -- forwarding zeros must not return zeros -> use Sigmoid()
-function recurrentModule()
+local function recurrentModule()
    local recurrent = nn.Sequential()
    local parallel = nn.ParallelTable()
    parallel:add(nn.Sigmoid()); parallel:add(nn.Identity())
@@ -2233,7 +2233,7 @@ function recurrentModule()
    return recurrent
 end
 
-function lstmModule()
+local function lstmModule()
    local recurrent = nn.Sequential()
    local parallel = nn.ParallelTable()
    parallel:add(nn.Sigmoid()); parallel:add(nn.Identity()); parallel:add(nn.Identity())
@@ -2243,7 +2243,7 @@ function lstmModule()
    return recurrent
 end
 
-function firstElement(a)
+local function firstElement(a)
    return torch.type(a) == 'table' and a[1] or a
 end
 
@@ -2264,7 +2264,7 @@ function rnntest.MaskZero()
       mytester:assertlt(torch.norm(o - e), precision, 'mock ' .. name .. ' module failed for batch')
     
       -- test mask zero module now
-      local module = nn.MaskZero(recurrent)
+      local module = nn.MaskZero(recurrent, 1)
       -- non batch forward
       local i = torch.rand(10)
       local e = firstElement(recurrent:forward({i, torch.rand(10), torch.rand(10)}))
@@ -2298,7 +2298,7 @@ function rnntest.MaskZero()
       -- Use a SplitTable and SelectTable to adapt module
       local module = nn.Sequential()
       module:add(nn.SplitTable(1))
-      module:add(nn.MaskZero(recurrent))
+      module:add(nn.MaskZero(recurrent, 1))
       if name == 'lstm' then module:add(nn.SelectTable(1)) end
 
       local input = torch.rand(name == 'lstm' and 3 or 2, 10)
@@ -2312,7 +2312,7 @@ function rnntest.MaskZero()
       -- rebuild module to avoid correlated tests
       local module = nn.Sequential()
       module:add(nn.SplitTable(1))
-      module:add(nn.MaskZero(recurrent))
+      module:add(nn.MaskZero(recurrent, 1))
       if name == 'lstm' then module:add(nn.SelectTable(1)) end
 
       local input = torch.rand(name == 'lstm' and 3 or 2, 5, 10)

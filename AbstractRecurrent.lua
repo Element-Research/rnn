@@ -38,8 +38,8 @@ function AbstractRecurrent:getStepModule(step)
    return recurrentModule
 end
 
-function AbstractRecurrent:maskZero()
-   self.recurrentModule = nn.MaskZero(self.recurrentModule)
+function AbstractRecurrent:maskZero(nInputDim)
+   self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim)
 end
 
 function AbstractRecurrent:updateGradInput(input, gradOutput)      
