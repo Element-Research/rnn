@@ -2220,6 +2220,106 @@ function rnntest.Recurrence()
    end
 end
 
+-- mock Recurrent and LSTM recurrentModules for UT
+-- must be stateless
+-- forwarding zeros must not return zeros -> use Sigmoid()
+function recurrentModule()
+   local recurrent = nn.Sequential()
+   local parallel = nn.ParallelTable()
+   parallel:add(nn.Sigmoid()); parallel:add(nn.Identity())
+   recurrent = nn.Sequential()
+   recurrent:add(parallel)
+   recurrent:add(nn.SelectTable(1))
+   return recurrent
+end
+
+function lstmModule()
+   local recurrent = nn.Sequential()
+   local parallel = nn.ParallelTable()
+   parallel:add(nn.Sigmoid()); parallel:add(nn.Identity()); parallel:add(nn.Identity())
+   recurrent = nn.Sequential()
+   recurrent:add(parallel)
+   recurrent:add(nn.NarrowTable(1, 2))
+   return recurrent
+end
+
+function firstElement(a)
+   return torch.type(a) == 'table' and a[1] or a
+end
+
+function rnntest.MaskZero()
+   local recurrents = {['recurrent'] = recurrentModule(), ['lstm'] = lstmModule()}
+   -- Note we use lstmModule input signature and firstElement to prevent duplicate code
+   for name, recurrent in pairs(recurrents) do
+      -- test encapsulated module first
+      -- non batch
+      local i = torch.rand(10)
+      local e = nn.Sigmoid():forward(i)
+      local o = firstElement(recurrent:forward({i, torch.zeros(10), torch.zeros(10)}))
+      mytester:assertlt(torch.norm(o - e), precision, 'mock ' .. name .. ' failed for non batch')
+      -- batch
+      local i = torch.rand(5, 10)
+      local e = nn.Sigmoid():forward(i)
+      local o = firstElement(recurrent:forward({i, torch.zeros(5, 10), torch.zeros(5, 10)}))
+      mytester:assertlt(torch.norm(o - e), precision, 'mock ' .. name .. ' module failed for batch')
+    
+      -- test mask zero module now
+      local module = nn.MaskZero(recurrent)
+      -- non batch forward
+      local i = torch.rand(10)
+      local e = firstElement(recurrent:forward({i, torch.rand(10), torch.rand(10)}))
+      local o = firstElement(module:forward({i, torch.rand(10), torch.rand(10)}))
+      mytester:assertgt(torch.norm(i - o), precision, 'error on non batch forward for ' .. name)
+      mytester:assertlt(torch.norm(e - o), precision, 'error on non batch forward for ' .. name)
+      local i = torch.zeros(10)
+      local o = firstElement(module:forward({i, torch.rand(10), torch.rand(10)}))
+      mytester:assertlt(torch.norm(i - o), precision, 'error on non batch forward for ' .. name)
+      -- batch forward
+      local i = torch.rand(5, 10)
+      local e = firstElement(recurrent:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      local o = firstElement(module:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      mytester:assertgt(torch.norm(i - o), precision, 'error on batch forward for ' .. name)
+      mytester:assertlt(torch.norm(e - o), precision, 'error on batch forward for ' .. name)
+      local i = torch.zeros(5, 10)
+      local o = firstElement(module:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      mytester:assertlt(torch.norm(i - o), precision, 'error on batch forward for ' .. name)
+      local i = torch.Tensor({{0, 0, 0}, {1, 2, 5}})
+      -- clone r because it will be update by module:forward call
+      local r = firstElement(recurrent:forward({i, torch.rand(2, 3), torch.rand(2, 3)})):clone()
+      local o = firstElement(module:forward({i, torch.rand(2, 3), torch.rand(2, 3)}))
+      mytester:assertgt(torch.norm(r - o), precision, 'error on batch forward for ' .. name)
+      r[1]:zero()
+      mytester:assertlt(torch.norm(r - o), precision, 'error on batch forward for ' .. name)
+
+      -- check gradients
+      local jac = nn.Jacobian
+      local sjac = nn.SparseJacobian
+      -- Note: testJacobian doesn't support table inputs or outputs
+      -- Use a SplitTable and SelectTable to adapt module
+      local module = nn.Sequential()
+      module:add(nn.SplitTable(1))
+      module:add(nn.MaskZero(recurrent))
+      if name == 'lstm' then module:add(nn.SelectTable(1)) end
+
+      local input = torch.rand(name == 'lstm' and 3 or 2, 10)
+      local err = jac.testJacobian(module, input)
+      mytester:assertlt(err, precision, 'error on state for ' .. name)
+      -- IO
+      local ferr,berr = jac.testIO(module,input)
+      mytester:asserteq(ferr, 0, torch.typename(module) .. ' - i/o forward err for ' .. name)
+      mytester:asserteq(berr, 0, torch.typename(module) .. ' - i/o backward err for ' .. name)
+      -- batch
+      -- rebuild module to avoid correlated tests
+      local module = nn.Sequential()
+      module:add(nn.SplitTable(1))
+      module:add(nn.MaskZero(recurrent))
+      if name == 'lstm' then module:add(nn.SelectTable(1)) end
+
+      local input = torch.rand(name == 'lstm' and 3 or 2, 5, 10)
+      local err = jac.testJacobian(module,input)
+      mytester:assertlt(err, precision, 'batch error on state for ' .. name)
+   end
+end
 
 function rnn.test(tests)
    mytester = torch.Tester()

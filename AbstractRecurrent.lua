@@ -38,6 +38,10 @@ function AbstractRecurrent:getStepModule(step)
    return recurrentModule
 end
 
+function AbstractRecurrent:maskZero()
+   self.recurrentModule = nn.MaskZero(self.recurrentModule)
+end
+
 function AbstractRecurrent:updateGradInput(input, gradOutput)      
    if self.onlineBackward then
       -- updateGradInput will be called in reverse order of time
