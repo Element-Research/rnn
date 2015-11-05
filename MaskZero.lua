@@ -16,9 +16,9 @@
 local MaskZero, parent = torch.class("nn.MaskZero", "nn.Decorator")
 
 function MaskZero:updateOutput(input)
-	self.output = self.module:updateOutput(input)
-
-	-- recurrent module input is always the first one
+   self.output = self.module:updateOutput(input)
+   
+   -- recurrent module input is always the first one
    local rmi = input[1]
    -- build mask once
    local vectorDim = rmi:dim() -- works for batch and non batch
