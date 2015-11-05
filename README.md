@@ -54,6 +54,13 @@ to obtain copies of the internal `recurrentModule`. These copies share
 `parameters` and `gradParameters` but each have their own `output`, `gradInput` 
 and any other intermediate states. 
 
+### maskZero() ###
+Decorates the implementing recurrent module with MaskZero. Recurrent module output
+will be zeroed for input data which is a zero vector. This makes possible to pad
+sequences with different lengths in the same batch with zero vectors.
+Warning: padding must come before any real data in the input sequence (padding
+after the real data is not supported and will yield unpredictable results without failing).
+
 ### [output] updateOutput(input) ###
 Forward propagates the input for the current step. The outputs or intermediate 
 states of the previous steps are used recurrently. This is transparent to the 
