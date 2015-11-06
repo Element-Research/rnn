@@ -40,6 +40,7 @@ end
 
 function AbstractRecurrent:maskZero(nInputDim)
    self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim)
+   return self
 end
 
 function AbstractRecurrent:updateGradInput(input, gradOutput)      
