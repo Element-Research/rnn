@@ -737,7 +737,7 @@ be decorated by their own `Sequencer`. The recent update, which introduced the
 Nevertheless, existing code shouldn't be affected by the change.
 
 ### remember([mode]) ###
-When `mode='both'` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
+When `mode='both'`, the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
 each call to `forward`, which is the default behavior of the class. 
 This behavior is only applicable to decorated AbstractRecurrent `modules`.
 Accepted values for argument `mode` are as follows :
