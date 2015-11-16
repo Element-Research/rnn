@@ -102,7 +102,7 @@ if opt.dropout then
    lm:insert(nn.Dropout(opt.dropoutProb), 1)
 end
 
-lookup = nn.LookupTable(ds:vocabularySize(), opt.hiddenSize[1], opt.accUpdate)
+lookup = nn.LookupTable(ds:vocabularySize(), opt.hiddenSize[1])
 lookup.maxOutNorm = -1 -- disable maxParamNorm on the lookup table
 lm:insert(lookup, 1)
 
@@ -154,7 +154,6 @@ train = dp.Optimizer{
    end,
    feedback = dp.Perplexity(),  
    sampler = dp.TextSampler{epoch_size = opt.trainEpochSize, batch_size = opt.batchSize}, 
-   acc_update = opt.accUpdate,
    progress = opt.progress
 }
 valid = dp.Evaluator{
