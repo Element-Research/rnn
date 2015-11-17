@@ -2321,6 +2321,49 @@ function rnntest.MaskZero()
    end
 end
 
+local function forwardbackward(module, criterion, input, expected)
+  local output = module:forward(input)
+  criterion:forward(output, expected)
+  module:zeroGradParameters()
+  module:backward(input, criterion:backward(output, expected))
+  module:updateParameters(1)
+  return output
+end
+
+function rnntest.LookupTableMaskZero()
+   local batchSize = math.random(5, 10)
+   local outputSize = math.random(5, 10)
+   local indexSize = batchSize
+
+   local m1 = nn.LookupTable(indexSize, outputSize)
+   local m2 = nn.LookupTableMaskZero(indexSize, outputSize)
+   m2.weight:narrow(1, 2, indexSize):copy(m1.weight)
+   local criterion = nn.MSECriterion()
+   -- Zero padding will change averaging
+   -- TODO create Criterion supporting padding
+   criterion.sizeAverage = false
+
+   -- verify that LookupTables have the same results (modulo zero padding)
+   -- through multiple backpropagations
+   for i=1, 10 do
+      local input1 = torch.randperm(batchSize)
+      local input2 = torch.zeros(batchSize + 2)
+      input2:narrow(1, 1, batchSize):copy(input1)
+      local expected1 = torch.rand(batchSize, outputSize)
+      local expected2 = torch.rand(batchSize + 2, outputSize)
+      expected2:narrow(1, 1, batchSize):copy(expected1)
+      local o1 = forwardbackward(m1, criterion, input1, expected1)
+      local o2 = forwardbackward(m2, criterion, input2, expected2)
+      -- output modulo zero index should be the same
+      mytester:assertlt(torch.norm(o1 - o2:narrow(1, 1, batchSize), 2), precision)
+      -- zero index should yield zero vector
+      mytester:assertlt(o2[batchSize + 1]:norm(2), precision)
+      mytester:assertlt(o2[batchSize + 2]:norm(2), precision)
+      -- weights should be equivalent
+      mytester:assertlt(torch.norm(m1.weight - m2.weight:narrow(1, 2, indexSize), 2), precision)
+  end
+end
+
 function rnn.test(tests)
    mytester = torch.Tester()
    mytester:add(rnntest)
