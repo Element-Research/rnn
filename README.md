@@ -22,6 +22,7 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
 
 Miscellaneous modules :
  * [MaskZero](#rnn.MaskZero) : zeroes the `output` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
+ * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
 
 Criterions used for handling sequential inputs and targets :
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
@@ -905,6 +906,18 @@ in the first Tensor of the `input`. In the case of an `input` table,
 the first Tensor is the first one encountered when doing a depth-first search.
 
 This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
+
+<a name='rnn.LookupTableMaskZero'></a>
+## LookupTableMaskZero ##
+This module extends `nn.LookupTable` to support zero indexes. Zero indexes are forwarded as zero tensors.
+
+```lua
+lt = nn.LookupTableMaskZero(nIndex, nOutput)
+```
+
+The `output` Tensor will have each row zeroed when the commensurate row of the `input` is a zero index. 
+
+This lookup table makes it possible to pad sequences with different lengths in the same batch with zero vectors.
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##

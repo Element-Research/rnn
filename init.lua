@@ -18,6 +18,7 @@ torch.include('rnn', 'ZeroGrad.lua')
 torch.include('rnn', 'LinearNoBias.lua')
 
 -- recurrent modules
+torch.include('rnn', 'LookupTableMaskZero.lua')
 torch.include('rnn', 'MaskZero.lua')
 torch.include('rnn', 'AbstractRecurrent.lua')
 torch.include('rnn', 'Recurrent.lua')
