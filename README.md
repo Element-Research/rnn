@@ -841,7 +841,7 @@ you can still measure the pseudo-likeliness of such a sequence (see [this](http:
 
 <a name='rnn.Repeater'></a>
 ## Repeater ##
-This Module is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) similar to [Sequencer].
+This Module is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) similar to [Sequencer](#rnn.Sequencer).
 It differs in that the sequence length is fixed before hand and the input is repeatedly forwarded 
 through the wrapped `module` to produce an output table of length `nStep`:
 ```lua
