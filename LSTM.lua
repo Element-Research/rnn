@@ -213,9 +213,7 @@ function LSTM:backwardThroughTime(timeStep, rho)
          local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
          local gradInputTable = recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
          gradInput, self.gradPrevOutput, gradCell = unpack(gradInputTable)
-         if step > 1 then
-            self.gradCells[step-1] = gradCell
-         end
+         self.gradCells[step-1] = gradCell
          table.insert(self.gradInputs, 1, gradInput)
          if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
          if self.userPrevCell then self.userGradPrevCell = gradCell end
@@ -255,9 +253,7 @@ function LSTM:updateGradInputThroughTime(timeStep, rho)
       local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
       local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
       gradInput, self.gradPrevOutput, gradCell = unpack(gradInputTable)
-      if step > 1 then
-         self.gradCells[step-1] = gradCell
-      end
+      self.gradCells[step-1] = gradCell
       table.insert(self.gradInputs, 1, gradInput)
       if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
       if self.userPrevCell then self.userGradPrevCell = gradCell end
