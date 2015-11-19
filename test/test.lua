@@ -2318,6 +2318,34 @@ function rnntest.MaskZero()
       local input = torch.rand(name == 'lstm' and 3 or 2, 5, 10)
       local err = jac.testJacobian(module,input)
       mytester:assertlt(err, precision, 'batch error on state for ' .. name)
+
+      -- full test on convolution and linear modules
+      local module = nn.Sequential() :add( nn.ParallelTable() :add(nn.SpatialConvolution(1,2,3,3)) :add(nn.Linear(100,2)) )
+      --module = module:float()
+      local batchNum = 5
+      local input = {torch.rand(batchNum,1,10,10), torch.rand(batchNum,100)}
+      local zeroRowNum = 2
+      for i = 1,#input do
+         input[i]:narrow(1,1,zeroRowNum):zero()
+      end
+      --module = nn.MaskZero(module, 3)
+      local output = module:forward(input)
+      for i = 1,#input do
+         for j = 1,batchNum do
+            local rmi = input[i][j]:view(-1) -- collapse dims
+            local vectorDim = rmi:dim()
+            local rn = rmi.new()
+            rn:norm(rmi, 2, vectorDim)
+            local err = rn[1]
+            if j<=zeroRowNum then
+               -- check zero outputs
+               mytester:assertlt(err, precision, 'batch ' ..i.. ':' ..j.. ' error on state for ' .. name)
+            else
+               -- check non-zero outputs
+               mytester:assertgt(err, precision, 'batch ' ..i.. ':' ..j.. ' error on state for ' .. name)
+            end
+         end
+      end
    end
 end
 
