@@ -544,7 +544,7 @@ Basically, the input, forget and output gates, as well as the hidden state are c
 <a name='rnn.Recursor'></a>
 ## Recursor ##
 
-This module recorates a `module` to be used within an `AbstractSequencer` instance.
+This module decorates a `module` to be used within an `AbstractSequencer` instance.
 It does this by making the decorated module conform to the `AbstractRecurrent` interface,
 which like the `LSTM` and `Recurrent` classes, this class inherits. 
 
@@ -557,7 +557,7 @@ decorator will create a `stepClone()` of the decorated `module`.
 So for each time-step, it clones the `module`. Both the clone and 
 original share parameters and gradients w.r.t. parameters. However, for 
 modules that already conform to the `AbstractRecurrent` interface, 
-the clone and original module are one in the same (i.e. no clone).
+the clone and original module are one and the same (i.e. no clone).
 
 Examples :
 
