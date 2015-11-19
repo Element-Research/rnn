@@ -35,6 +35,13 @@ function MaskZero:recursiveMask(output, input, mask)
       assert(torch.isTensor(input))
       output = torch.isTensor(output) and output or input.new()
    	
+      -- make sure mask has the same dimenion as the input tensor
+      local inputSize = input:size():fill(1)
+      if input:dim() - 1 == self.nInputDim then
+         inputSize[1] = input:size(1)
+      end
+      mask:resize(inputSize)
+      -- build mask
       local zeroMask = mask:expandAs(input)
       output:resizeAs(input):copy(input)
       output:maskedFill(zeroMask, 0)
