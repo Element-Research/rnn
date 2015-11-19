@@ -507,7 +507,7 @@ The actual implementation corresponds to the following algorithm:
 i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + W[c->i]c[t−1] + b[1->i])      (1)
 f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + W[c->f]c[t−1] + b[1->f])      (2)
 z[t] = tanh(W[x->c]x[t] + W[h->c]h[t−1] + b[1->c])                   (3)
-c[t] = f[t]c[t−1] + i[t]z(t)                                         (4)
+c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
 o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 h[t] = o[t]tanh(c[t])                                                (6)
 ```
