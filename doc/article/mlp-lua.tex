@@ -1,0 +1,10 @@
+% Generator: GNU source-highlight, by Lorenzo Bettini, http://www.gnu.org/software/src-highlite
+\noindent
+\mbox{}mlp\ =\ nn.\textbf{Sequential}() \\
+\mbox{}\textbf{mlp:add}(nn.\textbf{Convert}(\texttt{'bchw'},\ \texttt{'bf'}))\ \textit{-\/-\ collapse\ 3D\ to\ 1D} \\
+\mbox{}\textbf{mlp:add}(nn.\textbf{Linear}(1*28*28,\ 200)) \\
+\mbox{}\textbf{mlp:add}(nn.\textbf{Tanh}()) \\
+\mbox{}\textbf{mlp:add}(nn.\textbf{Linear}(200,\ 200)) \\
+\mbox{}\textbf{mlp:add}(nn.\textbf{Tanh}())\  \\
+\mbox{}\textbf{mlp:add}(nn.\textbf{Linear}(200,\ 10)) \\
+\mbox{}\textbf{mlp:add}(nn.\textbf{LogSoftMax}())\ \textit{-\/-\ for\ classification\ problems}

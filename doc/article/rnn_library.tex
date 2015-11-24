@@ -1,11 +1,10 @@
 \documentclass{article} % For LaTeX2e
 \usepackage{nips15submit_e,times}
-\usepackage{hyperref}
-\usepackage{url}
+%\usepackage[bookmarks=false]{hyperref}
+%\usepackage{url}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \providecommand{\inlinecode}[1]{\texttt{#1}}
-\usepackage{minted}
 %\documentstyle[nips14submit_09,times,art10]{article} % For LaTeX 2.09
 
 
@@ -128,45 +127,20 @@ and then training a the resulting neural network on some data.
 As an example, a Multi-Layer Perceptron (MLP) with 2 layers of hidden units can be 
 assembled as such:
 
-\begin{minted}{lua}
-mlp = nn.Sequential()
-mlp:add(nn.Convert('bchw', 'bf')) -- collapse 3D to 1D
-mlp:add(nn.Linear(1*28*28, 200))
-mlp:add(nn.Tanh())
-mlp:add(nn.Linear(200, 200))
-mlp:add(nn.Tanh()) 
-mlp:add(nn.Linear(200, 10))
-mlp:add(nn.LogSoftMax()) -- for classification problems
-\end{minted}
+\input{mlp-lua}
 
 In the above example, the \inlinecode{Sequential} is a \inlinecode{Container} subclass.
 A call to \inlinecode{output = mlp:forward(input)} will iteratively transform the \inlinecode{input}
 one module at a time, in order that these were added to the composite.
 
-To fit the \inlinecode{mlp} module to a dataset, the Negative Log-Likelihood (NLL) criterion could be used:
+To train the \inlinecode{mlp} module on a dataset, 
+the Negative Log-Likelihood (NLL) criterion could be used:
 
-\begin{minted}{lua}
-nll = nn.ClassNLLCriterion()
-\end{minted}
+\input{nll-lua}
 
-The actual training loop would look somewhat like this :
-\begin{minted}{lua}
-function trainEpoch(module, criterion, inputs, targets)
-   for i=1,inputs:size(1) do
-      local idx = math.random(1,inputs:size(1))
-      local input, target = inputs[idx], targets:narrow(1,idx,1)
-      -- forward
-      local output = module:forward(input)
-      local loss = criterion:forward(output, target)
-      -- backward
-      local gradOutput = criterion:backward(output, target)
-      module:zeroGradParameters()
-      local gradInput = module:backward(input, gradOutput)
-      -- update
-      module:updateParameters(0.1) -- W = W - 0.1*dL/dW
-   end
-end
-\end{minted}
+The actual training loop would usually be a variation of the following :
+
+\input{trainEpoch-lua}
 
 The above \inlinecode{trainEpoch} function could be used to train the
 \inlinecode{mlp} module using the \inlinecode{nll} criterion
@@ -208,40 +182,7 @@ As a first iteration, we wanted to be able to forward a sequence through a \inli
 module by making successive calls to its \inlinecode{forward} method\footnote{For reasons of backwards 
 compatibility this use case is still supported} :
 
-\begin{minted}{lua}
-
--- backpropagate every 5 time steps
-rho = 5
-batchSize = 3
-inputSize = 10
-outputSize = 10
-
--- generate some dummy inputs and gradOutputs sequences
-inputs, gradOutputs = {}, {}
-for step=1,rho do
-   inputs[step] = torch.randn(batchSize,inputSize)
-   gradOutputs[step] = torch.randn(batchSize,inputSize)
-end
-
--- an AbstractRecurrent instance
-rnn = nn.Recurrent(
-   hiddenSize, -- size of the input layer
-   nn.Linear(inputSize,outputSize), -- input layer
-   nn.Linear(outputSize, outputSize), -- recurrent layer
-   nn.Sigmoid(), -- transfer function
-   rho -- maximum number of time-steps for BPTT
-)
-
--- feed-forward and backpropagate through time like this :
-for step=1,rho do
-   rnn:forward(inputs[step])
-   rnn:backward(inputs[step], gradOutputs[step])
-end
-rnn:backwardThroughTime() -- call backward on the internal modules
-gradInputs = rnn.gradInputs
-rnn:updateParameters(0.1)
-rnn:forget() -- resets the time-step counter
-\end{minted}
+\input{rnn-example-lua}
 
 As can be seen by the above example, the original design allowed for 
 the call to \inlinecode{forward} of each element in the sequence to 
@@ -272,9 +213,7 @@ The \inlinecode{Sequencer} module is a decorator used to abstract
 away the intricacies of \inlinecode{AbstractRecurrent} modules
 like \inlinecode{Recurrence}, \inlinecode{Recurrent} and \inlinecode{LSTM}. 
 
-\begin{minted}{lua}
-seq = nn.Sequencer(module)
-\end{minted}
+\input{sequencer-lua}
 
 While an \inlinecode{AbstractRecurrent} instance requires a sequence to be presented one element at a time, 
 each with its own call to \inlinecode{forward} (and \inlinecode{backward}), 
@@ -286,19 +225,11 @@ other such \inlinecode{AbstractRecurrent} specific methods.
 For example, \inlinecode{rnn}, an \inlinecode{AbstractRecurrent} instance, 
 can forward an input sequence one \inlinecode{forward} call at a time:
 
-\begin{minted}{lua}
-input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
-rnn:forward(input[1])
-rnn:forward(input[2])
-rnn:forward(input[3])
-\end{minted}
+\input{ff-lua}
 
 Equivalently, we can use a \inlinecode{Sequencer} to forward the entire \inlinecode{input} sequence at once:
 
-\begin{minted}{lua}
-seq = nn.Sequencer(rnn)
-seq:forward(input)
-\end{minted}
+\input{ff2-lua}
 
 Furthermore, the \inlinecode{Sequencer} manages the \inlinecode{backward} and 
 \inlinecode{backwardThroughTime} calls to the decorated module internally. 
@@ -315,14 +246,7 @@ instance could only either decorate a recurrent instance
 or a non-recurrent instance.
 This was not an imposing constraint as it can be subverted by stacking \inlinecode{Sequencer} instances:
 
-\begin{minted}{lua}
-srnn = nn.Sequential()
-   :add(nn.Sequencer(nn.Linear(inputSize, hiddenSize)))
-   :add(nn.Sequencer(nn.LSTM(hiddenSize, hiddenSize)))
-   :add(nn.Sequencer(nn.LSTM(hiddenSize, hiddenSize)))
-   :add(nn.Sequencer(nn.Linear(hiddenSize, outputSize)))
-   :add(nn.Sequencer(nn.LogSoftMax()))
-\end{minted}
+\input{srnn-lua}
 
 The above was actually the use-case that brought us to this second iteration of the code base. 
 The objective was to build the stacked networks of LSTM layers outlined in \cite{zaremba2014recurrent}.
@@ -334,9 +258,7 @@ Long-Short Term Memory units\cite{hochreiter1997long}.
 We used the LSTM in \cite{graves2013speech} as a blueprint for this module as it was the most concise. 
 Yet it is also the vanilla LSTM described in \cite{greff2015lstm}.
 
-\begin{minted}{lua}
-module = nn.LSTM(inputSize, outputSize, [rho])
-\end{minted}
+\input{lstm-lua}
 
 The implementation of the \inlinecode{forward} method corresponds to the following algorithm:
 
@@ -368,9 +290,7 @@ which consists mostly of \inlinecode{output} and \inlinecode{gradInput} attribut
 
 \subsubsection{Repeater}
 
-\begin{minted}{lua}
-r = nn.Repeater(module, nStep)
-\end{minted}
+\input{repeater-lua}
 
 While the \inlinecode{Sequencer} applied a decorated module to an \inlinecode{input} sequence (a table), 
 the \inlinecode{Repeater} repeatedly applies a module to a single unchanging \inlinecode{input}. 
@@ -392,9 +312,7 @@ module.
 This module is similar to the \inlinecode{Repeater} module in that it recursively applies 
 an \inlinecode{rnn} module to a fixed \inlinecode{input}, which in this case is an image.
 
-\begin{minted}{lua}
-ram = nn.RecurrentAttention(rnn, action, nStep, hiddenSize)
-\end{minted}
+\input{ram-lua}
 
 The \inlinecode{rnn} argument is an AbstractRecurrent instance
 which expects a table \inlinecode{\{x, z\}} as \inlinecode{input} 
@@ -432,9 +350,7 @@ This module decorates another \inlinecode{module} to allow it to be used within 
 It does this by making the decorated \inlinecode{module} conform to the \inlinecode{AbstractRecurrent} interface, 
 which like the \inlinecode{LSTM} and \inlinecode{Recurrent} classes, this class inherits.
 
-\begin{minted}{lua}
-rec = nn.Recursor(module[, rho])
-\end{minted}
+\input{rec-lua}
 
 For each successive call to \inlinecode{updateOutput} (i.e. \inlinecode{forward}), 
 this decorator will call \inlinecode{stepClone} on the decorated \inlinecode{module}. 
@@ -444,47 +360,22 @@ As usual, both the clone and original share parameters and gradients w.r.t. para
 
 So in the second iteration, to stack \inlinecode{LSTMs}, two \inlinecode{Sequencers} were required :
 
-\begin{minted}{lua}
-lstm = nn.Sequential()
-   :add(nn.Sequencer(nn.LSTM(100,100)))
-   :add(nn.Sequencer(nn.LSTM(100,100)))
-\end{minted}
+\input{rec2-lua}
 
 Using a Recursor, the same model can be assembled with a single \inlinecode{Sequencer} :
 
-\begin{minted}{lua}
-lstm = nn.Sequencer(
-   nn.Recursor(
-      nn.Sequential()
-         :add(nn.LSTM(100,100))
-         :add(nn.LSTM(100,100))
-      )
-   )
-\end{minted}
+\input{rec3-lua}
 
 Actually, the \inlinecode{Sequencer} will wrap any non-recurrent module into a \inlinecode{Recursor} automatically.
 So the above model can be further simplified :
 
-\begin{minted}{lua}
-lstm = nn.Sequencer(
-   nn.Sequential()
-      :add(nn.LSTM(100,100))
-      :add(nn.LSTM(100,100))
-   )
-\end{minted}
+\input{rec4-lua}
 
 A non-recurrent instance like \inlinecode{Linear} can also be added between both \inlinecode{LSTMs}. 
 In this case, a \inlinecode{Linear} will be cloned (and have its parameters shared) for each time-step, 
 while the \inlinecode{LSTMs} will handle cloning internally :
 
-\begin{minted}{lua}
-lstm = nn.Sequencer(
-   nn.Sequential()
-      :add(nn.LSTM(100,100))
-      :add(nn.Linear(100,100))
-      :add(nn.LSTM(100,100))
-   )
-\end{minted}
+\input{rec5-lua}
 
 To recapitulate, recurrent instances are expected to manage time-steps internally. 
 Non-recurrent instances can be wrapped by a \inlinecode{Recursor} to yield the same behavior.
@@ -502,9 +393,7 @@ Another \inlinecode{AbstractRecurrent} subclass, this module
 is an extremely general container for implementing recurrences that feedback the previous \inlinecode{output} 
 alongside the current {input} to the \inlinecode{Recurrence}. 
 
-\begin{minted}{lua}
-rnn = nn.Recurrence(module, outputSize, nInputDim, [rho])
-\end{minted}
+\input{recurrence-lua}
 
 Unlike the older \inlinecode{Recurrent} module, \inlinecode{Recurrence} only 
 requires a single \inlinecode{module} which implements the actual 
@@ -519,39 +408,12 @@ the recurrent layer (like \inlinecode{LSTM}, unlike \inlinecode{Recurrent}).
 
 As an example, let us combine \inlinecode{Sequencer} and \inlinecode{Recurrence} to build a Simple RNN for language modeling :
 
-\begin{minted}{lua}
-rho = 5
-hiddenSize = 10
-nIndex = 10000
-
--- recurrent module
-rm = nn.Sequential()
-   :add(nn.ParallelTable()
-      :add(nn.LookupTable(nIndex, hiddenSize))
-      :add(nn.Linear(hiddenSize, hiddenSize)))
-   :add(nn.CAddTable())
-   :add(nn.Sigmoid())
-
-rnn = nn.Sequencer(
-   nn.Sequential()
-      :add(nn.Recurrence(rm, hiddenSize, 1))
-      :add(nn.Linear(hiddenSize, nIndex))
-      :add(nn.LogSoftMax())
-)
-\end{minted}
+\input{rnnlm-lua}
 
 Both the \inlinecode{input} and \inlinecode{output} of the \inlinecode{rnn} module will 
 be a table of tensors. For example :
 
-\begin{minted}{lua}
-batchSize = 32
-input = {}
-for i=1,rho do
-   table.insert(input, torch.Tensor(batchSize):random(1,nIndex))
-end
-output = rnn:forward(input)
-assert(#output == #input)
-\end{minted}
+\input{lm-lua}
 
 RNNs require sequential data. In the above example, the \inlinecode{input} is a sequence 
 of \inlinecode{LookupTable} indices. If the task is to predict the next word given 
@@ -565,27 +427,7 @@ only on the most recent \inlinecode{output(t)} of the \inlinecode{rnn}.
 For example if we want to do sentiment analysis \cite{pang2008opinion}, 
 we could use something like the following :
 
-\begin{minted}{lua}
-rho = 5
-hiddenSize = 100
-nIndex = 10000
-nSentiment = 10
-
--- recurrent module
-rm = nn.Sequential()
-   :add(nn.ParallelTable()
-      :add(nn.LookupTable(nIndex, hiddenSize))
-      :add(nn.Linear(hiddenSize, hiddenSize)))
-   :add(nn.CAddTable())
-   :add(nn.Sigmoid())
-
-rnn = nn.Sequential()
-   :add(nn.Sequencer(nn.Recurrence(rm, hiddenSize, 1)))
-   :add(nn.SelectTable(-1)) --select last element
-   :add(nn.Linear(hiddenSize, nSentiment))
-   :add(nn.LogSoftMax())
-)
-\end{minted}
+\input{rnn2-lua}
 
 \section{Development Principles}
 

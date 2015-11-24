@@ -1,0 +1,21 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}
+\BOOKMARK [1][-]{section.2}{Torch}{}
+\BOOKMARK [2][-]{subsection.2.1}{torch7}{section.2}
+\BOOKMARK [2][-]{subsection.2.2}{nn}{section.2}
+\BOOKMARK [1][-]{section.3}{Package Components}{}
+\BOOKMARK [2][-]{subsection.3.1}{First Iteration : Recurrent module}{section.3}
+\BOOKMARK [2][-]{subsection.3.2}{Second Iteration : Sequencer and LSTM}{section.3}
+\BOOKMARK [3][-]{subsubsection.3.2.1}{Sequencer}{subsection.3.2}
+\BOOKMARK [3][-]{subsubsection.3.2.2}{LSTM}{subsection.3.2}
+\BOOKMARK [3][-]{subsubsection.3.2.3}{Repeater}{subsection.3.2}
+\BOOKMARK [2][-]{subsection.3.3}{Third Iteration}{section.3}
+\BOOKMARK [3][-]{subsubsection.3.3.1}{RecurrentAttention}{subsection.3.3}
+\BOOKMARK [3][-]{subsubsection.3.3.2}{Recursor}{subsection.3.3}
+\BOOKMARK [3][-]{subsubsection.3.3.3}{Recurrence}{subsection.3.3}
+\BOOKMARK [1][-]{section.4}{Development Principles}{}
+\BOOKMARK [2][-]{subsection.4.1}{Unit Testing}{section.4}
+\BOOKMARK [2][-]{subsection.4.2}{Backward Compatibility}{section.4}
+\BOOKMARK [2][-]{subsection.4.3}{Supporting Material}{section.4}
+\BOOKMARK [2][-]{subsection.4.4}{Core Extensions}{section.4}
+\BOOKMARK [1][-]{section.5}{Results}{}
+\BOOKMARK [1][-]{section.6}{Conclusion}{}

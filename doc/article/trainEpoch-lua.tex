@@ -1,0 +1,17 @@
+% Generator: GNU source-highlight, by Lorenzo Bettini, http://www.gnu.org/software/src-highlite
+\noindent
+\mbox{}\textbf{function}\ \textbf{trainEpoch}(module,\ criterion,\ inputs,\ targets) \\
+\mbox{}\ \ \ \textbf{for}\ i=1,\textbf{inputs:size}(1)\ \textbf{do} \\
+\mbox{}\ \ \ \ \ \ \textbf{local}\ idx\ =\ math.\textbf{random}(1,\textbf{inputs:size}(1)) \\
+\mbox{}\ \ \ \ \ \ \textbf{local}\ input,\ target\ =\ inputs[idx],\ \textbf{targets:narrow}(1,idx,1) \\
+\mbox{}\ \ \ \ \ \ \textit{-\/-\ forward} \\
+\mbox{}\ \ \ \ \ \ \textbf{local}\ output\ =\ \textbf{module:forward}(input) \\
+\mbox{}\ \ \ \ \ \ \textbf{local}\ loss\ =\ \textbf{criterion:forward}(output,\ target) \\
+\mbox{}\ \ \ \ \ \ \textit{-\/-\ backward} \\
+\mbox{}\ \ \ \ \ \ \textbf{local}\ gradOutput\ =\ \textbf{criterion:backward}(output,\ target) \\
+\mbox{}\ \ \ \ \ \ \textbf{module:zeroGradParameters}() \\
+\mbox{}\ \ \ \ \ \ \textbf{local}\ gradInput\ =\ \textbf{module:backward}(input,\ gradOutput) \\
+\mbox{}\ \ \ \ \ \ \textit{-\/-\ update} \\
+\mbox{}\ \ \ \ \ \ \textbf{module:updateParameters}(0.1)\ \textit{-\/-\ W\ =\ W\ -\ 0.1*dL/dW} \\
+\mbox{}\ \ \ \textbf{end} \\
+\mbox{}\textbf{end}
