@@ -9,6 +9,7 @@
 %\documentstyle[nips14submit_09,times,art10]{article} % For LaTeX 2.09
 
 
+
 \title{rnn : Recurrent Library for Torch7}
 
 
@@ -18,7 +19,7 @@ Element Inc.\\
 New York, NY \\
 \texttt{nick@nikopia.org} \\
 \And
-Sagar Wagmar \\
+Sagar Waghmare \\
 Element Inc.\\
 New York, NY \\
 \texttt{sw@discoverelement.com} \\
@@ -280,7 +281,7 @@ each with its own call to \inlinecode{forward} (and \inlinecode{backward}),
 the \inlinecode{Sequencer} forwards an entire \inlinecode{input} sequence (a table) 
 to yield the resulting \inlinecode{output} sequence (a table of the same length). 
 It also takes care of calling \inlinecode{forget}, \inlinecode{backwardOnline} and 
-other such \inlinecode{AbstractRecurrent}-specific methods.
+other such \inlinecode{AbstractRecurrent} specific methods.
 
 For example, \inlinecode{rnn}, an \inlinecode{AbstractRecurrent} instance, 
 can forward an input sequence one \inlinecode{forward} call at a time:
@@ -461,7 +462,7 @@ lstm = nn.Sequencer(
    )
 \end{minted}
 
-Actually, the \inlinecode{Sequencer} will wrap any non-recurrent module automatically.
+Actually, the \inlinecode{Sequencer} will wrap any non-recurrent module into a \inlinecode{Recursor} automatically.
 So the above model can be further simplified :
 
 \begin{minted}{lua}
