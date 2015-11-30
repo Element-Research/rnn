@@ -9,7 +9,7 @@ require 'rnn'
 
 torch.manualSeed(123)
 
-version = 1
+version = 1.1 --minibatch training
 
 --[[ Forward coupling: Copy encoder cell and output to decoder LSTM ]]--
 function forwardConnect(encLSTM, decLSTM)
@@ -31,12 +31,13 @@ function main()
   opt.inputSeqLen = 3 -- length of the encoded sequence
 
   -- Some example data
-  local encInSeq, decInSeq, decOutSeq = torch.Tensor({1,2,3}), torch.Tensor({1,2,3,4}), torch.Tensor({2,3,4,1})
-
+  local encInSeq, decInSeq, decOutSeq = torch.Tensor({{1,2,3},{3,2,1}}), torch.Tensor({{1,2,3,4},{4,3,2,1}}), torch.Tensor({{2,3,4,1},{1,2,4,3}})
+  decOutSeq = nn.SplitTable(2):forward(decOutSeq)
+  
   -- Encoder
   local enc = nn.Sequential()
   enc:add(nn.LookupTable(opt.vocabSz, opt.hiddenSz))
-  enc:add(nn.SplitTable(1))
+  enc:add(nn.SplitTable(2)) --Split along the second axis, where the first axis is the mini-batch
   local encLSTM = nn.LSTM(opt.hiddenSz, opt.hiddenSz)
   enc:add(nn.Sequencer(encLSTM))
   enc:add(nn.SelectTable(-1))
@@ -44,7 +45,7 @@ function main()
   -- Decoder
   local dec = nn.Sequential()
   dec:add(nn.LookupTable(opt.vocabSz, opt.hiddenSz))
-  dec:add(nn.SplitTable(1))
+  dec:add(nn.SplitTable(2)) --Split along the second axis, where the first axis is the mini-batch
   local decLSTM = nn.LSTM(opt.hiddenSz, opt.hiddenSz)
   dec:add(nn.Sequencer(decLSTM))
   dec:add(nn.Sequencer(nn.Linear(opt.hiddenSz, opt.vocabSz)))
