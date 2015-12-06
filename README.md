@@ -9,7 +9,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
   * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
-* [GRU](#rnn.GRU) : Gated Recurrent Units module;
+ * [GRU](#rnn.GRU) : Gated Recurrent Units module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
  * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
 
@@ -551,7 +551,7 @@ References :
 
 This is an implementation of Gated Recurrent Units module. 
 
-The `nn.GRU(inputSize, outputSize, [rho])` constructor takes 3 arguments likewise `nn.LSTM`.:
+The `nn.GRU(inputSize, outputSize, [rho])` constructor takes 3 arguments likewise `nn.LSTM`:
  * `inputSize` : a number specifying the size of the input;
  * `outputSize` : a number specifying the size of the output;
  * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999.
@@ -566,6 +566,8 @@ h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])            (3)
 s[t] = (1-z[t])h[t] + z[t]h[t-1]                                     (4)
 ```
 where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step, `b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input and `s[t]` is the output of the module (eq. 4). Note that the cell is not found, though `nn.LSTM` has one.
+
+![GRU-BENCHMARK](doc/image/gru-benchmark.png) 
 
 <a name='rnn.Recursor'></a>
 ## Recursor ##
