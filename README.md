@@ -9,6 +9,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
   * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
+* [GRU](#rnn.GRU) : Gated Recurrent Units module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
  * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
 
@@ -34,7 +35,7 @@ Criterions used for handling sequential inputs and targets :
 
 The following are example training scripts using this package :
 
-  * [RNN/LSTM](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
+  * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [RNN/LSTM/BRNN/BLSTM training](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
   * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7;
@@ -42,7 +43,7 @@ The following are example training scripts using this package :
   
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
-An abstract class inherited by [Recurrent](#rnn.Recurrent) and [LSTM](#rnn.LSTM).
+An abstract class inherited by [Recurrent](#rnn.Recurrent), [LSTM](#rnn.LSTM) and [GRU](#rnn.GRU).
 The constructor takes a single argument :
 ```lua
 rnn = nn.AbstractRecurrent(rho)
@@ -540,6 +541,31 @@ Note that we recommend decorating the `LSTM` with a `Sequencer`
 
 A faster version of the [LSTM](#rnn.LSTM). 
 Basically, the input, forget and output gates, as well as the hidden state are computed at one fell swoop.
+
+<a name='rnn.GRU'></a>
+## GRU ##
+
+References :
+ * A. [Learning Phrase Representations Using Rnn Encoder- Decoder For Statistical Machine Translation.](http://arxiv.org/pdf/1406.1078.pdf)
+ * B. [Implementing a GRU/LSTM RNN with Python and Theano](http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-grulstm-rnn-with-python-and-theano/)
+
+This is an implementation of Gated Recurrent Units module. 
+
+The `nn.GRU(inputSize, outputSize, [rho])` constructor takes 3 arguments likewise `nn.LSTM`.:
+ * `inputSize` : a number specifying the size of the input;
+ * `outputSize` : a number specifying the size of the output;
+ * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999.
+
+![GRU](http://d3kbpzbmcynnmx.cloudfront.net/wp-content/uploads/2015/10/Screen-Shot-2015-10-23-at-10.36.51-AM.png) 
+
+The actual implementation corresponds to the following algorithm:
+```lua
+z[t] = σ(W[x->z]x[t] + W[h->z]s[t−1] + W[c->z]c[t−1] + b[1->z])      (1)
+r[t] = σ(W[x->r]x[t] + W[h->r]s[t−1] + W[c->r]c[t−1] + b[1->r])      (2)
+h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])            (3)
+s[t] = (1-z[t])h[t] + z[t]h[t-1]                                     (4)
+```
+where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step, `b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input and `s[t]` is the output of the module (eq. 4). Note that the cell is not found, though `nn.LSTM` has one.
 
 <a name='rnn.Recursor'></a>
 ## Recursor ##
