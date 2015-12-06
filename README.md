@@ -1,7 +1,7 @@
 # rnn: recurrent neural networks #
 
 This is a Recurrent Neural Network library that extends Torch's nn. 
-You can use it to build RNNs, LSTMs, BRNNs, BLSTMs, and so forth and so on.
+You can use it to build RNNs, LSTMs, GRUs, BRNNs, BLSTMs, and so forth and so on.
 This library includes documentation for the following objects:
 
 Modules that consider successive calls to `forward` as different time-steps in a sequence :
@@ -38,9 +38,24 @@ The following are example training scripts using this package :
   * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [RNN/LSTM/BRNN/BLSTM training](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
-  * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7;
   * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) shows you how to couple encoder and decoder `LSTMs` for sequence-to-sequence networks.
+
+External resources :
   
+  * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7;
+  * [ConvLSTM](https://github.com/viorik/ConvLSTM) is a repository for training a [Spatio-temporal video autoencoder with differentiable memory](http://arxiv.org/abs/1511.06309).
+  * An [time series example](https://github.com/rracinskij/rnntest01/blob/master/rnntest01.lua) for univariate timeseries prediction.
+  
+## Citation ##
+
+If you use __rnn__ in your work, we'd really appreciate it if you could cite the following paper:
+
+Léonard, Nicholas, Sagar Waghmare, and Yang Wang. [rnn: Recurrent Library for Torch.](http://arxiv.org/abs/1511.07889) arXiv preprint arXiv:1511.07889 (2015).
+
+Any significant contributor to the library will also get added as an author to the paper.
+We define [significant contributor](https://github.com/Element-Research/rnn/graphs/contributors) 
+as anyone who added added 300 lines of code to the library.
+
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
 An abstract class inherited by [Recurrent](#rnn.Recurrent), [LSTM](#rnn.LSTM) and [GRU](#rnn.GRU).
@@ -567,15 +582,20 @@ r[t] = σ(W[x->r]x[t] + W[s->r]s[t−1] + b[1->r])            (2)
 h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 ```
-where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step, `b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input and `s[t]` is the output of the module (eq. 4). Note that the cell is not found, though `nn.LSTM` has one.
+where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step, `b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input and `s[t]` is the output of the module (eq. 4). Note that unlike the [LSTM](#rnn.LSTM), the GRU has no cells.
 
-For #63, Benchmark on `PennTreeBank` dataset using `recurrent-language-model.lua`. It slightly outperfomed `nn.FastLSTM`, however, since LSTMs have more parameters than GRUs, the dataset larger than `PennTreeBank` might change the performance result. Don't hasty judge on it and refer C and D.
+The GRU was benchmark on `PennTreeBank` dataset using [recurrent-language-model.lua](examples/recurrent-language-model.lua) script. 
+It slightly outperfomed `FastLSTM`, however, since LSTMs have more parameters than GRUs, 
+the dataset larger than `PennTreeBank` might change the performance result. 
+Don't be too hasty to judge on which one is the better of the two (see Ref. C and D).
 
+```
                 Memory   examples/s
     FastLSTM      176M        16.5K 
     GRU            92M        15.8K
+```
 
-\* __Memory__ is measured by the size of `dp.Experiment` save file. __examples/s__ is measured by the training speed at 1 epoch, so, it may have a disk IO bias.
+__Memory__ is measured by the size of `dp.Experiment` save file. __examples/s__ is measured by the training speed at 1 epoch, so, it may have a disk IO bias.
 
 ![GRU-BENCHMARK](doc/image/gru-benchmark.png) 
 
