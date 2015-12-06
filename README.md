@@ -569,6 +569,14 @@ s[t] = (1-z[t])h[t] + z[t]h[t-1]                                     (4)
 ```
 where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step, `b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input and `s[t]` is the output of the module (eq. 4). Note that the cell is not found, though `nn.LSTM` has one.
 
+For #63, Benchmark on `PennTreeBank` dataset using `recurrent-language-model.lua`. It slightly outperfomed `nn.FastLSTM`, however, since LSTMs have more parameters than GRUs, the dataset larger than `PennTreeBank` might change the performance result. Don't hasty judge on it and refer C and D.
+
+                Memory   examples/s
+    FastLSTM      176M        16.5K 
+    GRU            92M        15.8K
+
+\* __Memory__ is measured by the size of `dp.Experiment` save file. __examples/s__ is measured by the training speed at 1 epoch, so, it may have a disk IO bias.
+
 ![GRU-BENCHMARK](doc/image/gru-benchmark.png) 
 
 <a name='rnn.Recursor'></a>
