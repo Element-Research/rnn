@@ -1,0 +1,8 @@
+% Generator: GNU source-highlight, by Lorenzo Bettini, http://www.gnu.org/software/src-highlite
+\noindent
+\mbox{}rnn\ =\ nn.\textbf{Sequential}() \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Sequencer}(nn.\textbf{Linear}(inputSize,\ hiddenSize))) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Sequencer}(nn.\textbf{LSTM}(hiddenSize,\ hiddenSize))) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Sequencer}(nn.\textbf{LSTM}(hiddenSize,\ hiddenSize))) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Sequencer}(nn.\textbf{Linear}(hiddenSize,\ outputSize))) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Sequencer}(nn.\textbf{LogSoftMax}()))

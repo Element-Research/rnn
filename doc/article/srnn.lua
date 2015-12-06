@@ -1,0 +1,6 @@
+rnn = nn.Sequential()
+   :add(nn.Sequencer(nn.Linear(inputSize, hiddenSize)))
+   :add(nn.Sequencer(nn.LSTM(hiddenSize, hiddenSize)))
+   :add(nn.Sequencer(nn.LSTM(hiddenSize, hiddenSize)))
+   :add(nn.Sequencer(nn.Linear(hiddenSize, outputSize)))
+   :add(nn.Sequencer(nn.LogSoftMax()))

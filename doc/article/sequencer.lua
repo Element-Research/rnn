@@ -1,0 +1,1 @@
+seq = nn.Sequencer(module)
