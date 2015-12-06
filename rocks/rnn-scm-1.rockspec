@@ -9,7 +9,7 @@ source = {
 description = {
    summary = "A Recurrent Neural Network library that extends Torch's nn",
    detailed = [[
-A library to build RNNs, LSTMs, BRNNs, BLSTMs, and so forth and so on.
+A library to build RNNs, LSTMs, GRUs, BRNNs, BLSTMs, and so forth and so on.
    ]],
    homepage = "https://github.com/Element-Research/rnn",
    license = "BSD"
