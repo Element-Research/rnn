@@ -562,10 +562,10 @@ The `nn.GRU(inputSize, outputSize, [rho])` constructor takes 3 arguments likewis
 
 The actual implementation corresponds to the following algorithm:
 ```lua
-z[t] = σ(W[x->z]x[t] + W[s->z]s[t−1] + b[1->z])      (1)
-r[t] = σ(W[x->r]x[t] + W[s->r]s[t−1] + b[1->r])      (2)
-h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])            (3)
-s[t] = (1-z[t])h[t] + z[t]s[t-1]                                     (4)
+z[t] = σ(W[x->z]x[t] + W[s->z]s[t−1] + b[1->z])            (1)
+r[t] = σ(W[x->r]x[t] + W[s->r]s[t−1] + b[1->r])            (2)
+h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
+s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 ```
 where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step, `b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input and `s[t]` is the output of the module (eq. 4). Note that the cell is not found, though `nn.LSTM` has one.
 
