@@ -453,6 +453,109 @@ function rnntest.FastLSTM()
    end
 end
 
+function rnntest.GRU()
+   local batchSize = math.random(1,2)
+   local inputSize = math.random(3,4)
+   local outputSize = math.random(5,6)
+   local nStep = 3
+   local input = {}
+   local gradOutput = {}
+   for step=1,nStep do
+      input[step] = torch.randn(batchSize, inputSize)
+      if step == nStep then
+         -- for the sake of keeping this unit test simple,
+         gradOutput[step] = torch.randn(batchSize, outputSize)
+      else
+         -- only the last step will get a gradient from the output
+         gradOutput[step] = torch.zeros(batchSize, outputSize)
+      end
+   end
+   local gru = nn.GRU(inputSize, outputSize)
+   
+   -- we will use this to build an GRU step by step (with shared params)
+   local gruStep = gru.recurrentModule:clone()
+   
+   -- forward/backward through GRU
+   local output = {}
+   gru:zeroGradParameters()
+   for step=1,nStep do
+      output[step] = gru:forward(input[step])
+      assert(torch.isTensor(input[step]))
+      gru:backward(input[step], gradOutput[step], 1)
+   end   
+   local gradInput = gru:backwardThroughTime()
+   
+   local mlp2 -- this one will simulate rho = nSteps
+   local inputs
+   for step=1,nStep do
+      -- iteratively build an GRU out of non-recurrent components
+      local gru = gruStep:clone()
+      gru:share(gruStep, 'weight', 'gradWeight', 'bias', 'gradBias')
+      if step == 1 then
+         mlp2 = gru
+      else
+         local rnn = nn.Sequential()
+         local para = nn.ParallelTable()
+         para:add(nn.Identity()):add(mlp2)
+         rnn:add(para)
+         rnn:add(nn.FlattenTable())
+         rnn:add(gru)
+         mlp2 = rnn
+      end
+      
+      -- prepare inputs for mlp2
+      if inputs then
+         inputs = {input[step], inputs}
+      else
+         inputs = {input[step], torch.zeros(batchSize, outputSize)}
+      end
+   end
+   local output2 = mlp2:forward(inputs)
+   
+   mlp2:zeroGradParameters()
+   local gradInput2 = mlp2:backward(inputs, gradOutput[nStep], 1) --/nStep)
+   mytester:assertTensorEq(gradInput2[2][2][1], gradInput, 0.00001, "GRU gradInput error")
+   mytester:assertTensorEq(output[nStep], output2, 0.00001, "GRU output error")
+   
+   local params, gradParams = gru:parameters()
+   local params2, gradParams2 = gruStep:parameters()
+   mytester:assert(#params == #params2, "GRU parameters error "..#params.." ~= "..#params2)
+   for i, gradParam in ipairs(gradParams) do
+      local gradParam2 = gradParams2[i]
+      mytester:assertTensorEq(gradParam, gradParam2, 0.000001, 
+         "gru gradParam "..i.." error "..tostring(gradParam).." "..tostring(gradParam2))
+   end
+   
+   gradParams = gru.recursiveCopy(nil, gradParams)
+   gradInput = gradInput:clone()
+   mytester:assert(gru.zeroTensor:sum() == 0, "zeroTensor error")
+   gru:forget()
+   output = gru.recursiveCopy(nil, output)
+   local output3 = {}
+   gru:zeroGradParameters()
+   for step=1,nStep do
+      output3[step] = gru:forward(input[step])
+      gru:backward(input[step], gradOutput[step], 1)
+   end   
+   local gradInput3 = gru:updateGradInputThroughTime()
+   gru:accGradParametersThroughTime()
+   
+   mytester:assert(#output == #output3, "GRU output size error")
+   for i,output in ipairs(output) do
+      mytester:assertTensorEq(output, output3[i], 0.00001, "GRU forget (updateOutput) error "..i)
+   end
+   
+   mytester:assertTensorEq(gradInput, gradInput3, 0.00001, "GRU updateGradInputThroughTime error")
+   
+   local params3, gradParams3 = gru:parameters()
+   mytester:assert(#params == #params3, "LSTM parameters error "..#params.." ~= "..#params3)
+   for i, gradParam in ipairs(gradParams) do
+      local gradParam3 = gradParams3[i]
+      mytester:assertTensorEq(gradParam, gradParam3, 0.000001, 
+         "LSTM gradParam "..i.." error "..tostring(gradParam).." "..tostring(gradParam3))
+   end
+end
+
 function rnntest.Sequencer()
    local batchSize = 4
    local inputSize = 3
