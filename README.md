@@ -53,8 +53,8 @@ If you use __rnn__ in your work, we'd really appreciate it if you could cite the
 Léonard, Nicholas, Sagar Waghmare, and Yang Wang. [rnn: Recurrent Library for Torch.](http://arxiv.org/abs/1511.07889) arXiv preprint arXiv:1511.07889 (2015).
 
 Any significant contributor to the library will also get added as an author to the paper.
-We define [significant contributor](https://github.com/Element-Research/rnn/graphs/contributors) 
-as anyone who added added 300 lines of code to the library.
+A [significant contributor](https://github.com/Element-Research/rnn/graphs/contributors) 
+is anyone who added at least 300 lines of code to the library.
 
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
