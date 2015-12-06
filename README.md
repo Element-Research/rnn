@@ -548,6 +548,8 @@ Basically, the input, forget and output gates, as well as the hidden state are c
 References :
  * A. [Learning Phrase Representations Using Rnn Encoder- Decoder For Statistical Machine Translation.](http://arxiv.org/pdf/1406.1078.pdf)
  * B. [Implementing a GRU/LSTM RNN with Python and Theano](http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-grulstm-rnn-with-python-and-theano/)
+ * C. [An Empirical Exploration of Recurrent Network Architectures](http://jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
+ * D. [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555)
 
 This is an implementation of Gated Recurrent Units module. 
 
