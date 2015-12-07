@@ -6,7 +6,7 @@ version = 1
 --[[command line arguments]]--
 cmd = torch.CmdLine()
 cmd:text()
-cmd:text('Train a Language Model on PennTreeBank dataset using RNN or LSTM')
+cmd:text('Train a Language Model on PennTreeBank dataset using RNN or LSTM or GRU')
 cmd:text('Example:')
 cmd:text("recurrent-language-model.lua --cuda --useDevice 2 --progress --zeroFirst --cutoffNorm 4 --rho 10")
 cmd:text('Options:')
@@ -27,8 +27,9 @@ cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution b
 
 -- recurrent layer 
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
+cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
 cmd:option('--rho', 5, 'back-propagate through time (BPTT) for rho time-steps')
-cmd:option('--hiddenSize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs are stacked')
+cmd:option('--hiddenSize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
 cmd:option('--zeroFirst', false, 'first step will forward zero through recurrence (i.e. add bias of recurrence). As opposed to learning bias specifically for first step.')
 cmd:option('--dropout', false, 'apply dropout after each recurrent layer')
 cmd:option('--dropoutProb', 0.5, 'probability of zeroing a neuron (dropout probability)')
@@ -61,13 +62,16 @@ lm = nn.Sequential()
 local inputSize = opt.hiddenSize[1]
 for i,hiddenSize in ipairs(opt.hiddenSize) do 
 
-   if i~= 1 and not opt.lstm then
+   if i~= 1 and (not opt.lstm) and (not opt.gru) then
       lm:add(nn.Sequencer(nn.Linear(inputSize, hiddenSize)))
    end
    
    -- recurrent layer
    local rnn
-   if opt.lstm then
+   if opt.gru then
+      -- Gated Recurrent Units
+      rnn = nn.Sequencer(nn.GRU(inputSize, hiddenSize))
+   elseif opt.lstm then
       -- Long Short Term Memory
       rnn = nn.Sequencer(nn.FastLSTM(inputSize, hiddenSize))
    else
@@ -117,7 +121,7 @@ if opt.uniform > 0 then
 end
 
 -- will recurse a single continuous sequence
-lm:remember(opt.lstm and 'both' or 'eval')   
+lm:remember((opt.lstm or opt.gru) and 'both' or 'eval')
 
 --[[Propagators]]--
 

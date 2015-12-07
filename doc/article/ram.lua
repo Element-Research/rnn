@@ -1,0 +1,1 @@
+ram = nn.RecurrentAttention(rnn, action, nStep, hiddenSize)

@@ -1,0 +1,27 @@
+% Generator: GNU source-highlight, by Lorenzo Bettini, http://www.gnu.org/software/src-highlite
+\noindent
+\mbox{}\textit{-\/-\ generate\ some\ dummy\ inputs\ and\ gradOutputs\ sequences} \\
+\mbox{}inputs,\ gradOutputs\ =\ \{\},\ \{\} \\
+\mbox{}\textbf{for}\ step=1,rho\ \textbf{do} \\
+\mbox{}\ \ \ inputs[step]\ =\ torch.\textbf{randn}(batchSize,inputSize) \\
+\mbox{}\ \ \ gradOutputs[step]\ =\ torch.\textbf{randn}(batchSize,inputSize) \\
+\mbox{}\textbf{end} \\
+\mbox{} \\
+\mbox{}\textit{-\/-\ an\ AbstractRecurrent\ instance} \\
+\mbox{}rnn\ =\ nn.\textbf{Recurrent}( \\
+\mbox{}\ \ \ hiddenSize,\ \textit{-\/-\ size\ of\ the\ input\ layer} \\
+\mbox{}\ \ \ nn.\textbf{Linear}(inputSize,outputSize),\ \textit{-\/-\ input\ layer} \\
+\mbox{}\ \ \ nn.\textbf{Linear}(outputSize,\ outputSize),\ \textit{-\/-\ recurrent\ layer} \\
+\mbox{}\ \ \ nn.\textbf{Sigmoid}(),\ \textit{-\/-\ transfer\ function} \\
+\mbox{}\ \ \ rho\ \textit{-\/-\ maximum\ number\ of\ time-steps\ for\ BPTT} \\
+\mbox{}) \\
+\mbox{} \\
+\mbox{}\textit{-\/-\ feed-forward\ and\ backpropagate\ through\ time\ like\ this\ :} \\
+\mbox{}\textbf{for}\ step=1,rho\ \textbf{do} \\
+\mbox{}\ \ \ \textbf{rnn:forward}(inputs[step]) \\
+\mbox{}\ \ \ \textbf{rnn:backward}(inputs[step],\ gradOutputs[step]) \\
+\mbox{}\textbf{end} \\
+\mbox{}\textbf{rnn:backwardThroughTime}()\ \textit{-\/-\ call\ backward\ on\ the\ internal\ modules} \\
+\mbox{}gradInputs\ =\ rnn.gradInputs \\
+\mbox{}\textbf{rnn:updateParameters}(0.1) \\
+\mbox{}\textbf{rnn:forget}()\ \textit{-\/-\ resets\ the\ time-step\ counter}

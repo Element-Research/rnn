@@ -1,0 +1,94 @@
+\begin{thebibliography}{10}
+
+\bibitem{boden2001guide}
+M.~Boden.
+\newblock A guide to recurrent neural networks and backpropagation.
+\newblock 2001.
+
+\bibitem{collobert2011torch7}
+R.~Collobert, K.~Kavukcuoglu, and C.~Farabet.
+\newblock Torch7: A matlab-like environment for machine learning.
+\newblock In {\em BigLearn, NIPS Workshop}, number EPFL-CONF-192376, 2011.
+
+\bibitem{graves2013speech}
+A.~Graves, A.-r. Mohamed, and G.~Hinton.
+\newblock Speech recognition with deep recurrent neural networks.
+\newblock In {\em Acoustics, Speech and Signal Processing (ICASSP), 2013 IEEE
+  International Conference on}, pages 6645--6649. IEEE, 2013.
+
+\bibitem{greff2015lstm}
+K.~Greff, R.~K. Srivastava, J.~Koutn{\'\i}k, B.~R. Steunebrink, and
+  J.~Schmidhuber.
+\newblock Lstm: A search space odyssey.
+\newblock {\em arXiv preprint arXiv:1503.04069}, 2015.
+
+\bibitem{hinton2012improving}
+G.~E. Hinton, N.~Srivastava, A.~Krizhevsky, I.~Sutskever, and R.~R.
+  Salakhutdinov.
+\newblock Improving neural networks by preventing co-adaptation of feature
+  detectors.
+\newblock {\em arXiv preprint arXiv:1207.0580}, 2012.
+
+\bibitem{hochreiter1997long}
+S.~Hochreiter and J.~Schmidhuber.
+\newblock Long short-term memory.
+\newblock {\em Neural computation}, 9(8):1735--1780, 1997.
+
+\bibitem{ierusalimschy1996lua}
+R.~Ierusalimschy, L.~H. De~Figueiredo, and W.~Celes~Filho.
+\newblock Lua-an extensible extension language.
+\newblock {\em Softw., Pract. Exper.}, 26(6):635--652, 1996.
+
+\bibitem{lecun1998mnist}
+Y.~LeCun, C.~Cortes, and C.~J. Burges.
+\newblock The mnist database of handwritten digits, 1998.
+
+\bibitem{marcus1993building}
+M.~P. Marcus, M.~A. Marcinkiewicz, and B.~Santorini.
+\newblock Building a large annotated corpus of english: The penn treebank.
+\newblock {\em Computational linguistics}, 19(2):313--330, 1993.
+
+\bibitem{mikolov2012statistical}
+T.~Mikolov.
+\newblock Statistical language models based on neural networks.
+\newblock {\em Presentation at Google, Mountain View, 2nd April}, 2012.
+
+\bibitem{mnih2014recurrent}
+V.~Mnih, N.~Heess, A.~Graves, et~al.
+\newblock Recurrent models of visual attention.
+\newblock In {\em Advances in Neural Information Processing Systems}, pages
+  2204--2212, 2014.
+
+\bibitem{pang2008opinion}
+B.~Pang and L.~Lee.
+\newblock Opinion mining and sentiment analysis.
+\newblock {\em Foundations and trends in information retrieval}, 2(1-2):1--135,
+  2008.
+
+\bibitem{pinheiro2013recurrent}
+P.~H. Pinheiro and R.~Collobert.
+\newblock Recurrent convolutional neural networks for scene parsing.
+\newblock {\em arXiv preprint arXiv:1306.2795}, 2013.
+
+\bibitem{rumelhart2002learning}
+D.~E. Rumelhart, G.~E. Hinton, and R.~J. Williams.
+\newblock Learning representations by back-propagating errors.
+\newblock {\em Cognitive modeling}, 1:213, 2002.
+
+\bibitem{sutskever2013training}
+I.~Sutskever.
+\newblock {\em Training recurrent neural networks}.
+\newblock PhD thesis, University of Toronto, 2013.
+
+\bibitem{williams1992simple}
+R.~J. Williams.
+\newblock Simple statistical gradient-following algorithms for connectionist
+  reinforcement learning.
+\newblock {\em Machine learning}, 8(3-4):229--256, 1992.
+
+\bibitem{zaremba2014recurrent}
+W.~Zaremba, I.~Sutskever, and O.~Vinyals.
+\newblock Recurrent neural network regularization.
+\newblock {\em arXiv preprint arXiv:1409.2329}, 2014.
+
+\end{thebibliography}

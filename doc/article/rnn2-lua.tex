@@ -1,0 +1,16 @@
+% Generator: GNU source-highlight, by Lorenzo Bettini, http://www.gnu.org/software/src-highlite
+\noindent
+\mbox{}\textit{-\/-\ recurrent\ module} \\
+\mbox{}rm\ =\ nn.\textbf{Sequential}() \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{ParallelTable}() \\
+\mbox{}\ \ \ \ \ \ :\textbf{add}(nn.\textbf{LookupTable}(nIndex,\ hiddenSize)) \\
+\mbox{}\ \ \ \ \ \ :\textbf{add}(nn.\textbf{Linear}(hiddenSize,\ hiddenSize))) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{CAddTable}()) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Sigmoid}()) \\
+\mbox{}\textit{-\/-\ full\ RNN} \\
+\mbox{}rnn\ =\ nn.\textbf{Sequential}() \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Sequencer}(nn.\textbf{Recurrence}(rm,\ hiddenSize,\ 1))) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{SelectTable}(-1))\ \textit{-\/-select\ last\ element} \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{Linear}(hiddenSize,\ nSentiment)) \\
+\mbox{}\ \ \ :\textbf{add}(nn.\textbf{LogSoftMax}()) \\
+\mbox{})

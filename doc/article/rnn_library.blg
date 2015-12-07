@@ -1,0 +1,48 @@
+This is BibTeX, Version 0.99c (TeX Live 2009/Debian)
+The top-level auxiliary file: rnn_library.aux
+The style file: abbrv.bst
+Database file #1: rnn_library.bib
+Warning--empty journal in boden2001guide
+Warning--there's a number but no series in collobert2011torch7
+You've used 17 entries,
+            2118 wiz_defined-function locations,
+            596 strings with 6441 characters,
+and the built_in function-call counts, 5471 in all, are:
+= -- 535
+> -- 272
+< -- 3
++ -- 109
+- -- 90
+* -- 368
+:= -- 932
+add.period$ -- 51
+call.type$ -- 17
+change.case$ -- 94
+chr.to.int$ -- 0
+cite$ -- 19
+duplicate$ -- 206
+empty$ -- 412
+format.name$ -- 90
+if$ -- 1126
+int.to.chr$ -- 0
+int.to.str$ -- 17
+missing$ -- 15
+newline$ -- 87
+num.names$ -- 34
+pop$ -- 97
+preamble$ -- 1
+purify$ -- 78
+quote$ -- 0
+skip$ -- 152
+stack$ -- 0
+substring$ -- 301
+swap$ -- 42
+text.length$ -- 3
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 68
+warning$ -- 2
+while$ -- 51
+width$ -- 19
+write$ -- 180
+(There were 2 warnings)
