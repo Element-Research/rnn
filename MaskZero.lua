@@ -12,6 +12,7 @@ local MaskZero, parent = torch.class("nn.MaskZero", "nn.Decorator")
 
 function MaskZero:__init(module, nInputDim)
    parent.__init(self, module)
+   assert(torch.isTypeOf(module, 'nn.Module'))
    assert(torch.type(nInputDim) == 'number', 'Expecting nInputDim number at arg 1')
    self.nInputDim = nInputDim
 end
