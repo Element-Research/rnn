@@ -2495,6 +2495,51 @@ function rnntest.LookupTableMaskZero()
   end
 end
 
+function rnntest.MaskZeroCriterion()
+   local batchSize = 3
+   local nClass = 10
+   local input = torch.randn(batchSize, nClass)
+   local target = torch.LongTensor(batchSize):random(1,nClass)
+   
+   local nll = nn.ClassNLLCriterion()
+   local mznll = nn.MaskZeroCriterion(nll, 1)
+   
+   -- test that it works when nothing to mask
+   local err = mznll:forward(input, target)
+   local gradInput = mznll:backward(input, target):clone()
+   
+   local err2 = nll:forward(input, target)
+   local gradInput2 = nll:backward(input, target)
+   
+   mytester:assert(math.abs(err - err2) < 0.0000001, "MaskZeroCriterion No-mask fwd err")
+   mytester:assert(gradInput, gradInput2, 0.0000001, "MaskZeroCriterion No-mask bwd err") 
+   
+   -- test that it works when last row to mask
+   input[batchSize]:zero()
+   target[batchSize] = 0
+   
+   local err = mznll:forward(input, target)
+   local gradInput = mznll:backward(input, target):clone()
+   
+   local input2 = input:narrow(1,1,batchSize-1)
+   local target2 = target:narrow(1,1,batchSize-1)
+   local err2 = nll:forward(input2, target2)
+   local gradInput2 = nll:backward(input2, target2)
+   
+   mytester:assert(gradInput[batchSize]:sum() == 0, "MaskZeroCriterion last-mask bwd zero err")
+   mytester:assert(math.abs(err - err2) < 0.0000001, "MaskZeroCriterion last-mask fwd err")
+   mytester:assertTensorEq(gradInput:narrow(1,1,batchSize-1), gradInput2, 0.0000001, "MaskZeroCriterion last-mask bwd err") 
+   
+   -- test type-casting
+   mznll:float()
+   local input3 = input:float()
+   local err3 = mznll:forward(input3, target)
+   local gradInput3 = mznll:backward(input3, target):clone()
+   
+   mytester:assert(math.abs(err3 - err) < 0.0000001, "MaskZeroCriterion cast fwd err")
+   mytester:assert(gradInput3, gradInput:float(), 0.0000001, "MaskZeroCriterion cast bwd err")
+end
+
 function rnn.test(tests)
    mytester = torch.Tester()
    mytester:add(rnntest)

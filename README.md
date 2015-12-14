@@ -21,9 +21,10 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
  * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
 
-Miscellaneous modules :
- * [MaskZero](#rnn.MaskZero) : zeroes the `output` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
+Miscellaneous modules and criterions :
+ * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
  * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
+ * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros
 
 Criterions used for handling sequential inputs and targets :
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
@@ -977,6 +978,25 @@ lt = nn.LookupTableMaskZero(nIndex, nOutput)
 The `output` Tensor will have each row zeroed when the commensurate row of the `input` is a zero index. 
 
 This lookup table makes it possible to pad sequences with different lengths in the same batch with zero vectors.
+
+<a name='rnn.MaskZeroCriterion'></a>
+## MaskZeroCriterion ##
+This criterion zeroes the `err` and `gradInput` rows of the decorated criterion 
+for commensurate `input` rows which are tensors of zeros.
+
+```lua
+mzc = nn.MaskZeroCriterion(criterion, nInputDim)
+```
+
+The `gradInput` Tensor (or table thereof) of the decorated `criterion`
+will have each row (samples) zeroed when the commensurate row of the `input` 
+is a tensor of zeros. The `err` will also disregard such zero rows.
+
+The `nInputDim` argument must specify the number of non-batch dims 
+in the first Tensor of the `input`. In the case of an `input` table,
+the first Tensor is the first one encountered when doing a depth-first search.
+
+This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##
