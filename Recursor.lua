@@ -18,6 +18,7 @@ function Recursor:__init(module, rho)
 end
 
 function Recursor:updateOutput(input)
+   local output
    if self.train ~= false then
       -- set/save the output states
       self:recycle()
