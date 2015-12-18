@@ -126,7 +126,7 @@ function Recursor:includingSharedClones(f)
 end
 
 function Recursor:backwardOnline(online)
-   assert(oneline ~= false, "Recursor only supports online backwards")
+   assert(online ~= false, "Recursor only supports online backwards")
    parent.backwardOnline(self)
 end
 
