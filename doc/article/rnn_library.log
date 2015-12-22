@@ -1,6 +1,5 @@
-This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009/Debian) (format=pdflatex 2014.4.30)  24 NOV 2015 15:58
+This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009/Debian) (format=pdflatex 2014.4.30)  17 DEC 2015 11:19
 entering extended mode
- \write18 enabled.
  %&-line parsing enabled.
 **rnn_library.tex
 (./rnn_library.tex
@@ -88,19 +87,19 @@ Document Style - pseudocode environments for use with the `algorithmicx' style
 ) (./rnn_library.aux)
 \openout1 = `rnn_library.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 45.
-LaTeX Font Info:    ... okay on input line 45.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 45.
-LaTeX Font Info:    ... okay on input line 45.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 45.
-LaTeX Font Info:    ... okay on input line 45.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 45.
-LaTeX Font Info:    ... okay on input line 45.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 45.
-LaTeX Font Info:    ... okay on input line 45.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 45.
-LaTeX Font Info:    ... okay on input line 45.
-LaTeX Font Info:    Try loading font information for OT1+ptm on input line 45.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 50.
+LaTeX Font Info:    ... okay on input line 50.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 50.
+LaTeX Font Info:    ... okay on input line 50.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 50.
+LaTeX Font Info:    ... okay on input line 50.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 50.
+LaTeX Font Info:    ... okay on input line 50.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 50.
+LaTeX Font Info:    ... okay on input line 50.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 50.
+LaTeX Font Info:    ... okay on input line 50.
+LaTeX Font Info:    Try loading font information for OT1+ptm on input line 50.
  (/usr/share/texmf-texlive/tex/latex/psnfss/ot1ptm.fd
 File: ot1ptm.fd 2001/06/04 font definitions for OT1/ptm.
 )
@@ -131,37 +130,37 @@ File: pdftex.def 2010/03/12 v0.04p Graphics/color for pdfTeX
 \everyMPtoPDFconversion=\toks19
 )))
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <17.28> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 48.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 53.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <7> on input line 48.
+(Font)              <7> on input line 53.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <5> on input line 48.
+(Font)              <5> on input line 53.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 48.
-LaTeX Font Info:    Try loading font information for OT1+pcr on input line 48.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 53.
+LaTeX Font Info:    Try loading font information for OT1+pcr on input line 53.
  (/usr/share/texmf-texlive/tex/latex/psnfss/ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 )
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <12> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 50.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 55.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <9> on input line 69.
+(Font)              <9> on input line 74.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <6> on input line 69.
+(Font)              <6> on input line 74.
  [1
 
 {/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
-LaTeX Font Info:    Try loading font information for OMS+ptm on input line 119.
+LaTeX Font Info:    Try loading font information for OMS+ptm on input line 124.
 
 
 (/usr/share/texmf-texlive/tex/latex/psnfss/omsptm.fd
 File: omsptm.fd 
 )
 LaTeX Font Info:    Font shape `OMS/ptm/m/n' in size <10> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 119.
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 124.
  (./mlp-lua.tex)
 (./nll-lua.tex) (./trainEpoch-lua.tex) [2] (./rnn-example-lua.tex) [3]
-Underfull \hbox (badness 10000) in paragraph at lines 212--215
+Underfull \hbox (badness 10000) in paragraph at lines 217--220
 \OT1/ptm/m/n/10 The \OT1/pcr/m/n/10 Sequencer \OT1/ptm/m/n/10 mod-ule is a dec-
 o-ra-tor used to ab-stract away the in-tri-ca-cies of
  []
@@ -175,20 +174,21 @@ Missing character: There is no â in font cmr7!
 Missing character: There is no ˆ in font cmr7!
 Missing character: There is no ’ in font cmr7!
  (./repeater-lua.tex) (./ram-lua.tex)
-LaTeX Font Info:    Try loading font information for OMS+pcr on input line 318.
+LaTeX Font Info:    Try loading font information for OMS+pcr on input line 323.
 
 
 (/usr/share/texmf-texlive/tex/latex/psnfss/omspcr.fd
 File: omspcr.fd 
 )
 LaTeX Font Info:    Font shape `OMS/pcr/m/n' in size <10> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 318.
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 323.
  [5] (./rec-lua.tex)
-(./rec2-lua.tex) (./rec3-lua.tex) (./rec4-lua.tex) (./rec5-lua.tex
-Underfull \vbox (badness 3657) has occurred while \output is active []
+(./rec2-lua.tex) (./rec3-lua.tex) (./rec4-lua.tex)
+Underfull \vbox (badness 1521) has occurred while \output is active []
 
- [6])
-Underfull \hbox (badness 1052) in paragraph at lines 391--395
+ [6]
+(./rec5-lua.tex)
+Underfull \hbox (badness 1052) in paragraph at lines 396--400
 \OT1/ptm/m/n/10 The last mod-ule in-tro-duced in this third it-er-a-tion is the
  \OT1/pcr/m/n/10 Recurrence \OT1/ptm/m/n/10 mod-ule. An-other
  []
@@ -201,7 +201,7 @@ Underfull \vbox (badness 10000) has occurred while \output is active []
 Here is how much of TeX's memory you used:
  1738 strings out of 495028
  23353 string characters out of 1181229
- 75046 words of memory out of 3000000
+ 76139 words of memory out of 3000000
  4863 multiletter control sequences out of 15000+50000
  20960 words of font info for 43 fonts, out of 3000000 for 9000
  28 hyphenation exceptions out of 8191
@@ -216,7 +216,7 @@ are/texmf-texlive/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/share/texmf-te
 xlive/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texmf-texlive/fonts/type1/
 urw/times/utmb8a.pfb></usr/share/texmf-texlive/fonts/type1/urw/times/utmr8a.pfb
 ></usr/share/texmf-texlive/fonts/type1/urw/times/utmri8a.pfb>
-Output written on rnn_library.pdf (11 pages, 159999 bytes).
+Output written on rnn_library.pdf (11 pages, 160855 bytes).
 PDF statistics:
  79 PDF objects out of 1000 (max. 8388607)
  0 named destinations out of 1000 (max. 500000)

@@ -51,7 +51,7 @@ The following are example training scripts using this package :
 
 If you use __rnn__ in your work, we'd really appreciate it if you could cite the following paper:
 
-Léonard, Nicholas, Sagar Waghmare, and Yang Wang. [rnn: Recurrent Library for Torch.](http://arxiv.org/abs/1511.07889) arXiv preprint arXiv:1511.07889 (2015).
+Léonard, Nicholas, Sagar Waghmare, Yang Wang, and Jin-Hwa Kim. [rnn: Recurrent Library for Torch.](http://arxiv.org/abs/1511.07889) arXiv preprint arXiv:1511.07889 (2015).
 
 Any significant contributor to the library will also get added as an author to the paper.
 A [significant contributor](https://github.com/Element-Research/rnn/graphs/contributors) 
