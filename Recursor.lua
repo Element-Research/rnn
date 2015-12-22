@@ -18,6 +18,7 @@ function Recursor:__init(module, rho)
 end
 
 function Recursor:updateOutput(input)
+   local output
    if self.train ~= false then
       -- set/save the output states
       self:recycle()
@@ -126,7 +127,7 @@ function Recursor:includingSharedClones(f)
 end
 
 function Recursor:backwardOnline(online)
-   assert(oneline ~= false, "Recursor only supports online backwards")
+   assert(online ~= false, "Recursor only supports online backwards")
    parent.backwardOnline(self)
 end
 

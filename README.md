@@ -558,6 +558,17 @@ Note that we recommend decorating the `LSTM` with a `Sequencer`
 A faster version of the [LSTM](#rnn.LSTM). 
 Basically, the input, forget and output gates, as well as the hidden state are computed at one fell swoop.
 
+Note that `FastLSTM` does not use peephole connections between cell and gates. The algorithm from `LSTM` changes as follows:
+```lua
+i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + b[1->i])                      (1)
+f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + b[1->f])                      (2)
+z[t] = tanh(W[x->c]x[t] + W[h->c]h[t−1] + b[1->c])                   (3)
+c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
+o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
+h[t] = o[t]tanh(c[t])                                                (6)
+```
+i.e. omitting the summands `W[c->i]c[t−1]` (eq. 1), `W[c->f]c[t−1]` (eq. 2), and `W[c->o]c[t]` (eq. 5).
+
 <a name='rnn.GRU'></a>
 ## GRU ##
 
