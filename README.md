@@ -364,6 +364,9 @@ while true do
 end
 ```
 
+<a name='rnn.Recurrent.backwardOnline'></a>
+### Use `backwardOnline()` ###
+
 Another option, is to perform the backpropagation through time using 
 the normal Module interface. The only requirement is that you 
 wrap your rnn into a [Recursor](#rnn.Recursor) and
@@ -833,7 +836,7 @@ brnn = nn.BiSequencer(fwd, [bwd, merge])
 
 The input to the module is a sequence (a table) of tensors
 and the output is a sequence (a table) of tensors of the same length.
-Applies a `fwd` rnn (an [AbstractRecurrent](#rnn.AbstractRecurrent) instance to each element in the sequence in
+Applies a `fwd` rnn (an [AbstractRecurrent](#rnn.AbstractRecurrent) instance) to each element in the sequence in
 forward order and applies the `bwd` rnn in reverse order (from last element to first element).
 The `bwd` rnn defaults to:
 
@@ -856,6 +859,11 @@ use of 3 Sequencers for the forward, backward and merge modules.
 
 Similarly to a [Sequencer](#rnn.Sequencer), the sequences in a batch must have the same size.
 But the sequence length of each batch can vary.
+
+Note : make sure you call `brnn:forget()` after each call to `updateParameters()`. 
+Alternatively, one could call `brnn.bwdSeq:forget()` so that only `bwd` rnn forgets.
+This is the minimum requirement, as it would not make sense for the `bwd` rnn to remember future sequences.
+
 
 <a name='rnn.BiSequencerLM'></a>
 ## BiSequencerLM ##
