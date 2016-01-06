@@ -19,7 +19,7 @@ end
 
 function Recursor:updateOutput(input)
    local output
-   if self.train ~= false then
+   if self.train ~= false then -- if self.train or self.train == nil then
       -- set/save the output states
       self:recycle()
       local recurrentModule = self:getStepModule(self.step)
@@ -28,7 +28,7 @@ function Recursor:updateOutput(input)
       output = self.recurrentModule:updateOutput(input)
    end
    
-   if self.train ~= false then
+   if self.train ~= false then -- if self.train or self.train == nil then
       local input_ = self.inputs[self.step]
       self.inputs[self.step] = self.copyInputs 
          and nn.rnn.recursiveCopy(input_, input) 
