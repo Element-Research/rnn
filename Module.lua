@@ -35,12 +35,25 @@ end
 
 -- notifies all AbstractRecurrent instances not wrapped by an AbstractSequencer
 -- that the backward calls will be handled online (in reverse order of forward time).
-function Module:backwardOnline(online)
+function Module:backwardOnline(online, root)
+   root = (root == nil) or root
    if self.modules then
       for i, module in ipairs(self.modules) do
-         module:backwardOnline(online)
+         module:backwardOnline(online, false)
       end
    end
+   
+   -- backwardOnline doesn't require copyInputs, copyGradOutputs
+   if root then
+      for i,modula in ipairs(self:listModules()) do
+         if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
+            modula.copyInputs = false
+            modula.copyGradOutputs = false
+         end
+      end
+      self.copyInputs = false
+      self.copyGradOutputs = false
+   end   
 end
 
 -- set the maximum number of backpropagation through time (BPTT) time-steps

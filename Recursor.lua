@@ -10,11 +10,11 @@ function Recursor:__init(module, rho)
    parent.__init(self, rho or 9999999)
 
    self.recurrentModule = module
-   self.recurrentModule:backwardOnline()
-   self.onlineBackward = true
    
    self.module = module
    self.modules = {module}
+   
+   self:backwardOnline()
 end
 
 function Recursor:updateOutput(input)
@@ -26,13 +26,6 @@ function Recursor:updateOutput(input)
       output = recurrentModule:updateOutput(input)
    else
       output = self.recurrentModule:updateOutput(input)
-   end
-   
-   if self.train ~= false then
-      local input_ = self.inputs[self.step]
-      self.inputs[self.step] = self.copyInputs 
-         and nn.rnn.recursiveCopy(input_, input) 
-         or nn.rnn.recursiveSet(input_, input)     
    end
    
    self.outputs[self.step] = output

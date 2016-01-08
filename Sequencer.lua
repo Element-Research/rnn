@@ -23,13 +23,6 @@ function Sequencer:__init(module)
    self.module:backwardOnline()
    self.modules = {self.module}
    
-   for i,modula in ipairs(self.module:listModules()) do
-      if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
-         modula.copyInputs = false
-         modula.copyGradOutputs = false
-      end
-   end
-   
    self.output = {}
    
    -- table of buffers used for evaluation

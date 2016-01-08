@@ -47,12 +47,13 @@ function AbstractRecurrent:updateGradInput(input, gradOutput)
    if self.onlineBackward then
       -- updateGradInput will be called in reverse order of time
       self.updateGradInputStep = self.updateGradInputStep or self.step
-      if self.copyGradOutputs then
-         self.gradOutputs[self.updateGradInputStep-1] = nn.rnn.recursiveCopy(self.gradOutputs[self.updateGradInputStep-1] , gradOutput)
-      else
-         self.gradOutputs[self.updateGradInputStep-1] = self.gradOutputs[self.updateGradInputStep-1] or nn.rnn.recursiveNew(gradOutput)
-         nn.rnn.recursiveSet(self.gradOutputs[self.updateGradInputStep-1], gradOutput)
-      end
+      
+      -- set inputs and gradOutputs for updateGradInputThroughTime
+      assert(not self.copyInputs)
+      assert(not self.copyGradOutputs)
+      local step = self.updateGradInputStep - 1
+      self.inputs[step] = nn.rnn.recursiveSet(self.inputs[step], input)
+      self.gradOutputs[step] = nn.rnn.recursiveSet(self.gradOutputs[step], gradOutput)
       
       -- BPTT for one time-step (rho = 1)
       self.gradInput = self:updateGradInputThroughTime(self.updateGradInputStep, 1)
@@ -80,6 +81,9 @@ function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
       self.scales[self.accGradParametersStep-1] = scale or 1
       
       -- BPTT for one time-step (rho = 1)
+      assert(not self.copyInputs)
+      local step = self.accGradParametersStep - 1
+      self.inputs[step] = nn.rnn.recursiveSet(self.inputs[step], input)
       self:accGradParametersThroughTime(self.accGradParametersStep, 1)
       
       self.accGradParametersStep = self.accGradParametersStep - 1
@@ -229,6 +233,7 @@ function AbstractRecurrent:sharedClone(shareParams, shareGradParams, clones, poi
 end
 
 function AbstractRecurrent:backwardOnline(online)
+   parent.backwardOnline(self, online)
    self.onlineBackward = (online == nil) and true or online
 end
 

@@ -20,12 +20,6 @@ function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    self.rnn = (not torch.isTypeOf(rnn, 'nn.AbstractRecurrent')) and nn.Recursor(rnn) or rnn
    -- backprop through time (BPTT) will be done online (in reverse order of forward)
    self.rnn:backwardOnline()
-   for i,modula in ipairs(self.rnn:listModules()) do
-      if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
-         modula.copyInputs = false
-         modula.copyGradOutputs = false
-      end
-   end
    
    -- samples an x,y actions for each example
    self.action =  (not torch.isTypeOf(action, 'nn.AbstractRecurrent')) and nn.Recursor(action) or action 
@@ -104,7 +98,7 @@ function RecurrentAttention:updateGradInput(input, gradOutput)
       end
       
       -- 2. backward through the rnn layer
-      local gradInput = self.rnn:updateGradInput(input, self.gradHidden[step])[1]
+      local gradInput = self.rnn:updateGradInput({input, self.actions[step]}, self.gradHidden[step])[1]
       if step == self.nStep then
          self.gradInput:resizeAs(gradInput):copy(gradInput)
       else
@@ -133,7 +127,7 @@ function RecurrentAttention:accGradParameters(input, gradOutput, scale)
       end
       
       -- 2. backward through the rnn layer
-      self.rnn:accGradParameters(input, self.gradHidden[step], scale)
+      self.rnn:accGradParameters({input, self.actions[step]}, self.gradHidden[step], scale)
    end
 end
 
@@ -156,7 +150,7 @@ function RecurrentAttention:accUpdateGradParameters(input, gradOutput, lr)
       end
       
       -- 2. backward through the rnn layer
-      self.rnn:accUpdateGradParameters(input, self.gradHidden[step], lr)
+      self.rnn:accUpdateGradParameters({input, self.actions[step]}, self.gradHidden[step], lr)
    end
 end
 

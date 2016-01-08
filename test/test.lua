@@ -606,7 +606,7 @@ function rnntest.FastLSTM_nngraph()
       cutorch.synchronize()
       local nngraphtime = a:time().real
       
-      print("nn vs nngraph time", nntime, nngraphtime)
+      print("Benchmark: nn vs nngraph time", nntime, nngraphtime)
    end
 end
 
@@ -2125,7 +2125,7 @@ function rnntest.LSTM_char_rnn()
          end
          -- evaluate the input sums at once for efficiency
          local i2h = nn.Linear(input_size_L, 4 * rnn_size)(x):annotate{name='i2h_'..L}
-         local h2h = nn.Linear(rnn_size, 4 * rnn_size)(prev_h):annotate{name='h2h_'..L}
+         local h2h = nn.LinearNoBias(rnn_size, 4 * rnn_size)(prev_h):annotate{name='h2h_'..L}
          local all_input_sums = nn.CAddTable()({i2h, h2h})
 
          local reshaped = nn.Reshape(4, rnn_size)(all_input_sums)
@@ -2190,50 +2190,51 @@ function rnntest.LSTM_char_rnn()
    local rnn_size = 128
    local n_layer = 2
    
-   -- char-rnn (nngraph)
-
-   local lstm1 = makeCharLSTM(input_size, rnn_size, n_layer, gpu)   
-   
-   -- the initial state of the cell/hidden states
-   local init_state = {}
-   for L=1,n_layer do
-      local h_init = torch.zeros(batch_size, rnn_size)
-      if gpu then h_init = h_init:cuda() end
-      table.insert(init_state, h_init:clone())
-      table.insert(init_state, h_init:clone())
+   if benchmark then
+      -- char-rnn (nngraph)
+      
+      local lstm1 = makeCharLSTM(input_size, rnn_size, n_layer, gpu)   
+      
+      -- the initial state of the cell/hidden states
+      local init_state = {}
+      for L=1,n_layer do
+         local h_init = torch.zeros(batch_size, rnn_size)
+         if gpu then h_init = h_init:cuda() end
+         table.insert(init_state, h_init:clone())
+         table.insert(init_state, h_init:clone())
+      end
+      
+      local x = init_state[1].new()
+      x:resize(batch_size):copy(torch.Tensor(batch_size):random(1,input_size))
+      
+      local input1 = {x, unpack(init_state)}
+      local output1 = lstm1:forward(input1)
+      if gpu then cutorch.synchronize() end
+      local a = torch.Timer()
+      for i=1,10 do
+         lstm1:forward(input1)
+      end
+      if gpu then cutorch.synchronize() end
+      local chartime = a:time().real
+      
+      -- rnn
+      
+      nn.FastLSTM.usenngraph = true
+      local lstm2 = makeRnnLSTM(input_size, rnn_size, n_layer, gpu)
+      nn.FastLSTM.usenngraph = false
+      
+      local output2 = lstm2:forward(x)
+      if gpu then cutorch.synchronize() end
+      local a = torch.Timer()
+      for i=1,10 do
+         lstm2:forget()
+         lstm2:forward(x)
+      end
+      if gpu then cutorch.synchronize() end
+      local rnntime = a:time().real
+      
+      print("Benchmark: char vs rnn time", chartime, rnntime)
    end
-   
-   local x = init_state[1].new()
-   x:resize(batch_size):copy(torch.Tensor(batch_size):random(1,input_size))
-   
-   local input1 = {x, unpack(init_state)}
-   local output1 = lstm1:forward(input1)
-   local a = torch.Timer()
-   for i=1,100 do
-      lstm1:forward(input1)
-   end
-   local chartime = a:time().real
-   
-   -- rnn
-   
-   local lstm2 = makeRnnLSTM(input_size, rnn_size, n_layer, gpu)
-   local output2 = lstm2:forward(x)
-   
-   local a = torch.Timer()
-   for i=1,100 do
-      lstm2:forget()
-      lstm2:forward(x)
-   end
-   local rnntime = a:time().real
-   
-   print("char vs rnn time", chartime, rnntime)
-   
-   local params1 = lstm1:getParameters()
-   local params2 = lstm2:getParameters()
-   
-   print(params1:size(), params2:size())
-   
-   print("Done char-rnn test")
 end
 
 -- https://github.com/Element-Research/rnn/issues/28
