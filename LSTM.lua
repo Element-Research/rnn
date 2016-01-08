@@ -212,6 +212,7 @@ function LSTM:backwardThroughTime(timeStep, rho)
          local inputTable = {self.inputs[step], output, cell}
          local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
          local gradInputTable = recurrentModule:backward(inputTable, {gradOutput, gradCell}, scale)
+         local gradInput
          gradInput, self.gradPrevOutput, gradCell = unpack(gradInputTable)
          self.gradCells[step-1] = gradCell
          table.insert(self.gradInputs, 1, gradInput)
