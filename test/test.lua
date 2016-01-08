@@ -2,6 +2,7 @@
 local rnntest = {}
 local precision = 1e-5
 local mytester
+local benchmark = false
 
 function rnntest.Recurrent()
    local batchSize = 4
@@ -395,7 +396,6 @@ function rnntest.LSTM()
 end
 
 function rnntest.FastLSTM()
-   --require 'dp'
    local inputSize = 100
    local batchSize = 40
    local nStep = 3
@@ -458,8 +458,6 @@ function rnntest.FastLSTM_nngraph()
    if not pcall(function() require 'nngraph' end) then
       return
    end
-   local _nngraph = nngraph
-   nngraph = nil
    
    local lstmSize = 10
    local batchSize = 4
@@ -468,8 +466,7 @@ function rnntest.FastLSTM_nngraph()
    local lstm1 = nn.FastLSTM(lstmSize) -- without nngraph
    local params1, gradParams1 = lstm1:getParameters()
    assert(torch.type(lstm1.recurrentModule) ~= 'nn.gModule')
-   
-   nngraph = _nngraph
+   nn.FastLSTM.usenngraph = true
    local lstm2 = nn.FastLSTM(lstmSize) -- with nngraph
    local params2, gradParams2 = lstm2:getParameters()
    assert(torch.type(lstm2.recurrentModule) == 'nn.gModule')
@@ -570,12 +567,10 @@ function rnntest.FastLSTM_nngraph()
    
    mytester:assertTensorEq(gradParams1, gradParams2, 0.000001, "FastLSTM nngraph gradParams err")
    
-   local benchmark = true
    if benchmark and pcall(function() require 'cunn' end ) then
       local lstmSize = 128
       local batchSize = 50
       local nStep = 50
-      
    
       local input = {}
       local gradOutput = {}
@@ -584,11 +579,9 @@ function rnntest.FastLSTM_nngraph()
          gradOutput[step] = torch.randn(batchSize, lstmSize):cuda()
       end
       
-      local _nngraph = nngraph
-      nngraph = nil
-      
+      nn.FastLSTM.usenngraph = false
       local lstm1 = nn.Sequencer(nn.FastLSTM(lstmSize)):cuda()
-      nngraph = _nngraph
+      nn.FastLSTM.usenngraph = true
       local lstm2 = nn.Sequencer(nn.FastLSTM(lstmSize)):cuda()
       
       -- nn
@@ -2853,8 +2846,9 @@ function rnntest.MaskZeroCriterion()
    mytester:assert(gradInput3, gradInput:float(), 0.0000001, "MaskZeroCriterion cast bwd err")
 end
 
-function rnn.test(tests)
+function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
+   benchmark = benchmark_
    mytester:add(rnntest)
    math.randomseed(os.time())
    mytester:run(tests)

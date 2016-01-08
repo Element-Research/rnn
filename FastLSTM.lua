@@ -1,5 +1,8 @@
 local FastLSTM, parent = torch.class("nn.FastLSTM", "nn.LSTM")
 
+-- set this to true to have it use nngraph instead of nn
+FastLSTM.usenngraph = false
+
 function FastLSTM:__init(inputSize, outputSize, rho)
    parent.__init(self, inputSize, outputSize, rho, false)
 end
@@ -12,7 +15,8 @@ function FastLSTM:buildModel()
    self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
    self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
    
-   if nngraph then
+   if self.usenngraph then
+      require 'nngraph'
       return self:nngraphModel()
    end
 
