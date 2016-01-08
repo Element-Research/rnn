@@ -452,6 +452,170 @@ function rnntest.FastLSTM()
       mytester:assertTensorEq(gradInput1[i], gradInput2[i], 0.000001, "FastLSTM gradInput error "..i)
    end
 end
+   
+function rnntest.FastLSTM_nngraph()
+   -- test the nngraph version of FastLSTM
+   if not pcall(function() require 'nngraph' end) then
+      return
+   end
+   local _nngraph = nngraph
+   nngraph = nil
+   
+   local lstmSize = 10
+   local batchSize = 4
+   local nStep = 3
+   
+   local lstm1 = nn.FastLSTM(lstmSize) -- without nngraph
+   local params1, gradParams1 = lstm1:getParameters()
+   assert(torch.type(lstm1.recurrentModule) ~= 'nn.gModule')
+   
+   nngraph = _nngraph
+   local lstm2 = nn.FastLSTM(lstmSize) -- with nngraph
+   local params2, gradParams2 = lstm2:getParameters()
+   assert(torch.type(lstm2.recurrentModule) == 'nn.gModule')
+   
+   lstm2.i2g.weight:copy(lstm1.i2g.weight)
+   lstm2.i2g.bias:copy(lstm1.i2g.bias)
+   lstm2.o2g.weight:copy(lstm1.o2g.weight)
+   
+   mytester:assertTensorEq(params1, params2, 0.00000001, "FastLSTM nngraph params init err")
+   
+   lstm1:zeroGradParameters()
+   lstm2:zeroGradParameters()
+   mytester:assertTensorEq(gradParams1, gradParams2, 0.000001, "FastLSTM nngraph zeroGradParameters err")
+   
+   local seq1 = nn.Sequencer(lstm1)
+   local seq2 = nn.Sequencer(lstm2)
+   
+   local input = {}
+   local gradOutput = {}
+   for step=1,nStep do
+      input[step] = torch.randn(batchSize, lstmSize)
+      gradOutput[step] = torch.randn(batchSize, lstmSize)
+   end
+   
+   local rm1 = lstm1.recurrentModule
+   local rm2 = lstm2.recurrentModule
+   
+   local input_ = {input[1], torch.randn(batchSize, lstmSize), torch.randn(batchSize, lstmSize)}
+   local gradOutput_ = {gradOutput[1], torch.randn(batchSize, lstmSize)}
+   local output1 = rm1:forward(input_)
+   local output2 = rm2:forward(input_)
+   rm1:zeroGradParameters()
+   rm2:zeroGradParameters()
+   local gradInput1 = rm1:backward(input_, gradOutput_)
+   local gradInput2 = rm2:backward(input_, gradOutput_)
+   
+   mytester:assertTensorEq(output1[1], output2[1], 0.0000001, "FastLSTM.recurrentModule forward 1 error")
+   mytester:assertTensorEq(output1[2], output2[2], 0.0000001, "FastLSTM.recurrentModule forward 2 error")
+   for i=1,3 do
+      mytester:assertTensorEq(gradInput1[i], gradInput2[i], 0.0000001, "FastLSTM.recurrentModule backward err "..i)
+   end
+   
+   mytester:assertTensorEq(gradParams1, gradParams2, 0.000001, "FastLSTM.recurrenModule nngraph gradParams err")
+   
+   -- again, with sharedClone
+   local rm3 = lstm1.recurrentModule:sharedClone()
+   local rm4 = lstm2.recurrentModule:clone()
+   
+   local output1 = rm3:forward(input_)
+   local output2 = rm4:forward(input_)
+   local gradInput1 = rm3:backward(input_, gradOutput_)
+   local gradInput2 = rm4:backward(input_, gradOutput_)
+   
+   mytester:assertTensorEq(output1[1], output2[1], 0.0000001, "FastLSTM.recurrentModule forward 1 error")
+   mytester:assertTensorEq(output1[2], output2[2], 0.0000001, "FastLSTM.recurrentModule forward 2 error")
+   for i=1,3 do
+      mytester:assertTensorEq(gradInput1[i], gradInput2[i], 0.0000001, "FastLSTM.recurrentModule backward err "..i)
+   end
+   
+   local p1, gp1 = rm3:parameters()
+   local p2, gp2 = rm4:parameters()
+   
+   for i=1,#p1 do
+      mytester:assertTensorEq(gp1[i], gp2[i], 0.000001, "FastLSTM nngraph gradParam err "..i)
+   end
+   
+   seq1:zeroGradParameters()
+   seq2:zeroGradParameters()
+   mytester:assertTensorEq(gradParams1, gradParams2, 0.000001, "FastLSTM nngraph zeroGradParameters err")
+   mytester:assert(gradParams1:sum() == 0)
+   
+   local input_ = _.map(input, function(k, x) return x:clone() end)
+   local gradOutput_ = _.map(gradOutput, function(k, x) return x:clone() end)
+   
+   -- forward/backward
+   local output1 = seq1:forward(input)
+   local gradInput1 = seq1:backward(input, gradOutput)
+   local output2 = seq2:forward(input)
+   local gradInput2 = seq2:backward(input, gradOutput)
+   
+   for i=1,#input do
+      mytester:assertTensorEq(input[i], input_[i], 0.000001)
+      mytester:assertTensorEq(gradOutput[i], gradOutput_[i], 0.000001)
+   end
+   
+   for i=1,#output1 do
+      mytester:assertTensorEq(output1[i], output2[i], 0.000001, "FastLSTM nngraph output error "..i)
+      mytester:assertTensorEq(gradInput1[i], gradInput2[i], 0.000001, "FastLSTM nngraph gradInput error "..i)
+   end
+   
+   local p1, gp1 = lstm2:parameters()
+   local p2, gp2 = lstm2.sharedClones[2]:parameters()
+   
+   for i=1,#p1 do
+      mytester:assertTensorEq(p1[i], p2[i], 0.000001, "FastLSTM nngraph param err "..i)
+      mytester:assertTensorEq(gp1[i], gp2[i], 0.000001, "FastLSTM nngraph gradParam err "..i)
+   end
+   
+   mytester:assertTensorEq(gradParams1, gradParams2, 0.000001, "FastLSTM nngraph gradParams err")
+   
+   local benchmark = true
+   if benchmark and pcall(function() require 'cunn' end ) then
+      local lstmSize = 128
+      local batchSize = 50
+      local nStep = 50
+      
+   
+      local input = {}
+      local gradOutput = {}
+      for step=1,nStep do
+         input[step] = torch.randn(batchSize, lstmSize):cuda()
+         gradOutput[step] = torch.randn(batchSize, lstmSize):cuda()
+      end
+      
+      local _nngraph = nngraph
+      nngraph = nil
+      
+      local lstm1 = nn.Sequencer(nn.FastLSTM(lstmSize)):cuda()
+      nngraph = _nngraph
+      local lstm2 = nn.Sequencer(nn.FastLSTM(lstmSize)):cuda()
+      
+      -- nn
+      
+      local output = lstm1:forward(input)
+      cutorch.synchronize()
+      local a = torch.Timer()
+      for i=1,10 do
+         lstm1:forward(input)
+      end
+      cutorch.synchronize()
+      local nntime = a:time().real
+      
+      -- nngraph
+      
+      local output = lstm2:forward(input)
+      cutorch.synchronize()
+      local a = torch.Timer()
+      for i=1,10 do
+         lstm2:forward(input)
+      end
+      cutorch.synchronize()
+      local nngraphtime = a:time().real
+      
+      print("nn vs nngraph time", nntime, nngraphtime)
+   end
+end
 
 function rnntest.GRU()
    local batchSize = math.random(1,2)
@@ -1881,7 +2045,7 @@ function rnntest.LSTM_nn_vs_nngraph()
    
    -- and do it again
    -- forward 
-   --reset_state(state)
+   -- reset_state(state)
    
    local inputs2 = inputs:narrow(1,nStep+1,nStep):transpose(1,2)
    local targets2 = inputs:narrow(1,nStep+2,nStep):transpose(1,2)
@@ -1928,6 +2092,155 @@ function rnntest.LSTM_nn_vs_nngraph()
    for i=1,#params_ do
       mytester:assertTensorEq(params_[i], params2_[i], 0.00001, "nn vs nngraph second update params err "..i)
    end
+end
+
+function rnntest.LSTM_char_rnn()
+   
+   -- we want to benchmark our LSTM against char-rnn's LSTM
+   local success = pcall(function() require 'nngraph' end)
+   if not success then
+      return
+   end
+   
+   local gpu = pcall(function() require 'cunn' end)
+   
+   local function makeCharLSTM(input_size, rnn_size, n)
+      local dropout = 0 
+
+      -- there will be 2*n+1 inputs
+      local inputs = {}
+      table.insert(inputs, nn.Identity()()) -- x
+      for L = 1,n do
+         table.insert(inputs, nn.Identity()()) -- prev_c[L]
+         table.insert(inputs, nn.Identity()()) -- prev_h[L]
+      end
+
+      local x, input_size_L
+      local outputs = {}
+      for L = 1,n do
+         -- c,h from previos timesteps
+         local prev_h = inputs[L*2+1]
+         local prev_c = inputs[L*2]
+         -- the input to this layer
+         if L == 1 then 
+            x = nn.OneHot(input_size)(inputs[1])
+            input_size_L = input_size
+         else 
+            x = outputs[(L-1)*2] 
+            if dropout > 0 then x = nn.Dropout(dropout)(x) end -- apply dropout, if any
+            input_size_L = rnn_size
+         end
+         -- evaluate the input sums at once for efficiency
+         local i2h = nn.Linear(input_size_L, 4 * rnn_size)(x):annotate{name='i2h_'..L}
+         local h2h = nn.Linear(rnn_size, 4 * rnn_size)(prev_h):annotate{name='h2h_'..L}
+         local all_input_sums = nn.CAddTable()({i2h, h2h})
+
+         local reshaped = nn.Reshape(4, rnn_size)(all_input_sums)
+         local n1, n2, n3, n4 = nn.SplitTable(2)(reshaped):split(4)
+         -- decode the gates
+         local in_gate = nn.Sigmoid()(n1)
+         local forget_gate = nn.Sigmoid()(n2)
+         local out_gate = nn.Sigmoid()(n3)
+         -- decode the write inputs
+         local in_transform = nn.Tanh()(n4)
+         -- perform the LSTM update
+         local next_c           = nn.CAddTable()({
+           nn.CMulTable()({forget_gate, prev_c}),
+           nn.CMulTable()({in_gate,     in_transform})
+         })
+         -- gated cells form the output
+         local next_h = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
+
+         table.insert(outputs, next_c)
+         table.insert(outputs, next_h)
+      end
+
+      -- set up the decoder
+      local top_h = outputs[#outputs]
+      if dropout > 0 then top_h = nn.Dropout(dropout)(top_h) end
+      local proj = nn.Linear(rnn_size, input_size)(top_h):annotate{name='decoder'}
+      local logsoft = nn.LogSoftMax()(proj)
+      table.insert(outputs, logsoft)
+
+      local lstm = nn.gModule(inputs, outputs)
+      if gpu then
+         lstm:cuda()
+      end
+      return lstm
+   end
+   
+   local function makeRnnLSTM(input_size, rnn_size, n, gpu)
+      local seq = nn.Sequential()
+         :add(nn.OneHot(input_size))
+      
+      local inputSize = input_size
+      for L=1,n do
+         seq:add(nn.FastLSTM(inputSize, rnn_size))
+         inputSize = rnn_size
+      end
+      
+      seq:add(nn.Linear(rnn_size, input_size))
+      seq:add(nn.LogSoftMax())
+      
+      local lstm = nn.Recursor(seq)
+      lstm:backwardOnline()
+      
+      if gpu then
+         lstm:cuda()
+      end
+      
+      return lstm 
+   end
+   
+   local batch_size = 50
+   local input_size = 65
+   local rnn_size = 128
+   local n_layer = 2
+   
+   -- char-rnn (nngraph)
+
+   local lstm1 = makeCharLSTM(input_size, rnn_size, n_layer, gpu)   
+   
+   -- the initial state of the cell/hidden states
+   local init_state = {}
+   for L=1,n_layer do
+      local h_init = torch.zeros(batch_size, rnn_size)
+      if gpu then h_init = h_init:cuda() end
+      table.insert(init_state, h_init:clone())
+      table.insert(init_state, h_init:clone())
+   end
+   
+   local x = init_state[1].new()
+   x:resize(batch_size):copy(torch.Tensor(batch_size):random(1,input_size))
+   
+   local input1 = {x, unpack(init_state)}
+   local output1 = lstm1:forward(input1)
+   local a = torch.Timer()
+   for i=1,100 do
+      lstm1:forward(input1)
+   end
+   local chartime = a:time().real
+   
+   -- rnn
+   
+   local lstm2 = makeRnnLSTM(input_size, rnn_size, n_layer, gpu)
+   local output2 = lstm2:forward(x)
+   
+   local a = torch.Timer()
+   for i=1,100 do
+      lstm2:forget()
+      lstm2:forward(x)
+   end
+   local rnntime = a:time().real
+   
+   print("char vs rnn time", chartime, rnntime)
+   
+   local params1 = lstm1:getParameters()
+   local params2 = lstm2:getParameters()
+   
+   print(params1:size(), params2:size())
+   
+   print("Done char-rnn test")
 end
 
 -- https://github.com/Element-Research/rnn/issues/28

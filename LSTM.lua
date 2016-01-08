@@ -14,7 +14,7 @@ local LSTM, parent = torch.class('nn.LSTM', 'nn.AbstractRecurrent')
 function LSTM:__init(inputSize, outputSize, rho, cell2gate)
    parent.__init(self, rho or 9999)
    self.inputSize = inputSize
-   self.outputSize = outputSize   
+   self.outputSize = outputSize or inputSize
    -- build the model
    self.cell2gate = (cell2gate == nil) and true or cell2gate
    self.recurrentModule = self:buildModel()

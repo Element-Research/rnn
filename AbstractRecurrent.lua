@@ -190,10 +190,10 @@ function AbstractRecurrent:includingSharedClones(f)
          table.insert(self.modules, module)
       end
    end
-   local r = f()
+   local r = {f()}
    self.modules = modules
    self.sharedClones = sharedClones
-   return r
+   return unpack(r)
 end
 
 function AbstractRecurrent:type(type)
