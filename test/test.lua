@@ -2707,7 +2707,9 @@ function rnntest.LSTM_nn_vs_nngraph()
    model2:remember()
    local outputs2 = model2:forward(inputs2)
    
-   local inputsClone, outputsClone, cellsClone = seq21.output[nStep+1]:clone(), container2:get(2).outputs[nStep]:clone(), container2:get(2).cells[nStep]:clone()
+   local inputsClone = seq21.output[nStep]:clone()
+   local outputsClone = container2:get(2).outputs[nStep]:clone()
+   local cellsClone = container2:get(2).cells[nStep]:clone()
    local err2 = criterion2:forward(outputs2, targets2)
    local state = {pos=nStep+1,data=inputs}
    local err = fp(state)
@@ -2725,16 +2727,16 @@ function rnntest.LSTM_nn_vs_nngraph()
    
    model2:updateParameters(lr)
    
-   mytester:assertTensorEq(inputsClone, container2:get(2).inputs[nStep+1], 0.000001)
+   mytester:assertTensorEq(inputsClone, seq21.output[nStep], 0.000001)
    mytester:assertTensorEq(outputsClone, container2:get(2).outputs[nStep], 0.000001)
    mytester:assertTensorEq(cellsClone, container2:get(2).cells[nStep], 0.000001)
    
    -- next_c, next_h, next_c...
    for i=nStep-1,2,-1 do
       mytester:assertTensorEq(model.dss[i][1], container2:get(2).gradCells[i+nStep], 0.0000001, "gradCells1 err "..i)
-      mytester:assertTensorEq(model.dss[i][2], container2:get(2)._gradOutputs[i+nStep] - seq24.gradInput[i+nStep], 0.0000001, "gradOutputs1 err "..i)
+      mytester:assertTensorEq(model.dss[i][2], container2:get(2)._gradOutputs[i+nStep] - seq24.gradInput[i], 0.0000001, "gradOutputs1 err "..i)
       mytester:assertTensorEq(model.dss[i][3], container2:get(3).gradCells[i+nStep], 0.0000001, "gradCells2 err "..i)
-      mytester:assertTensorEq(model.dss[i][4], container2:get(3)._gradOutputs[i+nStep] - seq25.gradInput[i+nStep], 0.0000001, "gradOutputs2 err "..i)
+      mytester:assertTensorEq(model.dss[i][4], container2:get(3)._gradOutputs[i+nStep] - seq25.gradInput[i], 0.0000001, "gradOutputs2 err "..i)
    end
    
    mytester:assertTensorNe(gradInputClone, dropout2.gradInput:select(2,1), 0.0000001, "lookup table gradInput1 err")
@@ -3085,6 +3087,7 @@ function rnntest.LSTM_checkgrad()
    
    function f(x)
       parameters:copy(x)
+      
       -- Do the forward prop
       rnn:zeroGradParameters()
       local err = 0
