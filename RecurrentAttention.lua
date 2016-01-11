@@ -18,12 +18,9 @@ function RecurrentAttention:__init(rnn, action, nStep, hiddenSize)
    self.rnn = rnn
    -- we can decorate the module with a Recursor to make it AbstractRecurrent
    self.rnn = (not torch.isTypeOf(rnn, 'nn.AbstractRecurrent')) and nn.Recursor(rnn) or rnn
-   -- backprop through time (BPTT) will be done online (in reverse order of forward)
-   self.rnn:backwardOnline()
    
    -- samples an x,y actions for each example
    self.action =  (not torch.isTypeOf(action, 'nn.AbstractRecurrent')) and nn.Recursor(action) or action 
-   self.action:backwardOnline()
    self.hiddenSize = hiddenSize
    self.nStep = nStep
    

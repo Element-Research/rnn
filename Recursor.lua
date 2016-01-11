@@ -13,8 +13,6 @@ function Recursor:__init(module, rho)
    
    self.module = module
    self.modules = {module}
-   
-   self:backwardOnline()
 end
 
 function Recursor:updateOutput(input)
@@ -33,74 +31,26 @@ function Recursor:updateOutput(input)
    self.step = self.step + 1
    self.updateGradInputStep = nil
    self.accGradParametersStep = nil
-   self.gradParametersAccumulated = false
    return self.output
 end
 
-function Recursor:backwardThroughTime(timeStep, timeRho)
-   timeStep = timeStep or self.step
-   local rho = math.min(timeRho or self.rho, timeStep-1)
-   local stop = timeStep - rho
-   local gradInput
-   if self.fastBackward then
-      self.gradInputs = {}
-      for step=timeStep-1,math.max(stop, 1),-1 do
-         -- backward propagate through this step
-         local recurrentModule = self:getStepModule(step)
-         gradInput = recurrentModule:backward(self.inputs[step], self.gradOutputs[step] , self.scales[step])
-         table.insert(self.gradInputs, 1, gradInput)
-      end
-      
-      self.gradParametersAccumulated = true
-   else
-      gradInput = self:updateGradInputThroughTime(timeStep, timeRho)
-      self:accGradParametersThroughTime(timeStep, timeRho)
-   end
-   return gradInput
-end
-
-function Recursor:updateGradInputThroughTime(timeStep, rho)
+function Recursor:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
-   self.gradInputs = {}
-   timeStep = timeStep or self.step
-   local rho = math.min(rho or self.rho, timeStep-1)
-   local stop = timeStep - rho
-   local gradInput
-   for step=timeStep-1,math.max(stop,1),-1 do
-      -- backward propagate through this step
-      local recurrentModule = self:getStepModule(step)
-      gradInput = recurrentModule:updateGradInput(self.inputs[step], self.gradOutputs[step])
-      table.insert(self.gradInputs, 1, gradInput)
-   end
+   local step = self.updateGradInputStep - 1
+   assert(step >= 1)
+   
+   local recurrentModule = self:getStepModule(step)
+   local gradInput = recurrentModule:updateGradInput(input, gradOutput)
    
    return gradInput
 end
 
-function Recursor:accGradParametersThroughTime(timeStep, rho)
-   timeStep = timeStep or self.step
-   local rho = math.min(rho or self.rho, timeStep-1)
-   local stop = timeStep - rho
-   for step=timeStep-1,math.max(stop,1),-1 do
-      -- backward propagate through this step
-      local recurrentModule = self:getStepModule(step)
-      recurrentModule:accGradParameters(self.inputs[step], self.gradOutputs[step], self.scales[step])
-   end
+function Recursor:_accGradParameters(input, gradOutput, scale)
+   local step = self.accGradParametersStep - 1
+   assert(step >= 1)
    
-   self.gradParametersAccumulated = true
-   return gradInput
-end
-
-function Recursor:accUpdateGradParametersThroughTime(lr, timeStep, rho)
-   timeStep = timeStep or self.step
-   local rho = math.min(rho or self.rho, timeStep-1)
-   local stop = timeStep - rho
-   for step=timeStep-1,math.max(stop,1),-1 do
-      -- backward propagate through this step
-      local recurrentModule = self:getStepModule(step)
-      recurrentModule:accUpdateGradParameters(self.inputs[step], self.gradOutputs[step], lr*self.scales[step])
-   end
-   
-   return gradInput
+   local recurrentModule = self:getStepModule(step)
+   recurrentModule:accGradParameters(input, gradOutput, scale)
 end
 
 function Recursor:includingSharedClones(f)
@@ -117,11 +67,6 @@ function Recursor:includingSharedClones(f)
    self.modules = modules
    self.sharedClones = sharedClones
    return r
-end
-
-function Recursor:backwardOnline(online)
-   assert(online ~= false, "Recursor only supports online backwards")
-   parent.backwardOnline(self)
 end
 
 function Recursor:forget(offset)

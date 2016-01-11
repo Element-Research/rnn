@@ -107,13 +107,6 @@ function Recurrence:updateOutput(input)
       output = self.recurrentModule:updateOutput{input, prevOutput}
    end
    
-   if self.train ~= false then
-      local input_ = self.inputs[self.step]
-      self.inputs[self.step] = self.copyInputs 
-         and nn.rnn.recursiveCopy(input_, input) 
-         or nn.rnn.recursiveSet(input_, input)     
-   end
-   
    self.outputs[self.step] = output
    
    self.output = output
@@ -122,112 +115,44 @@ function Recurrence:updateOutput(input)
    self.gradPrevOutput = nil
    self.updateGradInputStep = nil
    self.accGradParametersStep = nil
-   self.gradParametersAccumulated = false
    
    return self.output
 end
 
-function Recurrence:backwardThroughTime(timeStep, rho)
+function Recurrence:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
-   self.gradInputs = {} -- used by Sequencer, Repeater
-   timeStep = timeStep or self.step
-   local rho = math.min(rho or self.rho, timeStep-1)
-   local stop = timeStep - rho
+   local step = self.updateGradInputStep - 1
+   assert(step >= 1)
    
-   if self.fastBackward then
-      for step=timeStep-1,math.max(stop,1),-1 do
-         -- set the output/gradOutput states of current Module
-         local recurrentModule = self:getStepModule(step)
-         
-         -- backward propagate through this step
-         local gradOutput = self.gradOutputs[step]
-         if self.gradPrevOutput then
-            self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
-            nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
-            gradOutput = self._gradOutputs[step]
-         end
-         
-         local scale = self.scales[step]
-         local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1] 
-         local gradInputTable = recurrentModule:backward({self.inputs[step], output}, gradOutput, scale)
-         gradInput, self.gradPrevOutput = unpack(gradInputTable)
-         table.insert(self.gradInputs, 1, gradInput)
-         if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
-      end
-      self.gradParametersAccumulated = true
-      return gradInput
-   else
-      local gradInput = self:updateGradInputThroughTime()
-      self:accGradParametersThroughTime()
-      return gradInput
-   end
-end
-
-function Recurrence:updateGradInputThroughTime(timeStep, rho)
-   assert(self.step > 1, "expecting at least one updateOutput")
-   self.gradInputs = {}
    local gradInput
-   timeStep = timeStep or self.step
-   local rho = math.min(rho or self.rho, timeStep-1)
-   local stop = timeStep - rho
 
-   for step=timeStep-1,math.max(stop,1),-1 do
-      -- set the output/gradOutput states of current Module
-      local recurrentModule = self:getStepModule(step)
-      
-      -- backward propagate through this step
-      local gradOutput = self.gradOutputs[step]
-      if self.gradPrevOutput then
-         self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
-         nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
-         gradOutput = self._gradOutputs[step]
-      end
-      
-      local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
-      local gradInputTable = recurrentModule:updateGradInput({self.inputs[step], output}, gradOutput)
-      gradInput, self.gradPrevOutput = unpack(gradInputTable)
-      table.insert(self.gradInputs, 1, gradInput)
-      if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
+   -- set the output/gradOutput states of current Module
+   local recurrentModule = self:getStepModule(step)
+   
+   -- backward propagate through this step
+   if self.gradPrevOutput then
+      self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
+      nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
+      gradOutput = self._gradOutputs[step]
    end
+   
+   local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
+   local gradInputTable = recurrentModule:updateGradInput({input, output}, gradOutput)
+   gradInput, self.gradPrevOutput = unpack(gradInputTable)
+   if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
    
    return gradInput
 end
 
-function Recurrence:accGradParametersThroughTime(timeStep, rho)
-   timeStep = timeStep or self.step
-   local rho = math.min(rho or self.rho, timeStep-1)
-   local stop = timeStep - rho
-   
-   for step=timeStep-1,math.max(stop,1),-1 do
-      -- set the output/gradOutput states of current Module
-      local recurrentModule = self:getStepModule(step)
-      
-      -- backward propagate through this step
-      local scale = self.scales[step]
-      local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
-      local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
-      recurrentModule:accGradParameters({self.inputs[step], output}, gradOutput, scale)
-   end
-   
-   self.gradParametersAccumulated = true
-   return gradInput
-end
+function Recurrence:_accGradParameters(input, gradOutput, scale)
+   local step = self.accGradParametersStep - 1
+   assert(step >= 1)
 
-function Recurrence:accUpdateGradParametersThroughTime(lr, timeStep, rho)
-   timeStep = timeStep or self.step
-   local rho = math.min(rho or self.rho, timeStep-1)
-   local stop = timeStep - rho
+   local recurrentModule = self:getStepModule(step)
    
-   for step=timeStep-1,math.max(stop,1),-1 do
-      -- set the output/gradOutput states of current Module
-      local recurrentModule = self:getStepModule(step)
-      
-      -- backward propagate through this step
-      local scale = self.scales[step] 
-      local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
-      local gradOutput = (step == self.step-1) and self.gradOutputs[step] or self._gradOutputs[step]
-      recurrentModule:accUpdateGradParameters({self.inputs[step], output}, gradOutput, lr*scale)
-   end
+   local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
+   local gradOutput = (step == self.step-1) and gradOutput or self._gradOutputs[step]
+   recurrentModule:accGradParameters({step, output}, gradOutput, scale)
    
    return gradInput
 end

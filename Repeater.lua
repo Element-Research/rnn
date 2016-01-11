@@ -13,7 +13,6 @@ function Repeater:__init(module, rho)
    self.rho = rho
    self.module = (not torch.isTypeOf(rnn, 'nn.AbstractRecurrent')) and nn.Recursor(module) or module
    
-   self.module:backwardOnline()
    self.module:maxBPTTstep(rho) -- hijack rho (max number of time-steps for backprop)
    
    self.modules[1] = self.module

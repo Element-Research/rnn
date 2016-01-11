@@ -20,40 +20,12 @@ function Module:remember(remember)
    return self
 end
 
--- Calls backwardThroughTime for all encapsulated modules
-function Module:backwardThroughTime()
-   if self.modules then
-      for i, module in ipairs(self.modules) do
-         module:backwardThroughTime()
-      end
-   end
-end
-
 function Module:stepClone(shareParams, shareGradParams, clones, pointers)
    return self:sharedClone(shareParams, shareGradParams, clones, pointers, true)
 end
 
--- notifies all AbstractRecurrent instances not wrapped by an AbstractSequencer
--- that the backward calls will be handled online (in reverse order of forward time).
-function Module:backwardOnline(online, root)
-   root = (root == nil) or root
-   if self.modules then
-      for i, module in ipairs(self.modules) do
-         module:backwardOnline(online, false)
-      end
-   end
-   
-   -- backwardOnline doesn't require copyInputs, copyGradOutputs
-   if root then
-      for i,modula in ipairs(self:listModules()) do
-         if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
-            modula.copyInputs = false
-            modula.copyGradOutputs = false
-         end
-      end
-      self.copyInputs = false
-      self.copyGradOutputs = false
-   end   
+function Module:backwardOnline()
+   print("Deprecated Jan 6, 2016. By default rnn now uses backwardOnline, so no need to call this method")
 end
 
 -- set the maximum number of backpropagation through time (BPTT) time-steps
