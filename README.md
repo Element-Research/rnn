@@ -212,6 +212,7 @@ Note that calling the `evaluate` method turns off long-term memory;
 the RNN will only remember the previous output. This allows the RNN 
 to handle long sequences without allocating any additional memory.
 
+
 For a simple concise example of how to make use of this module, please consult the 
 [simple-recurrent-network.lua](examples/simple-recurrent-network.lua)
 training script.
@@ -589,7 +590,7 @@ brnn = nn.BiSequencer(fwd, [bwd, merge])
 
 The input to the module is a sequence (a table) of tensors
 and the output is a sequence (a table) of tensors of the same length.
-Applies a `fwd` rnn (an [AbstractRecurrent](#rnn.AbstractRecurrent) instance to each element in the sequence in
+Applies a `fwd` rnn (an [AbstractRecurrent](#rnn.AbstractRecurrent) instance) to each element in the sequence in
 forward order and applies the `bwd` rnn in reverse order (from last element to first element).
 The `bwd` rnn defaults to:
 
@@ -612,6 +613,11 @@ use of 3 Sequencers for the forward, backward and merge modules.
 
 Similarly to a [Sequencer](#rnn.Sequencer), the sequences in a batch must have the same size.
 But the sequence length of each batch can vary.
+
+Note : make sure you call `brnn:forget()` after each call to `updateParameters()`. 
+Alternatively, one could call `brnn.bwdSeq:forget()` so that only `bwd` rnn forgets.
+This is the minimum requirement, as it would not make sense for the `bwd` rnn to remember future sequences.
+
 
 <a name='rnn.BiSequencerLM'></a>
 ## BiSequencerLM ##

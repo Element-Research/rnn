@@ -17,7 +17,7 @@ end
 
 function Recursor:updateOutput(input)
    local output
-   if self.train ~= false then
+   if self.train ~= false then -- if self.train or self.train == nil then
       -- set/save the output states
       self:recycle()
       local recurrentModule = self:getStepModule(self.step)
