@@ -59,6 +59,29 @@ Any significant contributor to the library will also get added as an author to t
 A [significant contributor](https://github.com/Element-Research/rnn/graphs/contributors) 
 is anyone who added at least 300 lines of code to the library.
 
+## Troubleshooting ##
+
+Most issues can be resolved by updating the various dependencies:
+```bash
+luarocks install torch
+luarocks install nn
+luarocks install dpnn
+```
+
+If you are using CUDA :
+```bash
+luarocks install cutorch
+luarocks install cunn
+luarocks install cunnx
+```
+
+And don't forget to update this package :
+```bash
+luarocks install rnn
+```
+
+If that doesn't fix it, open and issue on github.
+
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
 An abstract class inherited by [Recurrent](#rnn.Recurrent), [LSTM](#rnn.LSTM) and [GRU](#rnn.GRU).
