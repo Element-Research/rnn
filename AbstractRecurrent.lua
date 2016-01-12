@@ -154,6 +154,13 @@ function AbstractRecurrent:sharedClone(shareParams, shareGradParams, clones, poi
    end
 end
 
+-- used by Recursor() after calling stepClone.
+-- this solves a very annoying bug...
+function AbstractRecurrent:setOutputStep(step)
+   self.output = self.outputs[step]
+   assert(self.output, "no output for step "..step)
+end
+
 function AbstractRecurrent:maxBPTTstep(rho)
    self.rho = rho
 end

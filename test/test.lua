@@ -636,7 +636,6 @@ function rnntest.Recurrent_old()
    end
 
    local err = optim.checkgrad(f, parameters:clone())
-   print(err)
    mytester:assert(err < 0.0001, "Recurrent optim.checkgrad error")
 end
 
@@ -1093,6 +1092,7 @@ function rnntest.FastLSTM_nngraph()
    assert(torch.type(lstm1.recurrentModule) ~= 'nn.gModule')
    nn.FastLSTM.usenngraph = true
    local lstm2 = nn.FastLSTM(lstmSize) -- with nngraph
+   nn.FastLSTM.usenngraph = false
    local params2, gradParams2 = lstm2:getParameters()
    assert(torch.type(lstm2.recurrentModule) == 'nn.gModule')
    
@@ -3079,6 +3079,7 @@ function rnntest.LSTM_checkgrad()
    rnn:add(r)
    rnn:add(nn.Linear(hiddenSize, nIndex))
    rnn:add(nn.LogSoftMax())
+   rnn = nn.Recursor(rnn)
 
    local criterion = nn.ClassNLLCriterion()
    local inputs = torch.randn(4, 2)
@@ -3098,9 +3099,9 @@ function rnntest.LSTM_checkgrad()
       end
       for i = inputs:size(1), 1, -1 do
          local gradOutput = criterion:backward(outputs[i], targets[i])
-         rnn:backward(inputs[i], gradOutput:clone())
+         rnn:backward(inputs[i], gradOutput)
       end
-      r:forget()
+      rnn:forget()
       return err, grads
    end
 

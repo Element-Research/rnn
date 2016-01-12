@@ -72,10 +72,10 @@ function Recurrent:updateOutput(input)
          self:recycle()
          local recurrentModule = self:getStepModule(self.step)
           -- self.output is the previous output of this module
-         output = recurrentModule:updateOutput{input, self.output}
+         output = recurrentModule:updateOutput{input, self.outputs[self.step-1]}
       else
          -- self.output is the previous output of this module
-         output = self.recurrentModule:updateOutput{input, self.output}
+         output = self.recurrentModule:updateOutput{input, self.outputs[self.step-1]}
       end
    end
    

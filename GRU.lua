@@ -103,7 +103,7 @@ function GRU:updateOutput(input)
       end
    else
       -- previous output and cell of this module
-      prevOutput = self.output
+      prevOutput = self.outputs[self.step-1]
    end
 
    -- output(t) = gru{input(t), output(t-1)}

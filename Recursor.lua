@@ -40,6 +40,7 @@ function Recursor:_updateGradInput(input, gradOutput)
    assert(step >= 1)
    
    local recurrentModule = self:getStepModule(step)
+   recurrentModule:setOutputStep(step)
    local gradInput = recurrentModule:updateGradInput(input, gradOutput)
    
    return gradInput
@@ -50,6 +51,7 @@ function Recursor:_accGradParameters(input, gradOutput, scale)
    assert(step >= 1)
    
    local recurrentModule = self:getStepModule(step)
+   recurrentModule:setOutputStep(step)
    recurrentModule:accGradParameters(input, gradOutput, scale)
 end
 

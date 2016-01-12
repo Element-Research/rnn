@@ -149,8 +149,8 @@ function LSTM:updateOutput(input)
       end
    else
       -- previous output and cell of this module
-      prevOutput = self.output
-      prevCell = self.cell
+      prevOutput = self.outputs[self.step-1]
+      prevCell = self.cells[self.step-1]
    end
       
    -- output(t), cell(t) = lstm{input(t), output(t-1), cell(t-1)}
