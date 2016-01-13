@@ -46,87 +46,70 @@ end
 print('Sequence:'); print(sequence)
 
 -- batch mode
-batchSize = 1 --8
+batchSize = 8
 offsets = {}
 for i=1,batchSize do
-   --table.insert(offsets, 1)
+   --table.insert(offsets, i)
    -- randomize batch input
    table.insert(offsets, math.ceil(math.random()*batchSize))
 end
 offsets = torch.LongTensor(offsets)
-print(offsets)
+--print(offsets)
 
 -- wrap rnn in to a Recursor
 rnn = nn.Recursor(rnn, rho)
 rnn:zeroGradParameters()
 -- rnn uses backwardOnline by default
 --rnn:backwardOnline()
+rnn = nn.Sequencer(rnn)
+criterion = nn.SequencerCriterion(criterion)
 print(rnn)
 
 updateInterval = 4 -- note that updateInterval < rho
 lr = 0.001 -- learning rate
-step = 0 -- step counter
 minErr = outputSize
-inputs, outputs, targets = {}, {}, {}
-kErrs = torch.Tensor(sequence:size(1)-1):fill(0)
 minK = 0
-nEpochs = 1
-avgErrs = torch.Tensor(nEpochs):fill(0)
-for k = 1, nEpochs do --while true do
-   for j = 1, sequence:size(1)-1 do
-      step = step + 1
-
-      -- forward
-      local rinput = sequence:index(1, offsets)
-      --print(rinput)
-      local routput = rnn:forward(rinput)
-      --print(#routput)
-
-      -- increase indices by 1
-      offsets:add(1)
+nIterations = 1000
+avgErrs = torch.Tensor(nIterations):fill(0)
+for k = 1, nIterations do --while true do
+   -- 1. create a sequence of rho time-steps
+   local inputs, targets = {}, {}
+   for step = 1, rho do
+      -- batch of inputs
+      inputs[step] = sequence:index(1, offsets)
+      -- batch of targets
+      offsets:add(1) -- increase indices by 1
       for i=1,batchSize do
          if offsets[i] > nIndex then
             offsets[i] = 1
          end
       end
+      targets[step] = sequence:index(1, offsets)
+   end
 
-      -- target
-      local target = sequence:index(1, offsets)
+   -- 2. forward sequence through rnn
+   rnn:zeroGradParameters()
 
-      -- report errors
-      local err = criterion:forward(routput, target)
-      print('Step: ' .. step .. ' Err: '.. err)
-      print(' Input:  ', rinput); print(' Output: ', routput); print(' Target: ', target)
-      kErrs[j] = err
+   local outputs = rnn:forward(inputs)
 
-      -- save these for BPTT
-      table.insert(inputs, rinput)
-      table.insert(outputs, routput)
-      table.insert(targets, target)
+   -- report errors
+   local err = criterion:forward(outputs, targets)
+   print('Iter: ' .. k .. ' Err: ' .. err)
+   --print(' Input:  ', inputs); print(' Output: ', outputs); print(' Target: ', targets)
 
-      -- backward
-      if step % updateInterval == 0 then
-         -- backpropagates through time (BPTT) :
-         for istep = updateInterval,1,-1 do
-            local gradOutput = criterion:backward(outputs[istep], targets[istep])
-            print(gradOutput)
-            print(r.step, r.updateGradInputStep)
-            rnn:backward(inputs[istep], gradOutput)
-         end
-         -- 2. updates parameters
-         rnn:updateParameters(lr)
-         rnn:zeroGradParameters()
-         -- 3. reset the internal time-step counter
-         --rnn:forget()
-         inputs, outputs, targets = {}, {}, {}
-      end
-   end -- #sequence
-   avgErrs[k] = kErrs:mean()
+   -- 3. backward sequence through rnn (i.e. backprop through time)
+   local gradOutputs = criterion:backward(outputs, targets)
+   local gradInputs = rnn:backward(inputs, gradOutputs)
+
+   -- 4. updates parameters
+   rnn:updateParameters(lr)
+
+   avgErrs[k] = err
    if avgErrs[k] < minErr then
       minErr = avgErrs[k]
       minK = k
    end
-end -- #epoches
+end -- nIterations
 
 --print(avgErrs)
 print('min err: ' .. minErr .. ' on iteration ' .. minK)
