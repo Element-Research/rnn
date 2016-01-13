@@ -1,7 +1,6 @@
 -- This is a multi-variate version of the time-series example 
 -- at https://github.com/Element-Research/rnn#rnn.Recurrent
 require 'rnn'
---require 'dp'
 
 rho = 5 -- maximum number of time steps for BPTT
 inputSize = 6
@@ -59,6 +58,7 @@ print(offsets)
 
 -- wrap rnn in to a Recursor
 rnn = nn.Recursor(rnn, rho)
+rnn:zeroGradParameters()
 -- rnn uses backwardOnline by default
 --rnn:backwardOnline()
 print(rnn)
