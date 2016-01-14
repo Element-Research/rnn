@@ -112,7 +112,7 @@ function AbstractRecurrent:includingSharedClones(f)
    self.sharedClones = nil
    self.modules = {}
    for i,modules in ipairs{modules, sharedClones} do
-      for j, module in pairs(modules) do
+      for j, module in pairs(modules or {}) do
          table.insert(self.modules, module)
       end
    end

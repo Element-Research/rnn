@@ -93,7 +93,7 @@ function Recurrence:updateOutput(input)
       end
    else
       -- previous output of this module
-      prevOutput = self.output
+      prevOutput = self.outputs[self.step-1]
    end
       
    -- output(t) = recurrentModule{input(t), output(t-1)}
