@@ -3436,6 +3436,46 @@ function rnntest.Recurrence()
    end
 end
 
+function rnntest.Recurrence_FastLSTM()
+   -- issue 107
+   -- this will test the use case where an AbstractRecurrent.recurrentModule
+   -- contains an AbstractRecurrent instance!
+   
+   local batchSize = 4
+   local hiddenSize = 10
+   local rho = 3
+   
+   local lstm = nn.FastLSTM(hiddenSize,hiddenSize)
+   
+   local rm = nn.Sequential()
+      :add(nn.CSubTable())
+      :add(lstm)
+      :add(nn.Linear(hiddenSize,hiddenSize))
+      :add(nn.Sigmoid())    
+      
+   local rnn = nn.Recurrence(rm, hiddenSize, 1)
+
+   local seq = nn.Sequencer(rnn)
+   
+   local inputs, gradOutputs = {}, {}
+   for i=1,rho do
+      inputs[i] = torch.randn(batchSize, hiddenSize)
+      gradOutputs[i] = torch.randn(batchSize, hiddenSize)
+   end
+   
+   for n=1,3 do
+      seq:evaluate()
+      seq:training()
+      seq:zeroGradParameters()
+      
+      seq:forward(inputs)
+      seq:backward(inputs, gradOutputs)
+      
+      mytester:assert(rnn.step == 4)
+      mytester:assert(lstm.step == 4)
+   end
+end
+
 -- mock Recurrent and LSTM recurrentModules for UT
 -- must be stateless
 -- forwarding zeros must not return zeros -> use Sigmoid()

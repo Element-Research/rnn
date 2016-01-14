@@ -94,6 +94,9 @@ end
 function AbstractRecurrent:forget(offset)
    offset = offset or 0
    
+   -- the recurrentModule may contain an AbstractRecurrent instance (issue 107)
+   parent.forget(self) 
+   
     -- bring all states back to the start of the sequence buffers
    if self.train ~= false then
       self.outputs = _.compact(self.outputs)
