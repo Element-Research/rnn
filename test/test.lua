@@ -645,7 +645,7 @@ function rnntest.Recurrent()
    local hiddenSize = 12
    local outputSize = 7
    local nStep = 5 
-   local inputModule = nn.Dictionary(dictSize, outputSize)
+   local inputModule = nn.LookupTable(dictSize, outputSize)
    local transferModule = nn.Sigmoid()
    -- test MLP feedback Module (because of Module:representations())
    local feedbackModule = nn.Sequential()
@@ -797,12 +797,13 @@ function rnntest.Recurrent()
    local mlp3 = nn.Sequential()
    -- contains params and grads of mlp2 (the MLP version of the Recurrent)
    mlp3:add(startModule):add(inputModule):add(feedbackModule)
+   
    local params2, gradParams2 = mlp3:parameters()
    local params, gradParams = mlp:parameters()
    
-   mytester:assert(#_.keys(params2) == #_.keys(params), 'missing parameters')
-   mytester:assert(#_.keys(gradParams) == #_.keys(params), 'missing gradParameters')
-   mytester:assert(#_.keys(gradParams2) == #_.keys(params), 'missing gradParameters2')
+   mytester:assert(_.size(params2) == _.size(params), 'missing parameters')
+   mytester:assert(_.size(gradParams) == _.size(params), 'missing gradParameters')
+   mytester:assert(_.size(gradParams2) == _.size(params), 'missing gradParameters2')
    
    for i,v in pairs(params) do
       mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, 'gradParameter error ' .. i)
@@ -823,7 +824,6 @@ function rnntest.Recurrent()
    
    local params5 = mlp5:sparseParameters()
    local params = mlp:sparseParameters()
-   mytester:assert(#_.keys(params5) ~= #_.keys(params), 'missing parameters') -- because of nn.Dictionary (it has sparse params)
    for k,v in pairs(params) do
       if params5[k] then
          mytester:assertTensorNe(params[k], params5[k], 0.0000000001, 'backwardThroughTime error ' .. i)
@@ -2766,11 +2766,19 @@ function rnntest.LSTM_char_rnn()
    end
    
    local batch_size = 50
-   local input_size = 128
-   local rnn_size = 512
+   local input_size = 65
+   local rnn_size = 128
    local n_layer = 2
    local seq_len = 50
    
+   local inputs = {}
+   local gradOutputs = {}
+   for i=1,seq_len do
+      table.insert(inputs, torch.Tensor(batch_size):random(1,input_size):cuda())
+      table.insert(gradOutputs, torch.randn(batch_size, input_size):cuda())
+   end
+   
+   local a = torch.Timer()
    local function clone_list(tensor_list, zero_too)
        -- utility function. todo: move away to some utils file?
        -- takes a list of tensors and returns a list of cloned tensors
@@ -2965,6 +2973,10 @@ function rnntest.LSTM_char_rnn()
       init_state_global = rnn_state[#rnn_state]
    end
    
+   local charrnnsetuptime = a:time().real
+   
+   local a = torch.Timer()
+   
    local function makeRnnLSTM(input_size, rnn_size, n)
       local seq = nn.Sequential()
          :add(nn.OneHot(input_size))
@@ -2996,36 +3008,47 @@ function rnntest.LSTM_char_rnn()
       end
    end
    
-   local inputs = {}
-   local gradOutputs = {}
-   for i=1,seq_len do
-      table.insert(inputs, torch.Tensor(batch_size):random(1,input_size):cuda())
-      table.insert(gradOutputs, torch.randn(batch_size, input_size):cuda())
-   end
+   local rnnsetuptime = a:time().real
    
    -- char-rnn (nngraph)
    
+   local a = torch.Timer()
    trainCharrnn(inputs, gradOutputs)
    cutorch.synchronize()
+   charrnnsetuptime = charrnnsetuptime + a:time().real
+   collectgarbage()
+   
    local a = torch.Timer()
-   for i=1,3 do
+   for i=1,10 do
       trainCharrnn(inputs, gradOutputs)
    end
    cutorch.synchronize()
    local chartime = a:time().real
-      
-   -- rnn
    
+   -- rnn
+   local a = torch.Timer()
    trainRnn(inputs, gradOutputs)
    cutorch.synchronize()
+   rnnsetuptime = rnnsetuptime + a:time().real
+   collectgarbage()
+   print("Benchmark")
+   print("setuptime : char, rnn, char/rnn", charrnnsetuptime, rnnsetuptime, charrnnsetuptime/rnnsetuptime)
    local a = torch.Timer()
-   for i=1,3 do
+   for i=1,10 do
       trainRnn(inputs, gradOutputs)
    end
    cutorch.synchronize()
    local rnntime = a:time().real
+   print("runtime: char, rnn, char/rnn", chartime, rnntime, chartime/rnntime)
    
-   print("Benchmark: char vs rnn time", chartime, rnntime, chartime/rnntime)
+   -- on NVIDIA Titan Black :
+   -- with FastLSTM.usenngraph = true  :
+   -- setuptime : char, rnn, char/rnn 1.5070691108704 1.1547832489014 1.3050666541138 
+   -- runtime: char, rnn, char/rnn    1.0558769702911 1.7060630321503 0.61889681119246
+   
+   -- with FastLSTM.usenngraph = false :
+   -- setuptime : char, rnn, char/rnn 1.5920469760895 2.4352579116821 0.65374881586558
+   -- runtime: char, rnn, char/rnn    1.0614919662476 1.124755859375  0.94375322199913
 end
 
 -- https://github.com/Element-Research/rnn/issues/28
@@ -3433,6 +3456,46 @@ function rnntest.Recurrence()
       if i~= 3 then -- the gradBias isn't shared (else udpated twice)
          mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "Recurrence RNN accGradParams err "..i)
       end
+   end
+end
+
+function rnntest.Recurrence_FastLSTM()
+   -- issue 107
+   -- this will test the use case where an AbstractRecurrent.recurrentModule
+   -- contains an AbstractRecurrent instance!
+   
+   local batchSize = 4
+   local hiddenSize = 10
+   local rho = 3
+   
+   local lstm = nn.FastLSTM(hiddenSize,hiddenSize)
+   
+   local rm = nn.Sequential()
+      :add(nn.CSubTable())
+      :add(lstm)
+      :add(nn.Linear(hiddenSize,hiddenSize))
+      :add(nn.Sigmoid())    
+      
+   local rnn = nn.Recurrence(rm, hiddenSize, 1)
+
+   local seq = nn.Sequencer(rnn)
+   
+   local inputs, gradOutputs = {}, {}
+   for i=1,rho do
+      inputs[i] = torch.randn(batchSize, hiddenSize)
+      gradOutputs[i] = torch.randn(batchSize, hiddenSize)
+   end
+   
+   for n=1,3 do
+      seq:evaluate()
+      seq:training()
+      seq:zeroGradParameters()
+      
+      seq:forward(inputs)
+      seq:backward(inputs, gradOutputs)
+      
+      mytester:assert(rnn.step == 4)
+      mytester:assert(lstm.step == 4)
    end
 end
 

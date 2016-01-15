@@ -1,6 +1,7 @@
 local FastLSTM, parent = torch.class("nn.FastLSTM", "nn.LSTM")
 
 -- set this to true to have it use nngraph instead of nn
+-- setting this to true can make your next FastLSTM significantly faster
 FastLSTM.usenngraph = false
 
 function FastLSTM:__init(inputSize, outputSize, rho)

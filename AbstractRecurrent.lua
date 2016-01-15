@@ -3,6 +3,8 @@ local _ = require 'moses'
 assert(not nn.AbstractRecurrent, "update nnx package : luarocks install nnx")
 local AbstractRecurrent, parent = torch.class('nn.AbstractRecurrent', 'nn.Container')
 
+AbstractRecurrent.dpnn_stepclone = true
+
 function AbstractRecurrent:__init(rho)
    parent.__init(self)
    
@@ -94,6 +96,9 @@ end
 function AbstractRecurrent:forget(offset)
    offset = offset or 0
    
+   -- the recurrentModule may contain an AbstractRecurrent instance (issue 107)
+   parent.forget(self) 
+   
     -- bring all states back to the start of the sequence buffers
    if self.train ~= false then
       self.outputs = _.compact(self.outputs)
@@ -112,7 +117,7 @@ function AbstractRecurrent:includingSharedClones(f)
    self.sharedClones = nil
    self.modules = {}
    for i,modules in ipairs{modules, sharedClones} do
-      for j, module in pairs(modules) do
+      for j, module in pairs(modules or {}) do
          table.insert(self.modules, module)
       end
    end
@@ -146,18 +151,10 @@ function AbstractRecurrent:reinforce(reward)
    end)
 end
 
-function AbstractRecurrent:sharedClone(shareParams, shareGradParams, clones, pointers, stepClone)
-   if stepClone then 
-      return self 
-   else
-      return parent.sharedClone(self, shareParams, shareGradParams, clones, pointers, stepClone)
-   end
-end
-
 -- used by Recursor() after calling stepClone.
 -- this solves a very annoying bug...
 function AbstractRecurrent:setOutputStep(step)
-   self.output = self.outputs[step]
+   self.output = self.outputs[step] --or self:getStepModule(step).output
    assert(self.output, "no output for step "..step)
 end
 
