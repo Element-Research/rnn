@@ -20,8 +20,8 @@ function Module:remember(remember)
    return self
 end
 
-function Module:stepClone(shareParams, shareGradParams, clones, pointers)
-   return self:sharedClone(shareParams, shareGradParams, clones, pointers, true)
+function Module:stepClone(shareParams, shareGradParams)
+   return self:sharedClone(shareParams, shareGradParams, true)
 end
 
 function Module:backwardOnline()
