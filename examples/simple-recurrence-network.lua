@@ -1,4 +1,4 @@
-require 'nn'
+-- example use of nn.Recurrence
 require 'rnn'
 
 -- hyper-parameters 
@@ -21,11 +21,11 @@ local rnn = nn.Sequential()
    :add(nn.Linear(hiddenSize, nIndex))
    :add(nn.LogSoftMax())
 
-print(rnn)
-
 -- all following code is exactly the same as the simple-sequencer-network.lua script
 -- internally, rnn will be wrapped into a Recursor to make it an AbstractRecurrent instance.
 rnn = nn.Sequencer(rnn)
+
+print(rnn)
 
 -- build criterion
 

@@ -9,19 +9,21 @@ lr = 0.1
 
 
 -- build simple recurrent neural network
-r = nn.Recurrent(
+local r = nn.Recurrent(
    hiddenSize, nn.LookupTable(nIndex, hiddenSize), 
    nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(), 
    rho
 )
 
-rnn = nn.Sequential()
-rnn:add(r)
-rnn:add(nn.Linear(hiddenSize, nIndex))
-rnn:add(nn.LogSoftMax())
+local rnn = nn.Sequential()
+   :add(r)
+   :add(nn.Linear(hiddenSize, nIndex))
+   :add(nn.LogSoftMax())
 
 -- internally, rnn will be wrapped into a Recursor to make it an AbstractRecurrent instance.
 rnn = nn.Sequencer(rnn)
+
+print(rnn)
 
 -- build criterion
 
