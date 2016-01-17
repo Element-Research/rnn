@@ -152,7 +152,7 @@ function Recurrence:_accGradParameters(input, gradOutput, scale)
    
    local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
    local gradOutput = (step == self.step-1) and gradOutput or self._gradOutputs[step]
-   recurrentModule:accGradParameters({step, output}, gradOutput, scale)
+   recurrentModule:accGradParameters({input, output}, gradOutput, scale)
    
    return gradInput
 end
