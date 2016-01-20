@@ -18,7 +18,7 @@ assert(not nn.Recurrent, "update nnx package : luarocks install nnx")
 local Recurrent, parent = torch.class('nn.Recurrent', 'nn.AbstractRecurrent')
 
 function Recurrent:__init(start, input, feedback, transfer, rho, merge)
-   parent.__init(self, rho or 5)
+   parent.__init(self, rho)
    
    local ts = torch.type(start)
    if ts == 'torch.LongStorage' or ts == 'number' then

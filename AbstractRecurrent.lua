@@ -8,7 +8,7 @@ AbstractRecurrent.dpnn_stepclone = true
 function AbstractRecurrent:__init(rho)
    parent.__init(self)
    
-   self.rho = rho --the maximum number of time steps to BPTT
+   self.rho = rho or 99999 --the maximum number of time steps to BPTT
    
    self.outputs = {}
    self._gradOutputs = {}
@@ -27,6 +27,7 @@ function AbstractRecurrent:getStepModule(step)
    if not recurrentModule then
       recurrentModule = self.recurrentModule:stepClone()
       self.sharedClones[step] = recurrentModule
+      self.nSharedClone = _.size(self.sharedClones)
    end
    return recurrentModule
 end
@@ -65,43 +66,32 @@ end
 function AbstractRecurrent:recycle(offset)
    -- offset can be used to skip initialModule (if any)
    offset = offset or 0
-   -- pad rho with one extra time-step of memory (helps for Sequencer:remember()).
-   -- also, rho could have been manually increased or decreased
-   local rho = math.max(self.rho+1, _.size(self.sharedClones) or 0)
-   if self.step > rho + offset then
-      assert(self.sharedClones[self.step] == nil)
+   
+   self.nSharedClone = self.nSharedClone or _.size(self.sharedClones) 
+
+   local rho = math.max(self.rho + 1, self.nSharedClone)
+   if self.sharedClones[self.step] == nil then
       self.sharedClones[self.step] = self.sharedClones[self.step-rho]
       self.sharedClones[self.step-rho] = nil
-   end
-   
-   rho = math.max(self.rho+1, _.size(self.outputs) or 0)
-   if self.step > rho + offset then
-      -- need to keep rho+1 of these
-      assert(self.outputs[self.step] == nil)
-      self.outputs[self.step] = self.outputs[self.step-rho-1] 
-      self.outputs[self.step-rho-1] = nil
-   end
-   
-   rho = math.max(self.rho+1, _.size(self._gradOutputs) or 0)
-   if self.step > rho then
       assert(self._gradOutputs[self.step] == nil)
       self._gradOutputs[self.step] = self._gradOutputs[self.step-rho]
       self._gradOutputs[self.step-rho] = nil
    end
    
+   self.outputs[self.step-rho-1] = nil
+   
    return self
 end
 
 -- this method brings all the memory back to the start
-function AbstractRecurrent:forget(offset)
-   offset = offset or 0
+function AbstractRecurrent:forget()
    
    -- the recurrentModule may contain an AbstractRecurrent instance (issue 107)
    parent.forget(self) 
    
     -- bring all states back to the start of the sequence buffers
    if self.train ~= false then
-      self.outputs = _.compact(self.outputs)
+      self.outputs = {}
       self.sharedClones = _.compact(self.sharedClones)
       self._gradOutputs = _.compact(self._gradOutputs)
    end
