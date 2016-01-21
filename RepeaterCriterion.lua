@@ -28,7 +28,7 @@ function RepeaterCriterion:backward(inputTable, target)
    return self.gradInput
 end
 
-function RepeaterCriterion:type(type)
+function RepeaterCriterion:type(type, ...)
    self.gradInput = nn.rnn.recursiveType(self.gradInput)
-   return self.criterion:type(type)
+   return self.criterion:type(type, ...)
 end
