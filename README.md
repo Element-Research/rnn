@@ -90,10 +90,10 @@ If that doesn't fix it, open and issue on github.
 An abstract class inherited by [Recurrent](#rnn.Recurrent), [LSTM](#rnn.LSTM) and [GRU](#rnn.GRU).
 The constructor takes a single argument :
 ```lua
-rnn = nn.AbstractRecurrent(rho)
+rnn = nn.AbstractRecurrent([rho])
 ```
 Argument `rho` is the maximum number of steps to backpropagate through time (BPTT).
-Sub-classes can set this to a large number like 99999 if they want to backpropagate through 
+Sub-classes can set this to a large number like 99999 (the default) if they want to backpropagate through 
 the entire sequence whatever its length. Setting lower values of rho are 
 useful when long sequences are forward propagated, but we only whish to 
 backpropagate through the last `rho` steps, which means that the remainder 
@@ -213,7 +213,7 @@ The `nn.Recurrent(start, input, feedback, [transfer, rho, merge])` constructor t
  * `input` : a Module that processes input Tensors (or Tables). Output must be of same size as `start` (or its output in the case of a `start` Module), and same size as the output of the `feedback` Module.
  * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `transfer` Module.
  * `transfer` : a non-linear Module used to process the element-wise sum of the `input` and `feedback` module outputs, or in the case of the first step, the output of the *start* Module.
- * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Due to the vanishing gradients effect, references A and B recommend `rho = 5` (or lower). Defaults to 5.
+ * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Due to the vanishing gradients effect, references A and B recommend `rho = 5` (or lower). Defaults to 99999.
  * `merge` : a [table Module](https://github.com/torch/nn/blob/master/doc/table.md#table-layers) that merges the outputs of the `input` and `feedback` Module before being forwarded through the `transfer` Module.
  
 An RNN is used to process a sequence of inputs. 

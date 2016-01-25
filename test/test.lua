@@ -731,7 +731,7 @@ function rnntest.Recurrent()
    
    local mlp10 = mlp7:clone()
    mlp10:forget()
-   mytester:assert(#mlp10.outputs == 5, 'forget outputs error')
+   mytester:assert(#mlp10.outputs == 0, 'forget outputs error')
    local i = 0
    for k,v in pairs(mlp10.sharedClones) do
       i = i + 1
@@ -867,7 +867,7 @@ function rnntest.Recurrent_TestTable()
    local inputSize = 10
    local hiddenSize = 12
    local outputSize = 7
-   local nStep = 5 
+   local nStep = 10
    local inputModule = nn.Linear(inputSize, outputSize)
    local transferModule = nn.Sigmoid()
    local learningRate = 0.1
@@ -898,10 +898,10 @@ function rnntest.Recurrent_TestTable()
 
    local input = torch.randn(batchSize, inputSize)
    local err = torch.randn(batchSize, outputSize)
-   for i=1,10 do
+   for i=1,nStep do
       mlp:forward{input, input:clone()}
    end
-   for i=10,1,-1 do
+   for i=nStep,1,-1 do
       mlp:backward({input, input:clone()}, {err, err:clone()})
    end
 end
