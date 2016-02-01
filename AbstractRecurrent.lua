@@ -33,7 +33,8 @@ function AbstractRecurrent:getStepModule(step)
 end
 
 function AbstractRecurrent:maskZero(nInputDim)
-   self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim)
+   self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim, true)
+   self.sharedClones = {}
    return self
 end
 
