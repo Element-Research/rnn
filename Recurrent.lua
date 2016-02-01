@@ -158,6 +158,11 @@ function Recurrent:includingSharedClones(f)
    return r
 end
 
+function Recurrent:maskZero()
+   error("Recurrent doesn't support maskZero as it uses a different "..
+      "module for the first time-step. Use nn.Recurrence instead.")
+end
+
 function Recurrent:__tostring__()
    local tab = '  '
    local line = '\n'

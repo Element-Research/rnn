@@ -10,9 +10,15 @@
 ------------------------------------------------------------------------
 local MaskZero, parent = torch.class("nn.MaskZero", "nn.Decorator")
 
-function MaskZero:__init(module, nInputDim)
+function MaskZero:__init(module, nInputDim, silent)
    parent.__init(self, module)
    assert(torch.isTypeOf(module, 'nn.Module'))
+   if torch.isTypeOf(module, 'nn.AbstractRecurrent') and not silent then
+      print("Warning : you are most likely using MaskZero the wrong way. "
+      .."You should probably use AbstractRecurrent:maskZero() so that "
+      .."it wraps the internal AbstractRecurrent.recurrentModule instead of "
+      .."wrapping the AbstractRecurrent module itself.") 
+   end
    assert(torch.type(nInputDim) == 'number', 'Expecting nInputDim number at arg 1')
    self.nInputDim = nInputDim
 end

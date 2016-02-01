@@ -3628,6 +3628,56 @@ function rnntest.MaskZero()
    end
 end
 
+function rnntest.AbstractRecurrent_maskZero()
+   local inputs = {}
+
+   local input = torch.zeros(4,4,10)
+   local sequence = torch.randn(4,10)
+   input:select(2,1):select(1,4):copy(sequence[1])
+   input:select(2,2):narrow(1,3,2):copy(sequence:narrow(1,1,2))
+   input:select(2,3):narrow(1,2,3):copy(sequence:narrow(1,1,3))
+   input:select(2,4):copy(sequence)
+
+
+   for i=1,4 do
+      table.insert(inputs, input[i])
+   end
+
+
+   local function testmask(rnn)
+      local seq = nn.Sequencer(rnn:maskZero(1))
+
+      local outputs = seq:forward(inputs)
+
+      mytester:assert(math.abs(outputs[1]:narrow(1,1,3):sum()) < 0.0000001, torch.type(rnn).." mask zero 1 err")
+      mytester:assert(math.abs(outputs[2]:narrow(1,1,2):sum()) < 0.0000001, torch.type(rnn).." mask zero 2 err")
+      mytester:assert(math.abs(outputs[3]:narrow(1,1,1):sum()) < 0.0000001, torch.type(rnn).." mask zero 3 err")
+      
+      mytester:assertTensorEq(outputs[1][4], outputs[2][3], 0.0000001, torch.type(rnn).." mask zero err")
+      mytester:assertTensorEq(outputs[1][4], outputs[3][2], 0.0000001, torch.type(rnn).." mask zero err")
+      mytester:assertTensorEq(outputs[1][4], outputs[4][1], 0.0000001, torch.type(rnn).." mask zero err")
+      
+      mytester:assertTensorEq(outputs[2][4], outputs[3][3], 0.0000001, torch.type(rnn).." mask zero err")
+      mytester:assertTensorEq(outputs[2][4], outputs[4][2], 0.0000001, torch.type(rnn).." mask zero err")
+      
+      mytester:assertTensorEq(outputs[3][4], outputs[4][3], 0.0000001, torch.type(rnn).." mask zero err")
+   end
+   
+   local rm = nn.Sequential()
+      :add(nn.ParallelTable()
+         :add(nn.Linear(10,10))
+         :add(nn.Linear(10,10)))
+      :add(nn.CAddTable())
+      :add(nn.Sigmoid())
+   
+   testmask(nn.Recurrence(rm, 10, 1))
+   testmask(nn.LSTM(10,10))
+   testmask(nn.GRU(10,10))
+   
+   local success, err = pcall(function() nn.Recurrent(10, nn.Linear(10,10), nn.Linear(10,10)):maskZero() end)
+   mytester:assert(not success, "nn.Recurrent supposed to give error on maskZero()")
+end
+
 local function forwardbackward(module, criterion, input, expected)
   local output = module:forward(input)
   criterion:forward(output, expected)
