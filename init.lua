@@ -1,7 +1,10 @@
 require 'dpnn'
+dpnn.version = dpnn.version or 0
+assert(dpnn.version > 1, "Please update dpnn : luarocks install dpnn")
 
 -- create global rnn table:
 rnn = {}
+rnn.version = 2
 
 unpack = unpack or table.unpack
 
@@ -39,6 +42,7 @@ torch.include('rnn', 'RecurrentAttention.lua')
 -- recurrent criterions:
 torch.include('rnn', 'RepeaterCriterion.lua')
 torch.include('rnn', 'SequencerCriterion.lua')
+torch.include('rnn', 'MaskZeroCriterion.lua')
 
 -- prevent likely name conflicts
 nn.rnn = rnn

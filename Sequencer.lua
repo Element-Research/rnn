@@ -20,15 +20,7 @@ function Sequencer:__init(module)
    -- we can decorate the module with a Recursor to make it AbstractRecurrent
    self.module = (not torch.isTypeOf(module, 'nn.AbstractRecurrent')) and nn.Recursor(module) or module
    -- backprop through time (BPTT) will be done online (in reverse order of forward)
-   self.module:backwardOnline()
    self.modules = {self.module}
-   
-   for i,modula in ipairs(self.module:listModules()) do
-      if torch.isTypeOf(modula, "nn.AbstractRecurrent") then
-         modula.copyInputs = false
-         modula.copyGradOutputs = false
-      end
-   end
    
    self.output = {}
    
