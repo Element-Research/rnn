@@ -22,7 +22,7 @@ function rnn.recursiveSet(t1,t2)
          t1[key], t2[key] = rnn.recursiveSet(t1[key], t2[key])
       end
    elseif torch.isTensor(t2) then
-      t1 = t1 or t2.new()
+      t1 = torch.isTensor(t1) and t1 or t2.new()
       t1:set(t2)
    else
       error("expecting nested tensors or tables. Got "..

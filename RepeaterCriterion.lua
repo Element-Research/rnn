@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------
 --[[ RepeaterCriterion ]]--
--- Applies a criterion to each of the inputs in a Table using the 
--- same target (the target is repeated). 
+-- Applies a criterion to each of the inputs in a Table using the
+-- same target (the target is repeated).
 -- Useful for nn.Repeater and nn.Sequencer.
 ------------------------------------------------------------------------
 assert(not nn.RepeaterCriterion, "update nnx package : luarocks install nnx")
@@ -25,10 +25,13 @@ function RepeaterCriterion:backward(inputTable, target)
    for i,input in ipairs(inputTable) do
       self.gradInput[i] = nn.rnn.recursiveCopy(self.gradInput[i], self.criterion:backward(input, target))
    end
+   for i = #inputTable+1, #self.gradInput do
+      self.gradInput[i] = nil
+   end
    return self.gradInput
 end
 
-function RepeaterCriterion:type(type)
+function RepeaterCriterion:type(type, ...)
    self.gradInput = nn.rnn.recursiveType(self.gradInput)
-   return self.criterion:type(type)
+   return self.criterion:type(type, ...)
 end
