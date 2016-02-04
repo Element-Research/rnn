@@ -17,43 +17,38 @@ function SequencerCriterion:__init(criterion)
          "ModuleCriterion decorates a SequencerCriterion. "..
          "Its modules can also be similarly decorated with a Sequencer.")
    end
+   self.clones = {}
    self.gradInput = {}
-   self._gradInput = {}
+end
+
+function SequencerCriterion:getStepCriterion(step)
+   assert(step, "expecting step at arg 1")
+   local criterion = self.clones[step]
+   if not criterion then
+      criterion = self.criterion:clone()
+      self.clones[step] = criterion
+   end
+   return criterion
 end
 
 function SequencerCriterion:updateOutput(inputTable, targetTable)
    self.output = 0
+   
    for i,input in ipairs(inputTable) do
-      self.output = self.output + self.criterion:forward(input, targetTable[i])
+      local criterion = self:getStepCriterion(i)
+      self.output = self.output + criterion:forward(input, targetTable[i])
    end
+   
    return self.output
 end
 
 function SequencerCriterion:updateGradInput(inputTable, targetTable)
+   self.gradInput = {}
+   
    for i,input in ipairs(inputTable) do
-      self.gradInput[i] = nn.rnn.recursiveCopy(
-         self.gradInput[i] or table.remove(self._gradInput, 1), 
-         self.criterion:backward(input, targetTable[i])
-      )
-   end
-   -- remove extra gradInput tensors (save for later)
-   for i=#inputTable+1,#self.gradInput do
-      table.insert(self._gradInput, self.gradInput[i])
-      self.gradInput[i] = nil
+      local criterion = self:getStepCriterion(i)
+      self.gradInput[i] = criterion:backward(input, targetTable[i])
    end
    
-   if #inputTable >= 3 and not self.isStateless then
-      -- make sure the criterion is stateless
-      local gradInput
-      for i = 1,3 do
-         self.criterion:forward(inputTable[i], targetTable[i])
-         gradInput = self.criterion:backward(inputTable[i], targetTable[i])
-         nn.utils.recursiveAdd(gradInput -1, self.gradInput[i])
-         if math.abs(nn.rnn.recursiveSum(gradInput)) < 0.0001 then
-            error("SequencerCriterion only decorates stateless criterions : "..tostring(self.criterion))
-         end
-      end
-      self.isStateless = true -- test should only be run once
-   end
    return self.gradInput
 end
