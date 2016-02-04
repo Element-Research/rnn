@@ -2073,9 +2073,9 @@ function rnntest.SequencerCriterion()
    end
    
    -- test type()
+   sc.gradInput = {}
    sc:float()
    
-   local gradInput3 = {}
    for i=1,nStep do
       input[i] = input[i]:float()
       target[i] = target[i]:float()
@@ -2086,6 +2086,25 @@ function rnntest.SequencerCriterion()
    local gradInput3 = sc:backward(input, target)
    for i=1,nStep do
       mytester:assertTensorEq(gradInput[i]:float(), gradInput3[i], 0.000001, "SequencerCriterion backward type err "..i)
+   end
+   
+   if pcall(function() require 'cunn' end) then
+      -- test cuda()
+      sc.gradInput = {}
+      sc:cuda()
+   
+      local gradInput4 = {}
+      for i=1,nStep do
+         input[i] = input[i]:cuda()
+         target[i] = target[i]:cuda()
+      end
+      
+      local err4 = sc:forward(input, target)
+      mytester:assert(math.abs(err - err4) < 0.000001, "SequencerCriterion forward cuda err") 
+      local gradInput4 = sc:backward(input, target)
+      for i=1,nStep do
+         mytester:assertTensorEq(gradInput4[i]:float(), gradInput3[i], 0.000001, "SequencerCriterion backward cuda err "..i)
+      end
    end
 end
 
@@ -3820,7 +3839,20 @@ function rnntest.MaskZeroCriterion()
    
    mytester:assert(math.abs(err3 - err) < 0.0000001, "MaskZeroCriterion cast fwd err")
    mytester:assert(gradInput3, gradInput:float(), 0.0000001, "MaskZeroCriterion cast bwd err")
+   
+   if pcall(function() require 'cunn' end) then
+      -- test cuda
+      mznll:cuda()
+      local input4 = input:cuda()
+      local target4 = target:cuda()
+      local err4 = mznll:forward(input4, target4)
+      local gradInput4 = mznll:backward(input4, target4):clone()
+      
+      mytester:assert(math.abs(err4 - err) < 0.0000001, "MaskZeroCriterion cuda fwd err")
+      mytester:assert(gradInput4:float(), gradInput3, 0.0000001, "MaskZeroCriterion cuda bwd err")
+   end
 end
+
 
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
