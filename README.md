@@ -799,24 +799,28 @@ This decorator makes it possible to pad sequences with different lengths in the 
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##
+
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
+
 ```lua
 c = nn.SequencerCriterion(criterion)
 ``` 
+
 Both the `input` and `target` are expected to be a sequence (a table). 
 For each step in the sequence, the corresponding elements of the input and target tables 
 will be applied to the `criterion`.
 The output of `forward` is the sum of all individual losses in the sequence.
 This is useful when used in conjuction with a [Sequencer](#rnn.Sequencer).
 
-WARNING : assumes that the decorated criterion is stateless, i.e. a `backward` shouldn't need to be preceded by a commensurate `forward`.
-
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
+
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
+
 ```lua
 c = nn.RepeaterCriterion(criterion)
 ``` 
+
 The `input` is expected to be a sequence (a table). A single `target` is 
 repeatedly applied using the same `criterion` to each element in the `input` sequence.
 The output of `forward` is the sum of all individual losses in the sequence.

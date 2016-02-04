@@ -2052,7 +2052,8 @@ function rnntest.SequencerCriterion()
    local inputSize = 10
    local outputSize = 7
    local nStep = 5  
-   local criterion = nn.ClassNLLCriterion()
+   -- https://github.com/Element-Research/rnn/issues/128
+   local criterion = nn.MaskZeroCriterion(nn.ClassNLLCriterion(),1)
    local sc = nn.SequencerCriterion(criterion:clone())
    local input = {}
    local target = {}
@@ -2070,7 +2071,62 @@ function rnntest.SequencerCriterion()
    for i=1,nStep do
       mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "SequencerCriterion backward err "..i)
    end
-   mytester:assert(sc.isStateless, "SequencerCriterion stateless error")
+   
+   -- test type()
+   sc:float()
+   
+   local gradInput3 = {}
+   for i=1,nStep do
+      input[i] = input[i]:float()
+      target[i] = target[i]:float()
+   end
+   
+   local err3 = sc:forward(input, target)
+   mytester:assert(math.abs(err - err3) < 0.000001, "SequencerCriterion forward type err") 
+   local gradInput3 = sc:backward(input, target)
+   for i=1,nStep do
+      mytester:assertTensorEq(gradInput[i]:float(), gradInput3[i], 0.000001, "SequencerCriterion backward type err "..i)
+   end
+end
+
+function rnntest.RepeaterCriterion()
+   local batchSize = 4
+   local inputSize = 10
+   local outputSize = 7
+   local nStep = 5  
+   local criterion = nn.ClassNLLCriterion()
+   local sc = nn.RepeaterCriterion(criterion:clone())
+   local input = {}
+   local target = torch.randperm(inputSize):narrow(1,1,batchSize)
+   local err2 = 0
+   local gradInput2 = {}
+   for i=1,nStep do
+      input[i] = torch.randn(batchSize, inputSize)
+      err2 = err2 + criterion:forward(input[i], target)
+      gradInput2[i] = criterion:backward(input[i], target):clone()
+   end
+   local err = sc:forward(input, target)
+   mytester:asserteq(err, err2, 0.000001, "RepeaterCriterion forward err") 
+   local gradInput = sc:backward(input, target)
+   for i=1,nStep do
+      mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "RepeaterCriterion backward err "..i)
+   end
+   
+   -- test type()
+   sc:float()
+   
+   local gradInput3 = {}
+   target = target:float()
+   for i=1,nStep do
+      input[i] = input[i]:float()
+   end
+   
+   local err3 = sc:forward(input, target)
+   mytester:assert(math.abs(err - err3) < 0.000001, "RepeaterCriterion forward type err") 
+   local gradInput3 = sc:backward(input, target)
+   for i=1,nStep do
+      mytester:assertTensorEq(gradInput[i]:float(), gradInput3[i], 0.000001, "RepeaterCriterion backward type err "..i)
+   end
 end
 
 function rnntest.RecurrentAttention()
