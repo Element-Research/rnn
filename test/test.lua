@@ -3853,6 +3853,50 @@ function rnntest.MaskZeroCriterion()
    end
 end
 
+function rnntest.issue129()
+   -- test without rnn
+   local model1 = nn.Sequential()
+   model1:add(nn.SpatialBatchNormalization(2))
+
+   local input = torch.randn(4, 2, 64, 64)  -- batch_size X channels X height X width
+
+   model1:training()
+   local output
+   for i=1, 1000 do  -- to run training enough times
+      output = model1:forward(input):clone()
+   end
+
+   model1:evaluate()
+   local output2 = model1:forward(input):clone()
+
+   mytester:assertTensorEq(output, output2,  0.0002, "issue 129 err")
+   
+   -- test with rnn
+   local normalize = nn.Sequential()
+   normalize:add(nn.SpatialBatchNormalization(2))
+
+   local model = nn.Sequential()
+   model:add(nn.SplitTable(1))  -- since sequencer expects table as input
+   model:add(nn.Sequencer(normalize))  -- wrapping batch-normalization in a sequencer
+   model:add(nn.JoinTable(1))  -- since sequencer outputs table
+
+   input:resize(1, 4, 2, 64, 64)  -- time_step X batch_size X channels X height X width
+
+   model:training()
+
+   local output
+   for i=1, 1000 do  -- to run training enough times
+      output = model:forward(input):clone()
+   end
+   
+   mytester:assertTensorEq(model1:get(1).running_mean, model:get(2).module.sharedClones[1].modules[1].running_mean, 0.000001)
+   mytester:assertTensorEq(model:get(2).module.sharedClones[1].modules[1].running_mean, model:get(2).module.recurrentModule.modules[1].running_mean, 0.0000001)
+
+   model:evaluate()
+   local output2 = model:forward(input):clone()
+
+   mytester:assertTensorEq(output, output2,  0.0002, "issue 129 err")
+end
 
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()

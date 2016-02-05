@@ -99,6 +99,22 @@ function AbstractRecurrent:forget()
    
    -- forget the past inputs; restart from first step
    self.step = 1
+   
+   
+  if not self.rmInSharedClones then
+      -- Asserts that issue 129 is solved. In forget as it is often called.
+      -- Asserts that self.recurrentModule is part of the sharedClones.
+      -- Since its used for evaluation, it should be used for training. 
+      local nClone = 0
+      for k,v in pairs(self.sharedClones) do -- to prevent odd bugs
+         if torch.pointer(v) == torch.pointer(self.recurrentModule) then
+            self.rmInSharedClones = true
+         end
+      end
+      if nClone > 1 then
+         assert(self.rmInSharedClones, "recurrentModule should be added to sharedClones in constructor")
+      end
+   end
    return self
 end
 
