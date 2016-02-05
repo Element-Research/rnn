@@ -110,6 +110,7 @@ function AbstractRecurrent:forget()
          if torch.pointer(v) == torch.pointer(self.recurrentModule) then
             self.rmInSharedClones = true
          end
+         nClone = nClone + 1
       end
       if nClone > 1 then
          assert(self.rmInSharedClones, "recurrentModule should be added to sharedClones in constructor")
