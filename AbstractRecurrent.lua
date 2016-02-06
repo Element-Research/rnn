@@ -200,3 +200,11 @@ end
 function AbstractRecurrent:backwardUpdateThroughTime(learningRate)
    error"DEPRECATED Jan 8, 2016"
 end
+
+function AbstractRecurrent:__tostring__()
+   if self.inputSize and self.outputSize then
+       return self.__typename .. string.format("(%d -> %d)", self.inputSize, self.outputSize)
+   else
+       return parent.__tostring__(self)
+   end
+end
