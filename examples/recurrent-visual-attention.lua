@@ -50,6 +50,7 @@ cmd:option('--imageHiddenSize', 256, 'size of hidden layer combining glimpse and
 cmd:option('--rho', 7, 'back-propagate through time (BPTT) for rho time-steps')
 cmd:option('--hiddenSize', 256, 'number of hidden units used in Simple RNN.')
 cmd:option('--dropout', false, 'apply dropout on hidden neurons')
+cmd:option('--FastLSTM', false, 'use LSTM instead of linear layer')
 
 --[[ data ]]--
 cmd:option('--dataset', 'Mnist', 'which dataset to use : Mnist | TranslattedMnist | etc')
@@ -120,7 +121,12 @@ glimpse:add(nn[opt.transfer]())
 glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
 
 -- rnn recurrent layer
-recurrent = nn.FastLSTM(opt.hiddenSize, opt.hiddenSize)
+if opt.FastLSTM then
+  recurrent = nn.FastLSTM(opt.hiddenSize, opt.hiddenSize)
+else
+  recurrent = nn.Linear(opt.hiddenSize, opt.hiddenSize)
+end
+
 
 -- recurrent neural network
 rnn = nn.Recurrent(opt.hiddenSize, glimpse, recurrent, nn[opt.transfer](), 99999)
