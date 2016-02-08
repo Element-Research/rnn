@@ -120,7 +120,7 @@ glimpse:add(nn[opt.transfer]())
 glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
 
 -- rnn recurrent layer
-recurrent = nn.Linear(opt.hiddenSize, opt.hiddenSize)
+recurrent = nn.FastLSTM(opt.hiddenSize, opt.hiddenSize)
 
 -- recurrent neural network
 rnn = nn.Recurrent(opt.hiddenSize, glimpse, recurrent, nn[opt.transfer](), 99999)
