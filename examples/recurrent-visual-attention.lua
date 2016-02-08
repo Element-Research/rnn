@@ -54,7 +54,7 @@ cmd:option('--dropout', false, 'apply dropout on hidden neurons')
 --[[ data ]]--
 cmd:option('--dataset', 'Mnist', 'which dataset to use : Mnist | TranslattedMnist | etc')
 cmd:option('--trainEpochSize', -1, 'number of train examples seen between each epoch')
-cmd:option('--validEpochSize', -1, 'number of valid examples used for early stopping and cross-validation') 
+cmd:option('--validEpochSize', -1, 'number of valid examples used for early stopping and cross-validation')
 cmd:option('--noTest', false, 'dont propagate through the test set')
 cmd:option('--overwrite', false, 'overwrite checkpoint')
 
@@ -73,7 +73,7 @@ end
 if opt.dataset == 'TranslatedMnist' then
    ds = torch.checkpoint(
       paths.concat(dp.DATA_DIR, 'checkpoint/dp.TranslatedMnist.t7'),
-      function() return dp[opt.dataset]() end, 
+      function() return dp[opt.dataset]() end,
       opt.overwrite
    )
 else
@@ -100,7 +100,7 @@ end
 
 --[[Model]]--
 
--- glimpse network (rnn input layer) 
+-- glimpse network (rnn input layer)
 locationSensor = nn.Sequential()
 locationSensor:add(nn.SelectTable(2))
 locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
@@ -182,7 +182,7 @@ train = dp.Optimizer{
          end
       end
    end,
-   callback = function(model, report)       
+   callback = function(model, report)
       if opt.cutoffNorm > 0 then
          local norm = model:gradParamClip(opt.cutoffNorm) -- affects gradParams
          opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
@@ -193,9 +193,9 @@ train = dp.Optimizer{
       model:updateGradParameters(opt.momentum) -- affects gradParams
       model:updateParameters(opt.learningRate) -- affects params
       model:maxParamNorm(opt.maxOutNorm) -- affects params
-      model:zeroGradParameters() -- affects gradParams 
+      model:zeroGradParameters() -- affects gradParams
    end,
-   feedback = dp.Confusion{output_module=nn.SelectTable(1)},  
+   feedback = dp.Confusion{output_module=nn.SelectTable(1)},
    sampler = dp.ShuffleSampler{
       epoch_size = opt.trainEpochSize, batch_size = opt.batchSize
    },
@@ -204,14 +204,14 @@ train = dp.Optimizer{
 
 
 valid = dp.Evaluator{
-   feedback = dp.Confusion{output_module=nn.SelectTable(1)},  
+   feedback = dp.Confusion{output_module=nn.SelectTable(1)},
    sampler = dp.Sampler{epoch_size = opt.validEpochSize, batch_size = opt.batchSize},
    progress = opt.progress
 }
 if not opt.noTest then
    tester = dp.Evaluator{
-      feedback = dp.Confusion{output_module=nn.SelectTable(1)},  
-      sampler = dp.Sampler{batch_size = opt.batchSize} 
+      feedback = dp.Confusion{output_module=nn.SelectTable(1)},
+      sampler = dp.Sampler{batch_size = opt.batchSize}
    }
 end
 
@@ -225,7 +225,7 @@ xp = dp.Experiment{
       ad,
       dp.FileLogger(),
       dp.EarlyStopper{
-         max_epochs = opt.maxTries, 
+         max_epochs = opt.maxTries,
          error_report={'validator','feedback','confusion','accuracy'},
          maximize = true
       }
