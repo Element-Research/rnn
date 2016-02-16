@@ -38,6 +38,12 @@ function AbstractRecurrent:maskZero(nInputDim)
    return self
 end
 
+function AbstractRecurrent:trimZero(nInputDim)
+   self.recurrentModule = nn.TrimZero(self.recurrentModule, nInputDim, true)
+   self.sharedClones = {}
+   return self
+end
+
 function AbstractRecurrent:updateGradInput(input, gradOutput)  
    -- updateGradInput should be called in reverse order of time
    self.updateGradInputStep = self.updateGradInputStep or self.step
