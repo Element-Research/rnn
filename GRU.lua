@@ -8,8 +8,12 @@
 assert(not nn.GRU, "update nnx package : luarocks install nnx")
 local GRU, parent = torch.class('nn.GRU', 'nn.AbstractRecurrent')
 
-function GRU:__init(inputSize, outputSize, rho)
+function GRU:__init(inputSize, outputSize, rho, p)
    parent.__init(self, rho or 9999)
+   self.p = p or 0
+   if p and p ~= 0 then
+      assert(nn.Dropout(p,false,false,true).lazy, 'only work with Lazy Dropout!')
+   end
    self.inputSize = inputSize
    self.outputSize = outputSize   
    -- build the model
@@ -31,8 +35,27 @@ function GRU:buildModel()
    -- output : {output}
    
    -- Calculate all four gates in one go : input, hidden, forget, output
-   self.i2g = nn.Linear(self.inputSize, 2*self.outputSize)
-   self.o2g = nn.LinearNoBias(self.outputSize, 2*self.outputSize)
+   if self.p ~= 0 then
+      self.i2g = nn.Sequential()
+                     :add(nn.ConcatTable()
+                        :add(nn.Dropout(self.p,false,false,true))
+                        :add(nn.Dropout(self.p,false,false,true)))
+                     :add(nn.ParallelTable()
+                        :add(nn.Linear(self.inputSize, self.outputSize))
+                        :add(nn.Linear(self.inputSize, self.outputSize)))
+                     :add(nn.JoinTable(2))
+      self.o2g = nn.Sequential()
+                     :add(nn.ConcatTable()
+                        :add(nn.Dropout(self.p,false,false,true))
+                        :add(nn.Dropout(self.p,false,false,true)))
+                     :add(nn.ParallelTable()
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize))
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize)))
+                     :add(nn.JoinTable(2))
+   else
+      self.i2g = nn.Linear(self.inputSize, 2*self.outputSize)
+      self.o2g = nn.LinearNoBias(self.outputSize, 2*self.outputSize)
+   end
 
    local para = nn.ParallelTable():add(self.i2g):add(self.o2g)
    local gates = nn.Sequential()
@@ -47,8 +70,7 @@ function GRU:buildModel()
    transfer:add(nn.Sigmoid()):add(nn.Sigmoid())
    gates:add(transfer)
 
-   local concat = nn.ConcatTable()
-   concat:add(nn.Identity()):add(gates)
+   local concat = nn.ConcatTable():add(nn.Identity()):add(gates)
    local seq = nn.Sequential()
    seq:add(concat)
    seq:add(nn.FlattenTable()) -- x(t), s(t-1), r, z
@@ -62,9 +84,16 @@ function GRU:buildModel()
    local hidden = nn.Sequential()
    local concat = nn.ConcatTable()
    local t1 = nn.Sequential()
-   t1:add(nn.SelectTable(1)):add(nn.Linear(self.inputSize, self.outputSize))
+   t1:add(nn.SelectTable(1))
    local t2 = nn.Sequential()
-   t2:add(nn.NarrowTable(2,2)):add(nn.CMulTable()):add(nn.LinearNoBias(self.outputSize, self.outputSize))
+   t2:add(nn.NarrowTable(2,2)):add(nn.CMulTable())
+   if self.p ~= 0 then
+      t1:add(nn.Dropout(self.p,false,false,true))
+      t2:add(nn.Dropout(self.p,false,false,true))
+   end
+   t1:add(nn.Linear(self.inputSize, self.outputSize))
+   t2:add(nn.LinearNoBias(self.outputSize, self.outputSize))
+
    concat:add(t1):add(t2)
    hidden:add(concat):add(nn.CAddTable()):add(nn.Tanh())
    

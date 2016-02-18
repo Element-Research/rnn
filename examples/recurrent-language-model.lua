@@ -16,6 +16,7 @@ cmd:option('--saturateEpoch', 400, 'epoch at which linear decayed LR will reach 
 cmd:option('--momentum', 0.9, 'momentum')
 cmd:option('--maxOutNorm', -1, 'max l2-norm of each layer\'s output neuron weights')
 cmd:option('--cutoffNorm', -1, 'max l2-norm of concatenation of all gradParam tensors')
+cmd:option('--weightDecay', 1e-4, 'weight decay factor')
 cmd:option('--batchSize', 32, 'number of examples per batch')
 cmd:option('--cuda', false, 'use CUDA')
 cmd:option('--useDevice', 1, 'sets the device (GPU) to use')
@@ -33,6 +34,7 @@ cmd:option('--hiddenSize', '{200}', 'number of hidden units used at output of ea
 cmd:option('--zeroFirst', false, 'first step will forward zero through recurrence (i.e. add bias of recurrence). As opposed to learning bias specifically for first step.')
 cmd:option('--dropout', false, 'apply dropout after each recurrent layer')
 cmd:option('--dropoutProb', 0.5, 'probability of zeroing a neuron (dropout probability)')
+cmd:option('--dropoutProbRnn', 0.25, 'probability of zeroing a neuron of rnn (dropout probability)')
 
 -- data
 cmd:option('--trainEpochSize', -1, 'number of train examples seen between each epoch')
@@ -70,7 +72,11 @@ for i,hiddenSize in ipairs(opt.hiddenSize) do
    local rnn
    if opt.gru then
       -- Gated Recurrent Units
-      rnn = nn.Sequencer(nn.GRU(inputSize, hiddenSize))
+      if opt.dropout then
+         rnn = nn.Sequencer(nn.GRU(inputSize, hiddenSize, nil, opt.dropoutProbRnn))
+      else
+         rnn = nn.Sequencer(nn.GRU(inputSize, hiddenSize))
+      end
    elseif opt.lstm then
       -- Long Short Term Memory
       rnn = nn.Sequencer(nn.FastLSTM(inputSize, hiddenSize))
@@ -102,7 +108,7 @@ end
 -- input layer (i.e. word embedding space)
 lm:insert(nn.SplitTable(1,2), 1) -- tensor to table of tensors
 
-if opt.dropout then
+if opt.dropout and not (opt.gru and 0 < opt.dropoutProbRnn) then  -- gru has a dropout option
    lm:insert(nn.Dropout(opt.dropoutProb), 1)
 end
 
@@ -147,6 +153,9 @@ train = dp.Optimizer{
       end
    end,
    callback = function(model, report) -- called every batch
+      if opt.gru and opt.dropout then  -- Bayesian Dropout for GRU needs weight decay
+         model:weightDecay(opt.weightDecay)
+      end
       if opt.cutoffNorm > 0 then
          local norm = model:gradParamClip(opt.cutoffNorm) -- affects gradParams
          opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
@@ -167,7 +176,8 @@ valid = dp.Evaluator{
 }
 tester = dp.Evaluator{
    feedback = dp.Perplexity(),  
-   sampler = dp.TextSampler{batch_size = 1} 
+   sampler = dp.TextSampler{batch_size = 1},
+   progress = opt.progress
 }
 
 --[[Experiment]]--

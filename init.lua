@@ -13,12 +13,16 @@ torch.include('rnn', 'recursiveUtils.lua')
 -- extensions to nn.Module
 torch.include('rnn', 'Module.lua')
 
+-- override nn.Dropout
+torch.include('rnn', 'Dropout.lua')
+
 -- for testing:
 torch.include('rnn', 'test.lua')
 
 -- support modules
 torch.include('rnn', 'ZeroGrad.lua')
 torch.include('rnn', 'LinearNoBias.lua')
+torch.include('rnn', 'SAdd.lua')
 
 -- recurrent modules
 torch.include('rnn', 'LookupTableMaskZero.lua')
@@ -29,7 +33,6 @@ torch.include('rnn', 'Recurrent.lua')
 torch.include('rnn', 'LSTM.lua')
 torch.include('rnn', 'FastLSTM.lua')
 torch.include('rnn', 'GRU.lua')
-torch.include('rnn', 'SAdd.lua')
 torch.include('rnn', 'Recursor.lua')
 torch.include('rnn', 'Recurrence.lua')
 
