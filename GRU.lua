@@ -4,6 +4,11 @@
 -- http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-gruGRU-rnn-with-python-and-theano/
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
+--
+-- For p > 0, it becomes Bayesian GRUs [Gal, arXiv:1512.05287, 2016].
+-- In this case, please do not dropout on input as BGRUs handle the input with 
+-- its own dropouts. First, try 0.25 for p as Gal (2016) suggested, presumably, 
+-- because of summations of two parts in GRUs connections. 
 ------------------------------------------------------------------------
 assert(not nn.GRU, "update nnx package : luarocks install nnx")
 local GRU, parent = torch.class('nn.GRU', 'nn.AbstractRecurrent')
