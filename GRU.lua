@@ -203,6 +203,10 @@ function GRU:_accGradParameters(input, gradOutput, scale)
    return gradInput
 end
 
+function GRU:__tostring__()
+   return string.format('%s(%d -> %d, %.2f)', torch.type(self), self.inputSize, self.outputSize, self.p)
+end
+
 -- migrate GRUs params to BGRUs params
 function GRU:migrate(params)
    local _params = self:parameters()

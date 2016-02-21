@@ -66,5 +66,5 @@ function Dropout:updateGradInput(input, gradOutput)
 end
 
 function Dropout:__tostring__()
-   return string.format('%s(%f, %s)', torch.type(self), self.p, self.lazy and 'lazy')
+   return string.format('%s(%.1f, %s)', torch.type(self), self.p, self.lazy and 'lazy' or 'busy')
 end
