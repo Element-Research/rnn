@@ -155,9 +155,19 @@ function AbstractRecurrent:evaluate()
 end
 
 function AbstractRecurrent:reinforce(reward)
-   return self:includingSharedClones(function()
-      return parent.reinforce(self, reward)
-   end)
+   if torch.type(reward) == 'table' then
+      -- multiple rewards, one per time-step
+      local rewards = reward
+      for step, reward in ipairs(rewards) do
+         local sm = self:getStepModule(step)
+         sm:reinforce(reward)
+      end
+   else
+      -- one reward broadcast to all time-steps
+      return self:includingSharedClones(function()
+         return parent.reinforce(self, reward)
+      end)
+   end
 end
 
 -- used by Recursor() after calling stepClone.

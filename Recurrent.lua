@@ -158,6 +158,26 @@ function Recurrent:includingSharedClones(f)
    return r
 end
 
+function Recurrent:reinforce(reward)
+   if torch.type(reward) == 'table' then
+      -- multiple rewards, one per time-step
+      local rewards = reward
+      for step, reward in ipairs(rewards) do
+         if step == 1 then
+            self.initialModule:reinforce(reward)
+         else
+            local sm = self:getStepModule(step)
+            sm:reinforce(reward)
+         end
+      end
+   else
+      -- one reward broadcast to all time-steps
+      return self:includingSharedClones(function()
+         return parent.reinforce(self, reward)
+      end)
+   end
+end
+
 function Recurrent:maskZero()
    error("Recurrent doesn't support maskZero as it uses a different "..
       "module for the first time-step. Use nn.Recurrence instead.")

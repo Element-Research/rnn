@@ -4047,6 +4047,23 @@ function rnntest.encoderdecoder()
    numgradtest()
 end
 
+function rnntest.reinforce()
+   -- test that AbstractRecurrent:reinforce(rewards) words
+   local seqLen = 4
+   local batchSize = 3
+   local rewards = {}
+   for i=1,seqLen do
+      rewards[i] = torch.randn(batchSize)
+   end
+   local rf = nn.ReinforceNormal(0.1)
+   local rnn = nn.Recursor(rf)
+   rnn:reinforce(rewards)
+   for i=1,seqLen do
+      local rm = rnn:getStepModule(i)
+      mytester:assertTensorEq(rm.reward, rewards[i], 0.000001, "Reinforce error")
+   end
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_
