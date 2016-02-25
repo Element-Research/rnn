@@ -4,130 +4,73 @@ Example of "coupled" separate encoder and decoder networks, e.g. for sequence-to
 
 ]]--
 
-require 'nn'
 require 'rnn'
 
-torch.manualSeed(123)
+version = 1.2 -- refactored numerical gradient test into unit tests. Added training loop
 
-version = 1.1 --supports both online and mini-batch training
+local opt = {}
+opt.learningRate = 0.1
+opt.hiddenSize = 6
+opt.vocabSize = 5
+opt.seqLen = 3 -- length of the encoded sequence
+opt.niter = 1000
 
 --[[ Forward coupling: Copy encoder cell and output to decoder LSTM ]]--
-function forwardConnect(encLSTM, decLSTM)
-  decLSTM.userPrevOutput = nn.rnn.recursiveCopy(decLSTM.userPrevOutput, encLSTM.outputs[opt.inputSeqLen])
-  decLSTM.userPrevCell = nn.rnn.recursiveCopy(decLSTM.userPrevCell, encLSTM.cells[opt.inputSeqLen])
+local function forwardConnect(encLSTM, decLSTM)
+   decLSTM.userPrevOutput = nn.rnn.recursiveCopy(decLSTM.userPrevOutput, encLSTM.outputs[opt.seqLen])
+   decLSTM.userPrevCell = nn.rnn.recursiveCopy(decLSTM.userPrevCell, encLSTM.cells[opt.seqLen])
 end
 
 --[[ Backward coupling: Copy decoder gradients to encoder LSTM ]]--
-function backwardConnect(encLSTM, decLSTM)
-  encLSTM.userNextGradCell = nn.rnn.recursiveCopy(encLSTM.userNextGradCell, decLSTM.userGradPrevCell)
-  encLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encLSTM.gradPrevOutput, decLSTM.userGradPrevOutput)
+local function backwardConnect(encLSTM, decLSTM)
+   encLSTM.userNextGradCell = nn.rnn.recursiveCopy(encLSTM.userNextGradCell, decLSTM.userGradPrevCell)
+   encLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encLSTM.gradPrevOutput, decLSTM.userGradPrevOutput)
 end
 
-function main()
-  opt = {}
-  opt.learningRate = 0.1
-  opt.hiddenSz = 6
-  opt.vocabSz = 5
-  opt.inputSeqLen = 3 -- length of the encoded sequence
+-- Encoder
+local enc = nn.Sequential()
+enc:add(nn.LookupTable(opt.vocabSize, opt.hiddenSize))
+enc:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
+local encLSTM = nn.LSTM(opt.hiddenSize, opt.hiddenSize)
+enc:add(nn.Sequencer(encLSTM))
+enc:add(nn.SelectTable(-1))
 
-  -- Some example data (batchsize = 2)
-  local encInSeq = torch.Tensor({{1,2,3},{3,2,1}}) 
-  local decInSeq = torch.Tensor({{1,2,3,4},{4,3,2,1}})
-  local decOutSeq = torch.Tensor({{2,3,4,1},{1,2,4,3}})
-  decOutSeq = nn.SplitTable(1, 1):forward(decOutSeq)
-  
-  -- Encoder
-  local enc = nn.Sequential()
-  enc:add(nn.LookupTable(opt.vocabSz, opt.hiddenSz))
-  enc:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
-  local encLSTM = nn.LSTM(opt.hiddenSz, opt.hiddenSz)
-  enc:add(nn.Sequencer(encLSTM))
-  enc:add(nn.SelectTable(-1))
+-- Decoder
+local dec = nn.Sequential()
+dec:add(nn.LookupTable(opt.vocabSize, opt.hiddenSize))
+dec:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
+local decLSTM = nn.LSTM(opt.hiddenSize, opt.hiddenSize)
+dec:add(nn.Sequencer(decLSTM))
+dec:add(nn.Sequencer(nn.Linear(opt.hiddenSize, opt.vocabSize)))
+dec:add(nn.Sequencer(nn.LogSoftMax()))
 
-  -- Decoder
-  local dec = nn.Sequential()
-  dec:add(nn.LookupTable(opt.vocabSz, opt.hiddenSz))
-  dec:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
-  local decLSTM = nn.LSTM(opt.hiddenSz, opt.hiddenSz)
-  dec:add(nn.Sequencer(decLSTM))
-  dec:add(nn.Sequencer(nn.Linear(opt.hiddenSz, opt.vocabSz)))
-  dec:add(nn.Sequencer(nn.LogSoftMax()))
+local criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
 
-  local criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+-- Some example data (batchsize = 2)
+local encInSeq = torch.Tensor({{1,2,3},{3,2,1}}) 
+local decInSeq = torch.Tensor({{1,2,3,4},{4,3,2,1}})
+local decOutSeq = torch.Tensor({{2,3,4,1},{1,2,4,3}})
+decOutSeq = nn.SplitTable(1, 1):forward(decOutSeq)
 
-  local encParams, encGradParams = enc:getParameters()
-  local decParams, decGradParams = dec:getParameters()
+for i=1,1000 do
+   enc:zeroGradParameters()
+   dec:zeroGradParameters()
 
-  enc:zeroGradParameters()
-  dec:zeroGradParameters()
+   -- Forward pass
+   local encOut = enc:forward(encInSeq)
+   forwardConnect(encLSTM, decLSTM)
+   local decOut = dec:forward(decInSeq)
+   local err = criterion:forward(decOut, decOutSeq)
+   
+   print(string.format("Iteration %d ; NLL err = %f ", i, err))
 
-  -- Forward pass
-  local encOut = enc:forward(encInSeq)
-  forwardConnect(encLSTM, decLSTM)
-  local decOut = dec:forward(decInSeq)
-  local Edec = criterion:forward(decOut, decOutSeq)
+   -- Backward pass
+   local gradOutput = criterion:backward(decOut, decOutSeq)
+   dec:backward(decInSeq, gradOutput)
+   backwardConnect(encLSTM, decLSTM)
+   local zeroTensor = torch.Tensor(2):zero()
+   enc:backward(encInSeq, zeroTensor)
 
-  -- Backward pass
-  local gEdec = criterion:backward(decOut, decOutSeq)
-  dec:backward(decInSeq, gEdec)
-  backwardConnect(encLSTM, decLSTM)
-  local zeroTensor = torch.Tensor(2):zero()
-  enc:backward(encInSeq, zeroTensor)
-  
-  --
-  -- You would normally do something like this now:
-  --   dec:updateParameters(opt.learningRate)
-  --   enc:updateParameters(opt.learningRate)
-  --
-  -- Here, we do a numerical gradient check to make sure the coupling is correct:
-  --
-  local tester = torch.Tester()
-  local tests = {}
-  local eps = 1e-5
-
-  function tests.gradientCheck()
-    local decGP_est, encGP_est = torch.DoubleTensor(decGradParams:size()), torch.DoubleTensor(encGradParams:size())
-
-    -- Easy function to do forward pass over coupled network and get error
-    function forwardPass()
-      local encOut = enc:forward(encInSeq)
-      forwardConnect(encLSTM, decLSTM)
-      local decOut = dec:forward(decInSeq)
-      local E = criterion:forward(decOut, decOutSeq)
-      return E
-    end
-
-    -- Check encoder
-    for i = 1, encGradParams:size(1) do
-      -- Forward with \theta+eps
-      encParams[i] = encParams[i] + eps
-      local C1 = forwardPass()
-      -- Forward with \theta-eps
-      encParams[i] = encParams[i] - 2 * eps
-      local C2 = forwardPass()
-
-      encParams[i] = encParams[i] + eps
-      encGP_est[i] = (C1 - C2) / (2 * eps)
-    end
-    tester:assertTensorEq(encGradParams, encGP_est, eps, "Numerical gradient check for encoder failed")
-
-    -- Check decoder
-    for i = 1, decGradParams:size(1) do
-      -- Forward with \theta+eps
-      decParams[i] = decParams[i] + eps
-      local C1 = forwardPass()
-      -- Forward with \theta-eps
-      decParams[i] = decParams[i] - 2 * eps
-      local C2 = forwardPass()
-
-      decParams[i] = decParams[i] + eps
-      decGP_est[i] = (C1 - C2) / (2 * eps)
-    end
-    tester:assertTensorEq(decGradParams, decGP_est, eps, "Numerical gradient check for decoder failed")
-  end
-
-  tester:add(tests)
-  tester:run()
+   dec:updateParameters(opt.learningRate)
+   enc:updateParameters(opt.learningRate)
 end
-
-main()
