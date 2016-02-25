@@ -34,7 +34,7 @@ end
 
 function AbstractRecurrent:maskZero(nInputDim)
    self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim, true)
-   self.sharedClones = {}
+   self.sharedClones = {self.recurrentModule}
    return self
 end
 

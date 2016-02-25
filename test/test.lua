@@ -1252,7 +1252,7 @@ function rnntest.GRU()
          gradOutput[step] = torch.zeros(batchSize, outputSize)
       end
    end
-   local gru = nn.GRU(inputSize, outputSize)
+   local gru = nn.GRU(inputSize, outputSize):maskZero(1) -- issue 145
    
    -- we will use this to build an GRU step by step (with shared params)
    local gruStep = gru.recurrentModule:clone()
