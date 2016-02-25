@@ -3851,6 +3851,16 @@ function rnntest.MaskZeroCriterion()
       mytester:assert(math.abs(err4 - err) < 0.0000001, "MaskZeroCriterion cuda fwd err")
       mytester:assert(gradInput4:float(), gradInput3, 0.0000001, "MaskZeroCriterion cuda bwd err")
    end
+   
+   -- issue 128
+   local input, target=torch.zeros(3,2), torch.Tensor({1,2,1}) -- batch size 3, 2 classes
+   local crit=nn.MaskZeroCriterion(nn.ClassNLLCriterion(), 1)
+   -- output from a masked module gives me all zeros
+   local loss = crit:forward(input, target)
+   mytester:assert(loss == 0, "MaskZeroCriterion all zeros fwd err")
+   
+   local gradInput = crit:backward(input, target)
+   mytester:assert(gradInput:sum() == 0, "MaskZeroCriterion all zeros bwd err")
 end
 
 function rnntest.issue129()
