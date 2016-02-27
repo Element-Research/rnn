@@ -140,11 +140,4 @@ function Sequencer:evaluate()
    assert(self.train == false)
 end
 
-function Sequencer:reinforce(reward)
-   if torch.type(reward) == 'table' then
-      error"Sequencer Error : step-wise rewards not yet supported"
-   end
-   return parent.reinforce(self, reward)
-end
-
 Sequencer.__tostring__ = nn.Decorator.__tostring__
