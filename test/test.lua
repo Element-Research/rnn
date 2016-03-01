@@ -2403,44 +2403,54 @@ function rnntest.RecurrentAttention()
    -- output layer (actions)
    local locator = nn.Sequential()
    locator:add(nn.Linear(opt.hiddenSize, 2))
-   locator:add(nn.HardTanh())
+   locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
+   local rn = nn.ReinforceNormal(2*opt.locatorStd)
+   rn:evaluate() -- so we can match the output from sg to sg2 (i.e deterministic)
+   locator:add(rn) -- sample from normal, uses REINFORCE learning rule
+   locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
    
    -- model is a reinforcement learning agent
    local rva2 = nn.RATest(rnn2:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
    local rva = nn.RecurrentAttention(rnn:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
    
-   local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
-   local gradOutput = {}
-   for step=1,opt.rho do
-      table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
-   end
+   for i=1,3 do
    
-   -- now we compare to the nn.RATest class (which, we know, works)
-   rva:zeroGradParameters()
-   rva2:zeroGradParameters()
-   
-   local output = rva:forward(input)
-   local output2 = rva2:forward(input)
-   
-   mytester:assert(#output == #output2, "RecurrentAttention #output err")
-   for i=1,#output do
-      mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention output err "..i)
-   end
-   
-   local gradInput = rva:backward(input, gradOutput)
-   local gradInput2 = rva2:backward(input, gradOutput)
-   
-   mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention gradInput err")
-   
-   rva:updateParameters(1)
-   rva2:updateParameters(1)
-   
-   local params, gradParams = rva:parameters()
-   local params2, gradParams2 = rva2:parameters()
-   
-   for i=1,#params do
-      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention, param err "..i)
-      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention, gradParam err "..i)
+      local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
+      local gradOutput = {}
+      for step=1,opt.rho do
+         table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+      end
+      
+      -- now we compare to the nn.RATest class (which, we know, works)
+      rva:zeroGradParameters()
+      rva2:zeroGradParameters()
+      
+      local output = rva:forward(input)
+      local output2 = rva2:forward(input)
+      
+      mytester:assert(#output == #output2, "RecurrentAttention #output err")
+      for i=1,#output do
+         mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention output err "..i)
+      end
+      
+      local reward = torch.randn(opt.batchSize)
+      rva:reinforce(reward)
+      rva2:reinforce(reward:clone())
+      local gradInput = rva:backward(input, gradOutput)
+      local gradInput2 = rva2:backward(input, gradOutput)
+      
+      mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention gradInput err")
+      
+      rva:updateParameters(1)
+      rva2:updateParameters(1)
+      
+      local params, gradParams = rva:parameters()
+      local params2, gradParams2 = rva2:parameters()
+      
+      for i=1,#params do
+         mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention, param err "..i)
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention, gradParam err "..i)
+      end
    end
    
    -- test with explicit recursor
@@ -2449,40 +2459,44 @@ function rnntest.RecurrentAttention()
    local rva2 = nn.RATest(rnn2:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
    local rva = nn.RecurrentAttention(nn.Recursor(rnn:clone()), locator:clone(), opt.rho, {opt.hiddenSize})
    
-   local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
-   local gradOutput = {}
-   for step=1,opt.rho do
-      table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+   for i=1,3 do
+      local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
+      local gradOutput = {}
+      for step=1,opt.rho do
+         table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+      end
+      
+      -- now we compare to the nn.RATest class (which, we know, works)
+      rva:zeroGradParameters()
+      rva2:zeroGradParameters()
+      
+      local output = rva:forward(input)
+      local output2 = rva2:forward(input)
+      
+      mytester:assert(#output == #output2, "RecurrentAttention(Recursor) #output err")
+      for i=1,#output do
+         mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention(Recursor) output err "..i)
+      end
+      
+      local reward = torch.randn(opt.batchSize)
+      rva:reinforce(reward)
+      rva2:reinforce(reward:clone())
+      local gradInput = rva:backward(input, gradOutput)
+      local gradInput2 = rva2:backward(input, gradOutput)
+      
+      mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention(Recursor) gradInput err")
+      
+      rva:updateParameters(1)
+      rva2:updateParameters(1)
+      
+      local params, gradParams = rva:parameters()
+      local params2, gradParams2 = rva2:parameters()
+      
+      for i=1,#params do
+         mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention(Recursor), param err "..i)
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention(Recursor), gradParam err "..i)
+      end
    end
-   
-   -- now we compare to the nn.RATest class (which, we know, works)
-   rva:zeroGradParameters()
-   rva2:zeroGradParameters()
-   
-   local output = rva:forward(input)
-   local output2 = rva2:forward(input)
-   
-   mytester:assert(#output == #output2, "RecurrentAttention(Recursor) #output err")
-   for i=1,#output do
-      mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention(Recursor) output err "..i)
-   end
-   
-   local gradInput = rva:backward(input, gradOutput)
-   local gradInput2 = rva2:backward(input, gradOutput)
-   
-   mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention(Recursor) gradInput err")
-   
-   rva:updateParameters(1)
-   rva2:updateParameters(1)
-   
-   local params, gradParams = rva:parameters()
-   local params2, gradParams2 = rva2:parameters()
-   
-   for i=1,#params do
-      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention(Recursor), param err "..i)
-      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention(Recursor), gradParam err "..i)
-   end
-   
 end
    
 function rnntest.LSTM_nn_vs_nngraph()
