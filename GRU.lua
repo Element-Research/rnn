@@ -5,7 +5,7 @@
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
 --
--- For p > 0, it becomes Bayesian GRUs [Gal, arXiv:1512.05287, 2016].
+-- For p > 0, it becomes Bayesian GRUs [Moon et al., 2015; Gal, 2015].
 -- In this case, please do not dropout on input as BGRUs handle the input with 
 -- its own dropouts. First, try 0.25 for p as Gal (2016) suggested, presumably, 
 -- because of summations of two parts in GRUs connections. 
