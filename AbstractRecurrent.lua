@@ -40,7 +40,7 @@ end
 
 function AbstractRecurrent:trimZero(nInputDim)
    self.recurrentModule = nn.TrimZero(self.recurrentModule, nInputDim, true)
-   self.sharedClones = {}
+   self.sharedClones = {self.recurrentModule}
    return self
 end
 
