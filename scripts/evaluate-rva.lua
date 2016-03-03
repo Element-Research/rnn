@@ -129,7 +129,7 @@ for i=1,input:size(1) do
       
       local gimg = img:clone()
       for d=1,sg.depth do
-         local size = sg.size*(sg.scale^(d-1))
+         local size = sg.height*(sg.scale^(d-1))
          local bbox = {y-size/2, x-size/2, size, size}
          drawBox(gimg, bbox, 1)
       end
