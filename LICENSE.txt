@@ -1,4 +1,4 @@
-Copyright (c) 2014-2015 Element Inc (Nicholas Leonard)
+Copyright (c) 2014-2016 Element Inc (Nicholas Leonard)
 
 All rights reserved.
 

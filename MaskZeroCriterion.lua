@@ -72,20 +72,28 @@ function MaskZeroCriterion:updateOutput(input, target)
    end)
    self.zeroMask:resize(j)
    
-   self.input = self:recursiveMask(self.input, input, self.zeroMask)
-   self.target = self:recursiveMask(self.target, target, self.zeroMask)
-   
-   -- forward through decorated criterion
-   self.output = self.criterion:updateOutput(self.input, self.target)
+   if j > 0 then
+      self.input = self:recursiveMask(self.input, input, self.zeroMask)
+      self.target = self:recursiveMask(self.target, target, self.zeroMask)
+      
+      -- forward through decorated criterion
+      self.output = self.criterion:updateOutput(self.input, self.target)
+   else
+      -- when all samples are masked, then loss is zero (issue 128)
+      self.output = 0
+   end
    
    return self.output
 end
 
 function MaskZeroCriterion:updateGradInput(input, target)
-   self._gradInput = self.criterion:updateGradInput(self.input, self.target)
-   
    self.gradInput:resizeAs(input):zero()
-   self.gradInput:indexCopy(1, self.zeroMask, self._gradInput)
+   
+   if self.zeroMask:nElement() > 0 then
+      self._gradInput = self.criterion:updateGradInput(self.input, self.target)
+      self.gradInput:indexCopy(1, self.zeroMask, self._gradInput)
+   end
+   
    return self.gradInput
 end
 

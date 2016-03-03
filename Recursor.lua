@@ -13,6 +13,7 @@ function Recursor:__init(module, rho)
    
    self.module = module
    self.modules = {module}
+   self.sharedClones[1] = self.recurrentModule
 end
 
 function Recursor:updateOutput(input)

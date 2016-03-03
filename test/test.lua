@@ -1252,7 +1252,7 @@ function rnntest.GRU()
          gradOutput[step] = torch.zeros(batchSize, outputSize)
       end
    end
-   local gru = nn.GRU(inputSize, outputSize)
+   local gru = nn.GRU(inputSize, outputSize):maskZero(1) -- issue 145
    
    -- we will use this to build an GRU step by step (with shared params)
    local gruStep = gru.recurrentModule:clone()
@@ -2052,7 +2052,8 @@ function rnntest.SequencerCriterion()
    local inputSize = 10
    local outputSize = 7
    local nStep = 5  
-   local criterion = nn.ClassNLLCriterion()
+   -- https://github.com/Element-Research/rnn/issues/128
+   local criterion = nn.MaskZeroCriterion(nn.ClassNLLCriterion(),1)
    local sc = nn.SequencerCriterion(criterion:clone())
    local input = {}
    local target = {}
@@ -2070,7 +2071,81 @@ function rnntest.SequencerCriterion()
    for i=1,nStep do
       mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "SequencerCriterion backward err "..i)
    end
-   mytester:assert(sc.isStateless, "SequencerCriterion stateless error")
+   
+   -- test type()
+   sc.gradInput = {}
+   sc:float()
+   
+   for i=1,nStep do
+      input[i] = input[i]:float()
+      target[i] = target[i]:float()
+   end
+   
+   local err3 = sc:forward(input, target)
+   mytester:assert(math.abs(err - err3) < 0.000001, "SequencerCriterion forward type err") 
+   local gradInput3 = sc:backward(input, target)
+   for i=1,nStep do
+      mytester:assertTensorEq(gradInput[i]:float(), gradInput3[i], 0.000001, "SequencerCriterion backward type err "..i)
+   end
+   
+   if pcall(function() require 'cunn' end) then
+      -- test cuda()
+      sc.gradInput = {}
+      sc:cuda()
+   
+      local gradInput4 = {}
+      for i=1,nStep do
+         input[i] = input[i]:cuda()
+         target[i] = target[i]:cuda()
+      end
+      
+      local err4 = sc:forward(input, target)
+      mytester:assert(math.abs(err - err4) < 0.000001, "SequencerCriterion forward cuda err") 
+      local gradInput4 = sc:backward(input, target)
+      for i=1,nStep do
+         mytester:assertTensorEq(gradInput4[i]:float(), gradInput3[i], 0.000001, "SequencerCriterion backward cuda err "..i)
+      end
+   end
+end
+
+function rnntest.RepeaterCriterion()
+   local batchSize = 4
+   local inputSize = 10
+   local outputSize = 7
+   local nStep = 5  
+   local criterion = nn.ClassNLLCriterion()
+   local sc = nn.RepeaterCriterion(criterion:clone())
+   local input = {}
+   local target = torch.randperm(inputSize):narrow(1,1,batchSize)
+   local err2 = 0
+   local gradInput2 = {}
+   for i=1,nStep do
+      input[i] = torch.randn(batchSize, inputSize)
+      err2 = err2 + criterion:forward(input[i], target)
+      gradInput2[i] = criterion:backward(input[i], target):clone()
+   end
+   local err = sc:forward(input, target)
+   mytester:asserteq(err, err2, 0.000001, "RepeaterCriterion forward err") 
+   local gradInput = sc:backward(input, target)
+   for i=1,nStep do
+      mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "RepeaterCriterion backward err "..i)
+   end
+   
+   -- test type()
+   sc:float()
+   
+   local gradInput3 = {}
+   target = target:float()
+   for i=1,nStep do
+      input[i] = input[i]:float()
+   end
+   
+   local err3 = sc:forward(input, target)
+   mytester:assert(math.abs(err - err3) < 0.000001, "RepeaterCriterion forward type err") 
+   local gradInput3 = sc:backward(input, target)
+   for i=1,nStep do
+      mytester:assertTensorEq(gradInput[i]:float(), gradInput3[i], 0.000001, "RepeaterCriterion backward type err "..i)
+   end
 end
 
 function rnntest.RecurrentAttention()
@@ -3925,6 +4000,229 @@ function rnntest.MaskZeroCriterion()
    
    mytester:assert(math.abs(err3 - err) < 0.0000001, "MaskZeroCriterion cast fwd err")
    mytester:assert(gradInput3, gradInput:float(), 0.0000001, "MaskZeroCriterion cast bwd err")
+   
+   if pcall(function() require 'cunn' end) then
+      -- test cuda
+      mznll:cuda()
+      local input4 = input:cuda()
+      local target4 = target:cuda()
+      local err4 = mznll:forward(input4, target4)
+      local gradInput4 = mznll:backward(input4, target4):clone()
+      
+      mytester:assert(math.abs(err4 - err) < 0.0000001, "MaskZeroCriterion cuda fwd err")
+      mytester:assert(gradInput4:float(), gradInput3, 0.0000001, "MaskZeroCriterion cuda bwd err")
+   end
+   
+   -- issue 128
+   local input, target=torch.zeros(3,2), torch.Tensor({1,2,1}) -- batch size 3, 2 classes
+   local crit=nn.MaskZeroCriterion(nn.ClassNLLCriterion(), 1)
+   -- output from a masked module gives me all zeros
+   local loss = crit:forward(input, target)
+   mytester:assert(loss == 0, "MaskZeroCriterion all zeros fwd err")
+   
+   local gradInput = crit:backward(input, target)
+   mytester:assert(gradInput:sum() == 0, "MaskZeroCriterion all zeros bwd err")
+end
+
+function rnntest.issue129()
+   -- test without rnn
+   local model1 = nn.Sequential()
+   model1:add(nn.SpatialBatchNormalization(2))
+
+   local input = torch.randn(4, 2, 64, 64)  -- batch_size X channels X height X width
+
+   model1:training()
+   local output
+   for i=1, 1000 do  -- to run training enough times
+      output = model1:forward(input):clone()
+   end
+
+   model1:evaluate()
+   local output2 = model1:forward(input):clone()
+
+   mytester:assertTensorEq(output, output2,  0.0002, "issue 129 err")
+   
+   -- test with rnn
+   local normalize = nn.Sequential()
+   normalize:add(nn.SpatialBatchNormalization(2))
+
+   local model = nn.Sequential()
+   model:add(nn.SplitTable(1))  -- since sequencer expects table as input
+   model:add(nn.Sequencer(normalize))  -- wrapping batch-normalization in a sequencer
+   model:add(nn.JoinTable(1))  -- since sequencer outputs table
+
+   input:resize(1, 4, 2, 64, 64)  -- time_step X batch_size X channels X height X width
+
+   model:training()
+
+   local output
+   for i=1, 1000 do  -- to run training enough times
+      output = model:forward(input):clone()
+   end
+   
+   mytester:assertTensorEq(model1:get(1).running_mean, model:get(2).module.sharedClones[1].modules[1].running_mean, 0.000001)
+   mytester:assertTensorEq(model:get(2).module.sharedClones[1].modules[1].running_mean, model:get(2).module.recurrentModule.modules[1].running_mean, 0.0000001)
+
+   model:evaluate()
+   local output2 = model:forward(input):clone()
+
+   mytester:assertTensorEq(output, output2,  0.0002, "issue 129 err")
+end
+
+function rnntest.encoderdecoder()
+   torch.manualSeed(123)
+   
+   local opt = {}
+   opt.learningRate = 0.1
+   opt.hiddenSz = 2
+   opt.vocabSz = 5
+   opt.inputSeqLen = 3 -- length of the encoded sequence
+
+   --[[ Forward coupling: Copy encoder cell and output to decoder LSTM ]]--
+   local function forwardConnect(encLSTM, decLSTM)
+     decLSTM.userPrevOutput = nn.rnn.recursiveCopy(decLSTM.userPrevOutput, encLSTM.outputs[opt.inputSeqLen])
+     decLSTM.userPrevCell = nn.rnn.recursiveCopy(decLSTM.userPrevCell, encLSTM.cells[opt.inputSeqLen])
+   end
+
+   --[[ Backward coupling: Copy decoder gradients to encoder LSTM ]]--
+   local function backwardConnect(encLSTM, decLSTM)
+     encLSTM.userNextGradCell = nn.rnn.recursiveCopy(encLSTM.userNextGradCell, decLSTM.userGradPrevCell)
+     encLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encLSTM.gradPrevOutput, decLSTM.userGradPrevOutput)
+   end
+
+   -- Encoder
+   local enc = nn.Sequential()
+   enc:add(nn.LookupTable(opt.vocabSz, opt.hiddenSz))
+   enc:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
+   local encLSTM = nn.LSTM(opt.hiddenSz, opt.hiddenSz)
+   enc:add(nn.Sequencer(encLSTM))
+   enc:add(nn.SelectTable(-1))
+
+   -- Decoder
+   local dec = nn.Sequential()
+   dec:add(nn.LookupTable(opt.vocabSz, opt.hiddenSz))
+   dec:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
+   local decLSTM = nn.LSTM(opt.hiddenSz, opt.hiddenSz)
+   dec:add(nn.Sequencer(decLSTM))
+   dec:add(nn.Sequencer(nn.Linear(opt.hiddenSz, opt.vocabSz)))
+   dec:add(nn.Sequencer(nn.LogSoftMax()))
+
+   local criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+
+   local encParams, encGradParams = enc:getParameters()
+   local decParams, decGradParams = dec:getParameters()
+
+   enc:zeroGradParameters()
+   dec:zeroGradParameters()
+
+   -- Some example data (batchsize = 2)
+   local encInSeq = torch.Tensor({{1,2,3},{3,2,1}}) 
+   local decInSeq = torch.Tensor({{1,2,3,4},{4,3,2,1}})
+   local decOutSeq = torch.Tensor({{2,3,4,1},{1,2,4,3}})
+   decOutSeq = nn.SplitTable(1, 1):forward(decOutSeq)
+
+   -- Forward pass
+   local encOut = enc:forward(encInSeq)
+   forwardConnect(encLSTM, decLSTM)
+   local decOut = dec:forward(decInSeq)
+   local Edec = criterion:forward(decOut, decOutSeq)
+
+   -- Backward pass
+   local gEdec = criterion:backward(decOut, decOutSeq)
+   dec:backward(decInSeq, gEdec)
+   backwardConnect(encLSTM, decLSTM)
+   local zeroTensor = torch.Tensor(2):zero()
+   enc:backward(encInSeq, zeroTensor)
+
+   local function numgradtest()
+      -- Here, we do a numerical gradient check to make sure the coupling is correct:
+      local eps = 1e-5
+
+      local decGP_est, encGP_est = torch.DoubleTensor(decGradParams:size()), torch.DoubleTensor(encGradParams:size())
+
+      -- Easy function to do forward pass over coupled network and get error
+      local function forwardPass()
+         local encOut = enc:forward(encInSeq)
+         forwardConnect(encLSTM, decLSTM)
+         local decOut = dec:forward(decInSeq)
+         local E = criterion:forward(decOut, decOutSeq)
+         return E
+      end
+
+      -- Check encoder
+      for i = 1, encGradParams:size(1) do
+         -- Forward with \theta+eps
+         encParams[i] = encParams[i] + eps
+         local C1 = forwardPass()
+         -- Forward with \theta-eps
+         encParams[i] = encParams[i] - 2 * eps
+         local C2 = forwardPass()
+
+         encParams[i] = encParams[i] + eps
+         encGP_est[i] = (C1 - C2) / (2 * eps)
+      end
+      mytester:assertTensorEq(encGradParams, encGP_est, eps, "Numerical gradient check for encoder failed")
+
+      -- Check decoder
+      for i = 1, decGradParams:size(1) do
+         -- Forward with \theta+eps
+         decParams[i] = decParams[i] + eps
+         local C1 = forwardPass()
+         -- Forward with \theta-eps
+         decParams[i] = decParams[i] - 2 * eps
+         local C2 = forwardPass()
+
+         decParams[i] = decParams[i] + eps
+         decGP_est[i] = (C1 - C2) / (2 * eps)
+      end
+      mytester:assertTensorEq(decGradParams, decGP_est, eps, "Numerical gradient check for decoder failed")
+   end
+   
+   numgradtest()
+   
+   encGradParams:zero()
+   decGradParams:zero()
+
+   -- issue 142
+
+   -- batchsize = 3
+   
+   encInSeq = torch.Tensor({{1,2,3},{3,2,1},{1,3,5}}) 
+   decInSeq = torch.Tensor({{1,2,3,4},{4,3,2,1},{1,3,5,1}})
+   decOutSeq = torch.Tensor({{2,3,4,1},{1,2,4,3},{1,2,5,3}})
+   decOutSeq = nn.SplitTable(1, 1):forward(decOutSeq)
+
+   -- Forward pass
+   local encOut = enc:forward(encInSeq)
+   forwardConnect(encLSTM, decLSTM)
+   local decOut = dec:forward(decInSeq)
+   local Edec = criterion:forward(decOut, decOutSeq)
+
+   -- Backward pass
+   local gEdec = criterion:backward(decOut, decOutSeq)
+   dec:backward(decInSeq, gEdec)
+   backwardConnect(encLSTM, decLSTM)
+   local zeroTensor = torch.Tensor(2):zero()
+   enc:backward(encInSeq, zeroTensor)
+   
+   numgradtest()
+end
+
+function rnntest.reinforce()
+   -- test that AbstractRecurrent:reinforce(rewards) words
+   local seqLen = 4
+   local batchSize = 3
+   local rewards = {}
+   for i=1,seqLen do
+      rewards[i] = torch.randn(batchSize)
+   end
+   local rf = nn.ReinforceNormal(0.1)
+   local rnn = nn.Recursor(rf)
+   rnn:reinforce(rewards)
+   for i=1,seqLen do
+      local rm = rnn:getStepModule(i)
+      mytester:assertTensorEq(rm.reward, rewards[i], 0.000001, "Reinforce error")
+   end
 end
 
 function rnn.test(tests, benchmark_)

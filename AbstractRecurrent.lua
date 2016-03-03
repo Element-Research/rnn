@@ -34,7 +34,7 @@ end
 
 function AbstractRecurrent:maskZero(nInputDim)
    self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim, true)
-   self.sharedClones = {}
+   self.sharedClones = {self.recurrentModule}
    return self
 end
 
@@ -105,6 +105,23 @@ function AbstractRecurrent:forget()
    
    -- forget the past inputs; restart from first step
    self.step = 1
+   
+   
+  if not self.rmInSharedClones then
+      -- Asserts that issue 129 is solved. In forget as it is often called.
+      -- Asserts that self.recurrentModule is part of the sharedClones.
+      -- Since its used for evaluation, it should be used for training. 
+      local nClone = 0
+      for k,v in pairs(self.sharedClones) do -- to prevent odd bugs
+         if torch.pointer(v) == torch.pointer(self.recurrentModule) then
+            self.rmInSharedClones = true
+         end
+         nClone = nClone + 1
+      end
+      if nClone > 1 then
+         assert(self.rmInSharedClones, "recurrentModule should be added to sharedClones in constructor")
+      end
+   end
    return self
 end
 
@@ -144,9 +161,19 @@ function AbstractRecurrent:evaluate()
 end
 
 function AbstractRecurrent:reinforce(reward)
-   return self:includingSharedClones(function()
-      return parent.reinforce(self, reward)
-   end)
+   if torch.type(reward) == 'table' then
+      -- multiple rewards, one per time-step
+      local rewards = reward
+      for step, reward in ipairs(rewards) do
+         local sm = self:getStepModule(step)
+         sm:reinforce(reward)
+      end
+   else
+      -- one reward broadcast to all time-steps
+      return self:includingSharedClones(function()
+         return parent.reinforce(self, reward)
+      end)
+   end
 end
 
 -- used by Recursor() after calling stepClone.
@@ -188,4 +215,12 @@ end
 
 function AbstractRecurrent:backwardUpdateThroughTime(learningRate)
    error"DEPRECATED Jan 8, 2016"
+end
+
+function AbstractRecurrent:__tostring__()
+   if self.inputSize and self.outputSize then
+       return self.__typename .. string.format("(%d -> %d)", self.inputSize, self.outputSize)
+   else
+       return parent.__tostring__(self)
+   end
 end

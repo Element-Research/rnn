@@ -557,6 +557,37 @@ requires that a sequence to be presented one input at a time, each with its own 
 the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
 It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
 
+### Input/Output Format
+
+The `Sequencer` requires inputs and outputs to be of shape `seqlen x batchsize x featsize` :
+
+ * `seqlen` is the number of time-steps that will be fed into the `Sequencer`.
+ * `batchsize` is the number of examples in the batch. Each example is its own independent sequence.
+ * `featsize` is the size of the remaining non-batch dimensions. So this could be `1` for language models, or `c x h x w` for convolutional models, etc.
+ 
+![Hello Fuzzy](doc/image/hellofuzzy.png)
+
+Above is an example input sequence for a character level language model.
+It has `seqlen` is 5 which means that it contains sequences of 5 time-steps. 
+The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table.
+The `batchsize` is 2 as their are two independent sequences : `{ H, E, L, L, O }` and `{ F, U, Z, Z, Y, }`.
+The `featsize` is 1 as their is only one feature dimension per character and each such character is of size 1.
+So the input in this case is a table of `seqlen` time-steps where each time-step is represented by a `batchsize x featsize` Tensor.
+
+![Sequence](doc/image/sequence.png)
+
+Above is another example of a sequence (input or output). 
+It has a `seqlen` of 4 time-steps. 
+The `batchsize` is again 2 which means there are two sequences.
+The `featsize` is 3 as each time-step of each sequence has 3 variables.
+So each time-step (element of the table) is represented again as a tensor
+of size `batchsize x featsize`. 
+Note that while in both examples the `featsize` encodes one dimension, 
+it could encode more. 
+
+
+### Example
+
 For example, `rnn` : an instance of nn.AbstractRecurrent, can forward an `input` sequence one forward at a time:
 ```lua
 input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
@@ -570,7 +601,9 @@ Equivalently, we can use a Sequencer to forward the entire `input` sequence at o
 ```lua
 seq = nn.Sequencer(rnn)
 seq:forward(input)
-```
+``` 
+
+### Details
 
 The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent instances) and apply it to each 
 input to produce an output table of the same length. 
@@ -799,24 +832,28 @@ This decorator makes it possible to pad sequences with different lengths in the 
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##
+
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
+
 ```lua
 c = nn.SequencerCriterion(criterion)
 ``` 
+
 Both the `input` and `target` are expected to be a sequence (a table). 
 For each step in the sequence, the corresponding elements of the input and target tables 
 will be applied to the `criterion`.
 The output of `forward` is the sum of all individual losses in the sequence.
 This is useful when used in conjuction with a [Sequencer](#rnn.Sequencer).
 
-WARNING : assumes that the decorated criterion is stateless, i.e. a `backward` shouldn't need to be preceded by a commensurate `forward`.
-
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
+
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
+
 ```lua
 c = nn.RepeaterCriterion(criterion)
 ``` 
+
 The `input` is expected to be a sequence (a table). A single `target` is 
 repeatedly applied using the same `criterion` to each element in the `input` sequence.
 The output of `forward` is the sum of all individual losses in the sequence.

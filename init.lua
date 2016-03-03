@@ -44,8 +44,8 @@ torch.include('rnn', 'BiSequencerLM.lua')
 torch.include('rnn', 'RecurrentAttention.lua')
 
 -- recurrent criterions:
-torch.include('rnn', 'RepeaterCriterion.lua')
 torch.include('rnn', 'SequencerCriterion.lua')
+torch.include('rnn', 'RepeaterCriterion.lua')
 torch.include('rnn', 'MaskZeroCriterion.lua')
 
 -- prevent likely name conflicts

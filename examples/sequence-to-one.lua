@@ -77,6 +77,4 @@ for iteration = 1, 1000 do
    -- 4. update
    
    rnn:updateParameters(lr)
-   
-   iteration = iteration + 1
 end
