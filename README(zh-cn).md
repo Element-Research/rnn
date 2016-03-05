@@ -13,86 +13,86 @@
  * [Recursor](#rnn.Recursor) : 用来装饰一个模型来使它符合[AbstractRecurrent](#rnn.AbstractRecurrent)的接口;
  * [Recurrence](#rnn.Recurrence) : 装饰一个模块当输入`{input(t), output(t-1)}`时输出`output(t)`;
 
-Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
- * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
- * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
- * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
- * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
- * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
- * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
+通过装饰`AbstractRecurrent`实例一次`forward`整个序列的模块:
+ * [AbstractSequencer](#rnn.AbstractSequencer) : 一个被Sequencer, Repeater, RecurrentAttention等继承的抽象类.;
+ * [Sequencer](#rnn.Sequencer) : 对一个输入序列里的所有元素应用模块封装;
+ * [BiSequencer](#rnn.BiSequencer) : 用来实现双向的RNNs和LSTMs;
+ * [BiSequencerLM](#rnn.BiSequencerLM) : 用来实现语言模型的双向RNNs和LSTMs;
+ * [Repeater](#rnn.Repeater) : 对一个AbstractRecurrent实例重复的应用同一个输入;
+ * [RecurrentAttention](#rnn.RecurrentAttention) : 一个广受关注的模型[REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
 
-Miscellaneous modules and criterions :
- * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
- * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
- * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros
+其他的模块和损失函数:
+ * [MaskZero](#rnn.MaskZero) : 来装饰一个模块当它`input`的张量中的行为0时，使相应的`output`和`gradOutput`为0.
+ * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : 扩展`nn.LookupTable`使它可以支持0索引和填充.0索引被作为以0组成的张量前向传递.
+ * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : 来装饰一个损失模块，当`input`张量的行为0时，使它对应的`gradInput`和`err`行为0.
 
-Criterions used for handling sequential inputs and targets :
- * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
- * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
+用于处理序列输入和目标的损失函数:
+ * [SequencerCriterion](#rnn.SequencerCriterion) : 对一个输入序列和目标顺序的应用相同的损失函数;
+ * [RepeaterCriterion](#rnn.RepeaterCriterion) : 对一个输入序列重复已同一个目标应用同一个损失函数;
 
 
 <a name='rnn.examples'></a>
-## Examples ##
+## 例子 ##
 
-The following are example training scripts using this package :
+下面的是用这个包实现的训练脚本样例:
 
-  * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
-  * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
-  * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) shows you how to couple encoder and decoder `LSTMs` for sequence-to-sequence networks;
-  * [Simple Recurrent Network](examples/simple-recurrent-network.lua) shows a simple example for building and training a simple recurrent neural network;
-  * [Simple Sequencer Network](examples/simple-recurrent-network.lua) is a version of the above script that uses the Sequencer to decorate the `rnn` instead;
-  * [Sequence to One](examples/sequence-to-one.lua) demonstrates how to do many to one sequence learning as is the case for sentiment analysis;
-  * [Multivariate Time Series](examples/recurrent-time-series.lua) demonstrates how train a simple RNN to do multi-variate time-series predication.
+  * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) 使用宾夕法尼亚树库;
+  * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) 使用MNIST数据集;
+  * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) 向你展示如何连接用作编码器和解码器的`LSTMs`实现一个序列到序列的网络;
+  * [Simple Recurrent Network](examples/simple-recurrent-network.lua) 展示一个创建和训练一个简单的递归神经网络的简单例子;
+  * [Simple Sequencer Network](examples/simple-recurrent-network.lua) 是上面脚本使用Sequencer来装饰`rnn`的另一个版本;
+  * [Sequence to One](examples/sequence-to-one.lua) 展示如何来进行多输入单输出序列的学习这种情感分析要用到的情况;
+  * [Multivariate Time Series](examples/recurrent-time-series.lua) 展示如何来训练一个简单的RNN来进行multi-variate time-series 预测.
 
-### External Resources
+### 扩展资源
 
-  * [dpnn](https://github.com/Element-Research/dpnn) : this is a dependency of the __rnn__ package. It contains useful nn extensions, modules and criterions.
-  * [RNN/LSTM/BRNN/BLSTM training script ](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
-  * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7;
-  * [ConvLSTM](https://github.com/viorik/ConvLSTM) is a repository for training a [Spatio-temporal video autoencoder with differentiable memory](http://arxiv.org/abs/1511.06309).
-  * An [time series example](https://github.com/rracinskij/rnntest01/blob/master/rnntest01.lua) for univariate timeseries prediction.
+  * [dpnn](https://github.com/Element-Research/dpnn) : 这是__rnn__包的依赖. 它包含有用的nn扩展, 模块和损失函数.
+  * [RNN/LSTM/BRNN/BLSTM training script ](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua)使用 宾夕法尼亚树库或Google Billion Words数据集;
+  * 一个简明的Torch7概述(1 小时), 包含__rnn__包的一些细节 (在最后), 可以通过这里获得[NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). 总之, 这个展示包含一个使用Torch7处理逻辑回归，多层感知器，卷积神经网络和递归神经网络不错的概览;
+  * [ConvLSTM](https://github.com/viorik/ConvLSTM) 是一个训练 [Spatio-temporal video autoencoder with differentiable memory](http://arxiv.org/abs/1511.06309)的目录.
+  * An [time series example](https://github.com/rracinskij/rnntest01/blob/master/rnntest01.lua) 用于univariate timeseries预测.
   
-## Citation ##
+## 引用 ##
 
-If you use __rnn__ in your work, we'd really appreciate it if you could cite the following paper:
+如果你在你的工作中使用到了__rnn__, 如果你引用下面的论文的话我们会很感激:
 
 Léonard, Nicholas, Sagar Waghmare, Yang Wang, and Jin-Hwa Kim. [rnn: Recurrent Library for Torch.](http://arxiv.org/abs/1511.07889) arXiv preprint arXiv:1511.07889 (2015).
 
-Any significant contributor to the library will also get added as an author to the paper.
-A [significant contributor](https://github.com/Element-Research/rnn/graphs/contributors) 
-is anyone who added at least 300 lines of code to the library.
+这个库的显著贡献者也会被作为作者加入这篇论文.
+[significant contributor](https://github.com/Element-Research/rnn/graphs/contributors) 
+是对这个库添加最少300行代码的人.
 
-## Troubleshooting ##
+## 故障排除 ##
 
-Most issues can be resolved by updating the various dependencies:
+大部分问题可以通过更新各种依赖的包解决:
 ```bash
 luarocks install torch
 luarocks install nn
 luarocks install dpnn
 ```
 
-If you are using CUDA :
+如果你使用CUDA:
 ```bash
 luarocks install cutorch
 luarocks install cunn
 luarocks install cunnx
 ```
 
-And don't forget to update this package :
+也不要忘了更新这个包 :
 ```bash
 luarocks install rnn
 ```
 
-If that doesn't fix it, open and issue on github.
+如果还不能解决，在github上发布一个问题.
 
 <a name='rnn.AbstractRecurrent'></a>
 ## AbstractRecurrent ##
-An abstract class inherited by [Recurrent](#rnn.Recurrent), [LSTM](#rnn.LSTM) and [GRU](#rnn.GRU).
-The constructor takes a single argument :
+一个被[Recurrent](#rnn.Recurrent), [LSTM](#rnn.LSTM) 和 [GRU](#rnn.GRU)继承的抽象类.
+构造函数获取一个参数 :
 ```lua
 rnn = nn.AbstractRecurrent([rho])
 ```
-Argument `rho` is the maximum number of steps to backpropagate through time (BPTT).
+参数`rho` is the maximum number of steps to backpropagate through time (BPTT).
 Sub-classes can set this to a large number like 99999 (the default) if they want to backpropagate through 
 the entire sequence whatever its length. Setting lower values of rho are 
 useful when long sequences are forward propagated, but we only whish to 
