@@ -28,7 +28,7 @@
 
 用于处理序列输入和目标的损失函数:
  * [SequencerCriterion](#rnn.SequencerCriterion) : 对一个输入序列和目标顺序的应用相同的损失函数;
- * [RepeaterCriterion](#rnn.RepeaterCriterion) : 对一个输入序列重复已同一个目标应用同一个损失函数;
+ * [RepeaterCriterion](#rnn.RepeaterCriterion) : 对一个输入序列重复以同一个目标应用同一个损失函数;
 
 
 <a name='rnn.examples'></a>
