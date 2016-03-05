@@ -6,7 +6,7 @@
 
 可以通过按照顺序连续的调用`forward`来实现不同时间步骤输入的模块：
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : 一个被Recurrent 和 LSTM继承的抽象类;
- * [Recurrent](#rnn.Recurrent) : 一个通用的递归神经网络容器;
+ * [Recurrent](#rnn.Recurrent) : 一个通用的循环神经网络容器;
  * [LSTM](#rnn.LSTM) : 一个普通的Long-Short Term Memory模块;
   * [FastLSTM](#rnn.FastLSTM) : 一个更快的[LSTM](#rnn.LSTM);
  * [GRU](#rnn.GRU) : Gated Recurrent Units模块;
@@ -39,7 +39,7 @@
   * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) 使用宾夕法尼亚树库;
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) 使用MNIST数据集;
   * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) 向你展示如何连接用作编码器和解码器的`LSTMs`实现一个序列到序列的网络;
-  * [Simple Recurrent Network](examples/simple-recurrent-network.lua) 展示一个创建和训练一个简单的递归神经网络的简单例子;
+  * [Simple Recurrent Network](examples/simple-recurrent-network.lua) 展示一个创建和训练一个简单的循环神经网络的简单例子;
   * [Simple Sequencer Network](examples/simple-recurrent-network.lua) 是上面脚本使用Sequencer来装饰`rnn`的另一个版本;
   * [Sequence to One](examples/sequence-to-one.lua) 展示如何来进行多输入单输出序列的学习这种情感分析要用到的情况;
   * [Multivariate Time Series](examples/recurrent-time-series.lua) 展示如何来训练一个简单的RNN来进行multi-variate time-series 预测.
@@ -48,7 +48,7 @@
 
   * [dpnn](https://github.com/Element-Research/dpnn) : 这是__rnn__包的依赖. 它包含有用的nn扩展, 模块和损失函数.
   * [RNN/LSTM/BRNN/BLSTM training script ](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua)使用 宾夕法尼亚树库或Google Billion Words数据集;
-  * 一个简明的Torch7概述(1 小时), 包含__rnn__包的一些细节 (在最后), 可以通过这里获得[NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). 总之, 这个展示包含一个使用Torch7处理逻辑回归，多层感知器，卷积神经网络和递归神经网络不错的概览;
+  * 一个简明的Torch7概述(1 小时), 包含__rnn__包的一些细节 (在最后), 可以通过这里获得[NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). 总之, 这个展示包含一个使用Torch7处理逻辑回归，多层感知器，卷积神经网络和循环神经网络不错的概览;
   * [ConvLSTM](https://github.com/viorik/ConvLSTM) 是一个训练 [Spatio-temporal video autoencoder with differentiable memory](http://arxiv.org/abs/1511.06309)的目录.
   * An [time series example](https://github.com/rracinskij/rnntest01/blob/master/rnntest01.lua) 用于univariate timeseries预测.
   
@@ -92,38 +92,38 @@ luarocks install rnn
 ```lua
 rnn = nn.AbstractRecurrent([rho])
 ```
-参数`rho` is the maximum number of steps to backpropagate through time (BPTT).
-Sub-classes can set this to a large number like 99999 (the default) if they want to backpropagate through 
-the entire sequence whatever its length. Setting lower values of rho are 
-useful when long sequences are forward propagated, but we only whish to 
-backpropagate through the last `rho` steps, which means that the remainder 
-of the sequence doesn't need to be stored (so no additional cost). 
+参数`rho` 是反向传播过程中的最大步数（backpropagate through time (BPTT)）.
+子类可以设置这个值为一个大的数字像 99999 (默认值) 如果它们
+想对整个序列进行反向传播而不管它有多长. 设置较小的 rho 值
+在很长的序列被前向传播时是很有用的, 但是我们只希望对前`rho`步
+进行反向传播, 这就意味着剩余的序列不需要被保存
+(所以没有额外的开销). 
 
 ### [recurrentModule] getStepModule(step) ###
-Returns a module for time-step `step`. This is used internally by sub-classes 
-to obtain copies of the internal `recurrentModule`. These copies share 
-`parameters` and `gradParameters` but each have their own `output`, `gradInput` 
-and any other intermediate states. 
+返回一个 `step` 时间步长的模块. 这个函数被内部的子类用来
+获取内部 `recurrentModule` 的副本. 这些副本共享 
+`parameters` 和 `gradParameters` 但是每个都有它们自己的 `output`, `gradInput` 
+和其它任何的中间变量. 
 
 ### setOutputStep(step) ###
-This is a method reserved for internal use by [Recursor](#rnn.Recursor) 
-when doing backward propagation. It sets the object's `output` attribute
-to point to the output at time-step `step`. 
-This method was introduced to solve a very annoying bug.
+这是一个被保留的内部方法由 [Recursor](#rnn.Recursor)
+进行反向传播时使用. 这个方法设置对象的 `output` 属性
+指向时间步长 `step` 时的输出. 
+这个方法被引进来解决一个非常烦人的bug.
 
 ### maskZero(nInputDim) ###
-Decorates the internal `recurrentModule` with [MaskZero](#rnn.MaskZero). 
-The `output` Tensor (or table thereof) of the `recurrentModule`
-will have each row (samples) zeroed when the commensurate row of the `input` 
-is a tensor of zeros. 
+用 [MaskZero](#rnn.MaskZero) 来装饰内部的 `recurrentModule`. 
+`recurrentModule` 的输出张量 (或由表生成的) `output`
+的每一行(样例)会被置零当 `input` 对应的输入行
+是一个值为0的张量时. 
 
-The `nInputDim` argument must specify the number of non-batch dims 
-in the first Tensor of the `input`. In the case of an `input` table,
-the first Tensor is the first one encountered when doing a depth-first search.
+参数 `nInputDim` 必须指定第一个输入张量 `input` 中
+非批量维度（non-batch dims）的数量. 当输入一个表 `input` 时,
+第一个张量是做深度优先搜索时遇到的第一个张量.
 
-Calling this method makes it possible to pad sequences with different lengths in the same batch with zero vectors.
-Warning: padding must come before any real data in the input sequence (padding
-after the real data is not supported and will yield unpredictable results without failing).
+调用这个方法使以相同批量不同长度的0向量填充序列成为可能.
+警告: 填充必须在任何真实输入序列里数据输入之前 (
+在真实的数据输入之后填充不被支持而且会产生不可预测的结果而没有错误发生).
 
 ### [output] updateOutput(input) ###
 Forward propagates the input for the current step. The outputs or intermediate 
