@@ -4,7 +4,7 @@
 你可以用它来创建RNNs, LSTMs, GRUs, BRNNs, BLSTMs等等。
 这个库里包含下列对象的文档：
 
-可以通过按照顺序连续的调用'forward'来实现不同时间步骤输入的模块：
+可以通过按照顺序连续的调用`forward`来实现不同时间步骤输入的模块：
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : 一个被Recurrent 和 LSTM继承的抽象类;
  * [Recurrent](#rnn.Recurrent) : 一个通用的递归神经网络容器;
  * [LSTM](#rnn.LSTM) : 一个普通的Long-Short Term Memory模块;
