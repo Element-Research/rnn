@@ -92,7 +92,7 @@ luarocks install rnn
 ```lua
 rnn = nn.AbstractRecurrent([rho])
 ```
-参数`rho` 是反向传播过程中的最大步数（backpropagate through time (BPTT)）.
+参数`rho` 是反向传播过程中的记录步数（backpropagate through time (BPTT)）的最大值.
 子类可以设置这个值为一个大的数字像 99999 (默认值) 如果它们
 想对整个序列进行反向传播而不管它有多长. 设置较小的 rho 值
 在很长的序列被前向传播时是很有用的, 但是我们只希望对前`rho`步
@@ -126,15 +126,15 @@ rnn = nn.AbstractRecurrent([rho])
 在真实的数据输入之后填充不被支持而且会产生不可预测的结果而没有错误发生).
 
 ### [output] updateOutput(input) ###
-Forward propagates the input for the current step. The outputs or intermediate 
-states of the previous steps are used recurrently. This is transparent to the 
-caller as the previous outputs and intermediate states are memorized. This 
-method also increments the `step` attribute by 1.
+对当前步的输入进行前向传播. 输出或者之前步的中间 
+状态被循环地使用. 因为存储之前的输出和中间状态
+所以这对调用则来说是透明的. 这个方法
+同时把 `step` 的值增加1.
 
 <a name='rnn.AbstractRecurrent.updateGradInput'></a>
 ### updateGradInput(input, gradOutput) ###
-Like `backward`, this method should be called in the reverse order of 
-`forward` calls used to propagate a sequence. So for example :
+像 `backward`, 这个方法应该用 `forward` 
+调用传递序列相反的顺序调用. 例如 :
 
 ```lua
 rnn = nn.LSTM(10, 10) -- AbstractRecurrent instance
@@ -150,44 +150,44 @@ end
 rnn:forget()
 ``` 
 
-The reverse order implements backpropagation through time (BPTT).
+以相反的顺序执行反向传播步骤（backpropagation through time (BPTT)）.
 
 ### accGradParameters(input, gradOutput, scale) ###
-Like `updateGradInput`, but for accumulating gradients w.r.t. parameters.
+像 `updateGradInput`, 但是对 w.r.t. 参数增加梯度值.
 
 ### recycle(offset) ###
-This method goes hand in hand with `forget`. It is useful when the current
-time-step is greater than `rho`, at which point it starts recycling 
-the oldest `recurrentModule` `sharedClones`, 
-such that they can be reused for storing the next step. This `offset` 
-is used for modules like `nn.Recurrent` that use a different module 
-for the first step. Default offset is 0.
+这个方法与 `forget`密切相关. 当前的输入步数大于`rho`时
+这个方法很有用, 从这时开始回收 
+最早产生的 `recurrentModule` `sharedClones`, 
+这样它们就可以存储下一步时被重用. `offset` 
+被例如`nn.Recurrent`这样第一步使用不同模块
+的模型使用. 默认的偏置是0.
 
 <a name='rnn.AbstractRecurrent.forget'></a>
 ### forget(offset) ###
-This method brings back all states to the start of the sequence buffers, 
-i.e. it forgets the current sequence. It also resets the `step` attribute to 1.
-It is highly recommended to call `forget` after each parameter update. 
-Otherwise, the previous state will be used to activate the next, which 
-will often lead to instability. This is caused by the previous state being
-the result of now changed parameters. It is also good practice to call 
-`forget` at the start of each new sequence.
+这个方法把所有状态重置为初始时的序列缓存, 
+即 它忘掉当前的序列. 它也重置 `step` 属性的值为1.
+强烈建议在每次参数更新之后调用 `forget`. 
+否则, 之前的状态会被用来产生下一个, 这
+往往会导致不稳定. 这是由之前的状态被
+现在用来改变参数使用造成的结果. 实践中在输入
+每一个新的序列前调用`forget`也很好.
 
 <a name='rnn.AbstractRecurrent.maxBPTTstep'></a>
 ###  maxBPTTstep(rho) ###
-This method sets the maximum number of time-steps for which to perform 
-backpropagation through time (BPTT). So say you set this to `rho = 3` time-steps,
-feed-forward for 4 steps, and then backpropgate, only the last 3 steps will be 
-used for the backpropagation. If your AbstractRecurrent instance is wrapped 
-by a [Sequencer](#rnn.Sequencer), this will be handled auto-magically by the Sequencer.
-Otherwise, setting this value to a large value (i.e. 9999999), is good for most, if not all, cases.
+这个方法设置进行反向传播时（backpropagation through time (BPTT)）
+记录的最大步数. 也就是说你把 `rho = 3` 步,
+前向传播输入4步, 然后进行反向传播,只有后3步会被
+反向传播使用. 如果你懂AbstractRecurrent实例被
+一个[Sequencer](#rnn.Sequencer)包裹, 这会被Sequencer魔术般的自动处理.
+否则, 设置这个值为一个大值 (例如 9999999), 对大部分情况, 都很好, 如果不是全部的话.
 
 <a name='rnn.AbstractRecurrent.backwardOnline'></a>
 ### backwardOnline() ###
-This method was deprecated Jan 6, 2016. 
-Since then, by default, `AbstractRecurrent` instances use the 
-backwardOnline behaviour. 
-See [updateGradInput](#rnn.AbstractRecurrent.updateGradInput) for details.
+这个方法于 Jan 6, 2016 被弃用. 
+从那时起, 默认的, `AbstractRecurrent` 实例使用
+backwardOnline行为. 
+具体细节参见 [updateGradInput](#rnn.AbstractRecurrent.updateGradInput).
 
 ### training() ###
 In training mode, the network remembers all previous `rho` (number of time-steps)
