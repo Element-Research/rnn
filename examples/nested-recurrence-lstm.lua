@@ -5,8 +5,8 @@ require 'rnn'
 -- hyper-parameters 
 batchSize = 8
 rho = 5 -- sequence length
-hiddenSize = 10
-nIndex = 100
+hiddenSize = 7
+nIndex = 10
 lr = 0.1
 
 -- Recurrence.recurrentModule
@@ -42,7 +42,7 @@ sequence:resize(100*10) -- one long sequence of 1,2,3...,10,1,2,3...10...
 
 offsets = {}
 for i=1,batchSize do
-   table.insert(offsets, math.ceil(math.random()*batchSize))
+   table.insert(offsets, math.ceil(math.random()*sequence:size(1)))
 end
 offsets = torch.LongTensor(offsets)
 
@@ -58,7 +58,7 @@ while true do
       -- incement indices
       offsets:add(1)
       for j=1,batchSize do
-         if offsets[j] > nIndex then
+         if offsets[j] > sequence:size(1) then
             offsets[j] = 1
          end
       end
