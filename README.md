@@ -208,7 +208,7 @@ References :
 
 A [composite Module](https://github.com/torch/nn/blob/master/doc/containers.md#containers) for implementing Recurrent Neural Networks (RNN), excluding the output layer. 
 
-The `nn.Recurrent(start, input, feedback, [transfer, rho, merge])` constructor takes 5 arguments:
+The `nn.Recurrent(start, input, feedback, [transfer, rho, merge])` constructor takes 6 arguments:
  * `start` : the size of the output (excluding the batch dimension), or a Module that will be inserted between the `input` Module and `transfer` module during the first step of the propagation. When `start` is a size (a number or `torch.LongTensor`), then this *start* Module will be initialized as `nn.Add(start)` (see Ref. A).
  * `input` : a Module that processes input Tensors (or Tables). Output must be of same size as `start` (or its output in the case of a `start` Module), and same size as the output of the `feedback` Module.
  * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `transfer` Module.
