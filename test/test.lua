@@ -4078,6 +4078,122 @@ function rnntest.reinforce()
    end
 end
 
+function rnntest.rnnlm()
+   if not pcall(function() require 'nngraph' end) then
+      return
+   end
+   
+   local vocabsize = 100
+   local opt = {
+      seqlen = 5,
+      batchsize = 3,
+      hiddensize = {20,20},
+      lstm = true
+   }
+   
+   local lm = nn.Sequential()
+
+   -- input layer (i.e. word embedding space)
+   local lookup = nn.LookupTable(vocabsize, opt.hiddensize[1])
+   lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+   lm:add(lookup) -- input is seqlen x batchsize
+   lm:add(nn.SplitTable(1)) -- tensor to table of tensors
+
+   -- rnn layers
+   local stepmodule = nn.Sequential() -- applied at each time-step
+   local inputsize = opt.hiddensize[1]
+   local rnns = {}
+   for i,hiddensize in ipairs(opt.hiddensize) do 
+      nn.FastLSTM.usenngraph = true -- faster
+      local rnn = nn.FastLSTM(inputsize, hiddensize)
+      table.insert(rnns, rnn)
+      stepmodule:add(rnn)
+      inputsize = hiddensize
+   end
+
+   -- output layer
+   local linear = nn.Linear(inputsize, vocabsize)
+   stepmodule:add(linear)
+   stepmodule:add(nn.LogSoftMax())
+   lm:add(nn.Sequencer(stepmodule))
+   lm:remember('both')
+   
+   
+   --[[ multiple sequencer ]]--
+   
+   
+   local lm2 = nn.Sequential()
+
+   local inputSize = opt.hiddensize[1]
+   for i,hiddenSize in ipairs(opt.hiddensize) do 
+      local rnn = nn.Sequencer(rnns[i]:clone())
+      lm2:add(rnn)
+      inputSize = hiddenSize
+   end
+
+   -- input layer (i.e. word embedding space)
+   lm2:insert(nn.SplitTable(1,2), 1) -- tensor to table of tensors
+   local lookup2 = lookup:clone()
+   lookup.maxOutNorm = -1 -- disable maxParamNorm on the lookup table
+   lm2:insert(lookup2, 1)
+
+   -- output layer
+   local softmax = nn.Sequential()
+   softmax:add(linear:clone())
+   softmax:add(nn.LogSoftMax())
+   lm2:add(nn.Sequencer(softmax))
+   lm2:remember('both')
+   
+   -- compare
+   
+   for j=1,2 do
+      local inputs = torch.LongTensor(opt.seqlen, opt.batchsize):random(1,vocabsize)
+      local gradOutputs = torch.randn(opt.seqlen, opt.batchsize, vocabsize)
+      local gradOutputs = nn.SplitTable(1):forward(gradOutputs)
+      
+      local params, gradParams = lm:parameters()
+      local params2, gradParams2 = lm2:parameters()
+      
+      lm:training()
+      lm2:training()
+      for i=1,4 do
+         local outputs = lm:forward(inputs)
+         lm:zeroGradParameters()
+         local gradInputs = lm:backward(inputs, gradOutputs)
+         lm:updateParameters(0.1)
+         
+         local inputs2 = inputs:transpose(1,2)
+         local outputs2 = lm2:forward(inputs2)
+         lm2:zeroGradParameters()
+         local gradInputs2 = lm2:backward(inputs2, gradOutputs)
+         lm2:updateParameters(0.1)
+         
+         mytester:assertTensorEq(gradInputs, gradInputs2, 0.0000001, "gradInputs err")
+         for k=1,#outputs2 do
+            mytester:assertTensorEq(outputs2[k], outputs[k], 0.0000001, "outputs err "..k)
+         end
+         
+         for k=1,#params do
+            mytester:assertTensorEq(gradParams[k], gradParams2[k], 0.0000001, "gradParam err "..k)
+            mytester:assertTensorEq(params[k], params2[k], 0.0000001, "param err"..k)
+         end
+      end
+      
+      lm:evaluate()
+      lm2:evaluate()
+      for i=1,3 do
+         local outputs = lm:forward(inputs)
+         
+         local inputs2 = inputs:transpose(1,2)
+         local outputs2 = lm2:forward(inputs2)
+         
+         for k=1,#outputs2 do
+            mytester:assertTensorEq(outputs2[k], outputs[k], 0.0000001, "outputs err "..k)
+         end
+      end
+   end
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_

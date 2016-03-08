@@ -9,15 +9,17 @@ cmd = torch.CmdLine()
 cmd:text()
 cmd:text('Train a Language Model on PennTreeBank dataset using RNN or LSTM or GRU')
 cmd:text('Example:')
-cmd:text('recurrent-language-model.lua --cuda --device 2 --progress --cutoff 4 --seqlen 10')
+cmd:text('th recurrent-language-model.lua --cuda --device 2 --progress --cutoff 4 --seqlen 10')
+cmd:text("th recurrent-language-model.lua --progress --cuda --lstm --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --cutoff 5 --maxepoch 13 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
 cmd:text('Options:')
-cmd:option('--lr', 0.05, 'learning rate at t=0')
+-- training
+cmd:option('--startlr', 0.05, 'learning rate at t=0')
 cmd:option('--minlr', 0.00001, 'minimum learning rate')
 cmd:option('--saturate', 400, 'epoch at which linear decayed LR will reach minlr')
+cmd:option('--schedule', '', 'learning rate schedule. e.g. {[5] = 0.004, [6] = 0.001}')
 cmd:option('--momentum', 0.9, 'momentum')
-cmd:option('--maxoutnorm', -1, 'max l2-norm of each layer\'s output neuron weights')
+cmd:option('--maxnormout', -1, 'max l2-norm of each layer\'s output neuron weights')
 cmd:option('--cutoff', -1, 'max l2-norm of concatenation of all gradParam tensors')
-cmd:option('--batchsize', 32, 'number of examples per batch')
 cmd:option('--cuda', false, 'use CUDA')
 cmd:option('--device', 1, 'sets the device (GPU) to use')
 cmd:option('--maxepoch', 1000, 'maximum number of epochs to run')
@@ -27,15 +29,14 @@ cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
 cmd:option('--nce', false, 'train with Noise Contrastive Estimation')
 cmd:option('--k', 25, 'how many noise samples to use for NCE')
-
--- recurrent layer 
+-- rnn layer 
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
 cmd:option('--dropout', 0, 'apply dropout with this probability after each rnn layer. dropout <= 0 disables it.')
-
 -- data
+cmd:option('--batchsize', 32, 'number of examples per batch')
 cmd:option('--trainsize', -1, 'number of train examples seen between each epoch')
 cmd:option('--validsize', -1, 'number of valid examples used for early stopping and cross-validation') 
 cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'rnnlm'), 'path to directory where experiment log (includes model) will be saved')
@@ -44,6 +45,7 @@ cmd:option('--id', '', 'id string of this experiment (used to name output file) 
 cmd:text()
 local opt = cmd:parse(arg or {})
 opt.hiddensize = loadstring(" return "..opt.hiddensize)()
+opt.schedule = loadstring(" return "..opt.schedule)()
 if not opt.silent then
    table.print(opt)
 end
@@ -63,7 +65,7 @@ local lm = nn.Sequential()
 
 -- input layer (i.e. word embedding space)
 local lookup = nn.LookupTable(#trainset.ivocab, opt.hiddensize[1])
-lookup.maxoutnorm = -1 -- prevent weird maxoutnorm behaviour
+lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
 lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 
@@ -79,7 +81,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
    
    if opt.gru then -- Gated Recurrent Units
       rnn = nn.GRU(inputsize, hiddensize)
-   elseif opt.lstm then -- Long Short Term Memory
+   elseif opt.lstm then -- Long Short Term Memory units
       require 'nngraph'
       nn.FastLSTM.usenngraph = true -- faster
       rnn = nn.FastLSTM(inputsize, hiddensize)
@@ -173,10 +175,8 @@ xplog.epoch = 0
 local ntrial = 0
 paths.mkdir(opt.savepath)
 
--- linear decay
-opt.decayFactor = (opt.minlr - opt.lr)/opt.saturate
-
 local epoch = 1
+opt.lr = opt.startlr
 opt.trainsize = opt.trainsize == -1 and trainset:size() or opt.trainsize
 opt.validsize = opt.validsize == -1 and validset:size() or opt.validsize
 while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
@@ -207,7 +207,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       end
       lm:updateGradParameters(opt.momentum) -- affects gradParams
       lm:updateParameters(opt.lr) -- affects params
-      lm:maxParamNorm(opt.maxoutnorm) -- affects params
+      lm:maxParamNorm(opt.maxnormout) -- affects params
 
       if opt.progress then
          xlua.progress(math.min(i + opt.seqlen, opt.trainsize), opt.trainsize)
@@ -220,7 +220,13 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    end
    
    -- learning rate decay
-   opt.lr = math.max(opt.minlr, opt.lr + opt.decayFactor)
+   if opt.schedule then
+      opt.lr = opt.schedule[epoch] or opt.lr
+   else
+      opt.lr = opt.lr + (opt.minlr - opt.startlr)/opt.saturate
+   end
+   opt.lr = math.max(opt.minlr, opt.lr)
+   
    if not opt.silent then
       print("learning rate", opt.lr)
       if opt.meanNorm then
@@ -230,10 +236,10 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
 
    if cutorch then cutorch.synchronize() end
    local speed = a:time().real/opt.trainsize
-   print(string.format("Speed : %f time/batch ", speed))
+   print(string.format("Speed : %f sec/batch ", speed))
 
    local ppl = torch.exp(sumErr/opt.trainsize)
-   print("Training PPL : "..ppl)
+   print("Training PPL : "..ppl, sumErr/opt.trainsize)
 
    xplog.trainppl[epoch] = ppl
 
