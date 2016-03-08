@@ -92,7 +92,7 @@ luarocks install rnn
 ```lua
 rnn = nn.AbstractRecurrent([rho])
 ```
-参数`rho` 是反向传播过程中的记录步数（backpropagate through time (BPTT)）的最大值.
+参数`rho` 是反向传播序列（backpropagate through time (BPTT)）的最大值.
 子类可以设置这个值为一个大的数字像 99999 (默认值) 如果它们
 想对整个序列进行反向传播而不管它有多长. 设置较小的 rho 值
 在很长的序列被前向传播时是很有用的, 但是我们只希望对前`rho`步
@@ -150,7 +150,7 @@ end
 rnn:forget()
 ``` 
 
-以相反的顺序执行反向传播步骤（backpropagation through time (BPTT)）.
+反向传播序列（backpropagation through time (BPTT)）.
 
 ### accGradParameters(input, gradOutput, scale) ###
 像 `updateGradInput`, 但是对 w.r.t. 参数增加梯度值.
@@ -175,7 +175,7 @@ rnn:forget()
 
 <a name='rnn.AbstractRecurrent.maxBPTTstep'></a>
 ###  maxBPTTstep(rho) ###
-这个方法设置进行反向传播时（backpropagation through time (BPTT)）
+这个方法设置进行反向传播序列时（backpropagation through time (BPTT)）
 记录的最大步数. 也就是说你把 `rho = 3` 步,
 前向传播输入4步, 然后进行反向传播,只有后3步会被
 反向传播使用. 如果你懂AbstractRecurrent实例被
@@ -190,25 +190,25 @@ backwardOnline行为.
 具体细节参见 [updateGradInput](#rnn.AbstractRecurrent.updateGradInput).
 
 ### training() ###
-In training mode, the network remembers all previous `rho` (number of time-steps)
-states. This is necessary for BPTT. 
+在训练模式, 网络记忆之前所有 `rho` (输入时间步数)个
+状态. 这对反向传播序列（BPTT）来说是必要的. 
 
 ### evaluate() ###
-During evaluation, since their is no need to perform BPTT at a later time, 
-only the previous step is remembered. This is very efficient memory-wise, 
-such that evaluation can be performed using potentially infinite-length 
-sequence.
+在评估过程中, 因为已经没有之后进行反向传播序列（BPTT）的需要, 
+只有之前的一步被记录. 这是很有效的内存使用, 
+评估具有处理无限长序列的 
+潜能.
  
 <a name='rnn.Recurrent'></a>
 ## Recurrent ##
-References :
+参考 :
  * A. [Sutsekever Thesis Sec. 2.5 and 2.8](http://www.cs.utoronto.ca/~ilya/pubs/ilya_sutskever_phd_thesis.pdf)
  * B. [Mikolov Thesis Sec. 3.2 and 3.3](http://www.fit.vutbr.cz/~imikolov/rnnlm/thesis.pdf)
  * C. [RNN and Backpropagation Guide](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.3.9311&rep=rep1&type=pdf)
 
-A [composite Module](https://github.com/torch/nn/blob/master/doc/containers.md#containers) for implementing Recurrent Neural Networks (RNN), excluding the output layer. 
+实现循环神经网络(RNN)[composite Module](https://github.com/torch/nn/blob/master/doc/containers.md#containers), 不包括输出层. 
 
-The `nn.Recurrent(start, input, feedback, [transfer, rho, merge])` constructor takes 5 arguments:
+`nn.Recurrent(start, input, feedback, [transfer, rho, merge])` 的构造函数获得5个参数:
  * `start` : the size of the output (excluding the batch dimension), or a Module that will be inserted between the `input` Module and `transfer` module during the first step of the propagation. When `start` is a size (a number or `torch.LongTensor`), then this *start* Module will be initialized as `nn.Add(start)` (see Ref. A).
  * `input` : a Module that processes input Tensors (or Tables). Output must be of same size as `start` (or its output in the case of a `start` Module), and same size as the output of the `feedback` Module.
  * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `transfer` Module.
