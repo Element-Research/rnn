@@ -46,7 +46,6 @@ function AbstractRecurrent:updateGradInput(input, gradOutput)
    self.gradInput = self:_updateGradInput(input, gradOutput, self.updateGradInputStep)
    
    self.updateGradInputStep = self.updateGradInputStep - 1
-   assert(self.gradInput, "Missing gradInput")
    return self.gradInput
 end
 
