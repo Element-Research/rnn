@@ -3,7 +3,7 @@ require 'rnn'
 -- hyper-parameters 
 batchSize = 8
 rho = 5 -- sequence length
-hiddenSize = 10
+hiddenSize = 7
 nIndex = 10
 lr = 0.1
 
