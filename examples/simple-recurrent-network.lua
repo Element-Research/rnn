@@ -4,7 +4,7 @@ require 'rnn'
 batchSize = 8
 rho = 5 -- sequence length
 hiddenSize = 10
-nIndex = 100
+nIndex = 10
 lr = 0.1
 
 
