@@ -209,30 +209,30 @@ backwardOnline行为.
 实现循环神经网络(RNN)[composite Module](https://github.com/torch/nn/blob/master/doc/containers.md#containers), 不包括输出层. 
 
 `nn.Recurrent(start, input, feedback, [transfer, rho, merge])` 的构造函数获得5个参数:
- * `start` : the size of the output (excluding the batch dimension), or a Module that will be inserted between the `input` Module and `transfer` module during the first step of the propagation. When `start` is a size (a number or `torch.LongTensor`), then this *start* Module will be initialized as `nn.Add(start)` (see Ref. A).
- * `input` : a Module that processes input Tensors (or Tables). Output must be of same size as `start` (or its output in the case of a `start` Module), and same size as the output of the `feedback` Module.
- * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `transfer` Module.
- * `transfer` : a non-linear Module used to process the element-wise sum of the `input` and `feedback` module outputs, or in the case of the first step, the output of the *start* Module.
- * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Due to the vanishing gradients effect, references A and B recommend `rho = 5` (or lower). Defaults to 99999.
- * `merge` : a [table Module](https://github.com/torch/nn/blob/master/doc/table.md#table-layers) that merges the outputs of the `input` and `feedback` Module before being forwarded through the `transfer` Module.
+ * `start` : 输出的数量(除了批量维度), 或者一个在第一次传播时将被插入到 `input` 模块和 `transfer` 模块之间的模块. 当 `start` 是一个尺寸时 (一个数或者 `torch.LongTensor`), 那么这个 *start* 模块将会被初始化为 `nn.Add(start)` (参见 引用. A).
+ * `input` : 一个处理输入张量(或表)的模块. 输出的尺寸必须与 `start` 相同(或者它以 `start` 模块的情况输出), 而且与 `feedback` 模块输出的尺寸相同.
+ * `feedback` : 一个返回之前输出的张量(或表)到 `transfer` 模块的模块.
+ * `transfer` : 一个用来处理 `input` 和 `feedback` 模块输出对应元素的和的非线性模块, 或者在第一步输入的情况下,  *start* 模块的输出.
+ * `rho` : 反向传播时处理序列的最大长度. 限制存储在内存中的之前步骤的数量. 由于空梯度效应的原因, 参考 A 和 B 推荐 `rho = 5` (或者更小). 默认是 99999.
+ * `merge` : 一个在前向传播通过 `transfer` 模块前合并 `input` 和 `feedback` 模块输出的[table Module](https://github.com/torch/nn/blob/master/doc/table.md#table-layers).
  
-An RNN is used to process a sequence of inputs. 
-Each step in the sequence should be propagated by its own `forward` (and `backward`), 
-one `input` (and `gradOutput`) at a time. 
-Each call to `forward` keeps a log of the intermediate states (the `input` and many `Module.outputs`) 
-and increments the `step` attribute by 1. 
-Method `backward` must be called in reverse order of the sequence of calls to `forward` in 
-order to backpropgate through time (BPTT). This reverse order is necessary 
-to return a `gradInput` for each call to `forward`. 
+RNN用来处理一个序列的输入. 
+序列的每一步都应该用它自己的 `forward` (和 `backward`)传播, 
+依次进行 `input` (和 `gradOutput`) . 
+每一个 `forward` 调用保存了一个中间状态( `input` 和很多 `Module.outputs`)的记录 
+并且把 `step` 属性增加1. 
+在反向传播序列期间(BPTT)
+`backward`方法必须被以与 `forward` 方法相反的顺序调用. 相反的顺序
+使每一个 `forward` 返回一个对应的 `gradInput`是必要的. 
 
-The `step` attribute is only reset to 1 when a call to the `forget` method is made. 
-In which case, the Module is ready to process the next sequence (or batch thereof).
-Note that the longer the sequence, the more memory that will be required to store all the 
-`output` and `gradInput` states (one for each time step). 
+`step` 属性只有在调用 `forget` 方法时会被复位为1. 
+在这种情况下, 模块准备好了去处理下一个序列(或者由此的一批).
+注意序列越长=, 需要用来存储全部 `output` 和 `gradInput`状态
+(每一步产生一个)的内存也越多. 
 
-To use this module with batches, we suggest using different 
-sequences of the same size within a batch and calling `updateParameters` 
-every `rho` steps and `forget` at the end of the sequence. 
+要批量地使用这个模块, 我们建议在一个批量内使用
+一个不同的同尺寸的序列, 并且每 `rho` 步
+调用 `updateParameters`, 并在序列的最后 `forget` . 
 
 Note that calling the `evaluate` method turns off long-term memory; 
 the RNN will only remember the previous output. This allows the RNN 
