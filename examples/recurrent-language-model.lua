@@ -163,7 +163,7 @@ local xplog = {}
 xplog.opt = opt -- save all hyper-parameters and such
 xplog.dataset = 'PennTreeBank'
 -- will only serialize params
-xplog.model = nn.Serial(net)
+xplog.model = nn.Serial(lm)
 xplog.model:mediumSerial()
 xplog.criterion = criterion
 -- keep a log of NLL for each epoch
