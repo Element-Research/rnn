@@ -114,7 +114,7 @@ This method was introduced to solve a very annoying bug.
 ### maskZero(nInputDim) ###
 Decorates the internal `recurrentModule` with [MaskZero](#rnn.MaskZero). 
 The `output` Tensor (or table thereof) of the `recurrentModule`
-will have each row (samples) zeroed when the commensurate row of the `input` 
+will have each row (i.e. samples) zeroed when the commensurate row of the `input` 
 is a tensor of zeros. 
 
 The `nInputDim` argument must specify the number of non-batch dims 
@@ -122,8 +122,10 @@ in the first Tensor of the `input`. In the case of an `input` table,
 the first Tensor is the first one encountered when doing a depth-first search.
 
 Calling this method makes it possible to pad sequences with different lengths in the same batch with zero vectors.
-Warning: padding must come before any real data in the input sequence (padding
-after the real data is not supported and will yield unpredictable results without failing).
+
+When a sample time-step is masked (i.e. `input` is a row of zeros), then 
+the hidden state is effectively reset (i.e. forgotten) for the next non-mask time-step.
+In other words, it is possible seperate unrelated sequences with a masked element.
 
 ### [output] updateOutput(input) ###
 Forward propagates the input for the current step. The outputs or intermediate 
