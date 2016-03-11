@@ -3877,6 +3877,115 @@ function rnntest.MaskZeroCriterion()
    mytester:assert(gradInput:sum() == 0, "MaskZeroCriterion all zeros bwd err")
 end
 
+function rnntest.MaskZero_where()
+   local hiddensize = 5
+   local batchsize = 4
+   local seqlen = 7
+   
+   local rnn = nn.FastLSTM(hiddensize, hiddensize)
+   rnn:maskZero(1)
+   rnn = nn.Sequencer(rnn)
+   
+   -- is there any difference between start and end padding?
+   
+   local inputs, gradOutputs = {}, {}
+   
+   for i=1,seqlen do
+      if i==1 then
+         inputs[i] = torch.zeros(batchsize, hiddensize)
+      else
+         inputs[i] = torch.randn(batchsize, hiddensize)
+      end
+      gradOutputs[i] = torch.randn(batchsize, hiddensize)
+   end
+   
+   local outputs = rnn:forward(inputs)
+   rnn:zeroGradParameters()
+   local gradInputs = rnn:backward(inputs, gradOutputs)
+   
+   local params, gradParams = rnn:parameters()
+   local params2, gradParams2 = {}, {}
+   for i=1,#params do
+      params2[i] = params[i]:clone()
+      gradParams2[i] = gradParams[i]:clone()
+   end
+   
+   local outputs2, gradInputs2 = {}, {}
+   for i=1,seqlen do
+      outputs2[i] = outputs[i]:clone()
+      gradInputs2[i] = gradInputs[i]:clone()
+   end
+   inputs[seqlen] = table.remove(inputs, 1)
+   gradOutputs[seqlen] = table.remove(gradOutputs, 1)
+
+   rnn:forget()
+   local outputs = rnn:forward(inputs)
+   rnn:zeroGradParameters()
+   local gradInputs = rnn:backward(inputs, gradOutputs)
+   
+   for i=1,seqlen-1 do
+      mytester:assertTensorEq(outputs[i], outputs2[i+1], 0.000001)
+      mytester:assertTensorEq(gradInputs[i], gradInputs2[i+1], 0.000001)
+   end
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams2[i], gradParams[i], 0.000001)
+   end
+   
+   -- how about in the middle? is it the same as a forget() in between
+   
+   local inputs, gradOutputs = {}, {}
+   
+   for i=1,seqlen do
+      if i==4 then
+         inputs[i] = torch.zeros(batchsize, hiddensize)
+      else
+         inputs[i] = torch.randn(batchsize, hiddensize)
+      end
+      gradOutputs[i] = torch.randn(batchsize, hiddensize)
+   end
+   
+   rnn:forget()
+   local rnn2 = rnn:clone()
+   
+   local outputs = rnn:forward(inputs)
+   rnn:zeroGradParameters()
+   local gradInputs = rnn:backward(inputs, gradOutputs)
+   
+   local _ = require 'moses'
+   local inputs1 = _.first(inputs, 3)
+   local gradOutputs1 = _.first(gradOutputs, 3)
+   
+   local outputs1 = rnn2:forward(inputs1)
+   rnn2:zeroGradParameters()
+   local gradInputs1 = rnn2:backward(inputs1, gradOutputs1)
+   
+   for i=1,3 do
+      mytester:assertTensorEq(outputs[i], outputs1[i], 0.000001)
+      mytester:assertTensorEq(gradInputs[i], gradInputs1[i], 0.000001)
+   end
+   
+   rnn2:forget() -- forget at mask zero
+   
+   local inputs2 = _.last(inputs, 3)
+   local gradOutputs2 = _.last(gradOutputs, 3)
+   
+   local outputs2 = rnn2:forward(inputs2)
+   local gradInputs2 = rnn2:backward(inputs2, gradOutputs2)
+   
+   local params, gradParams = rnn:parameters()
+   local params2, gradParams2 = rnn2:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams2[i], gradParams[i], 0.000001)
+   end
+   
+   for i=1,3 do
+      mytester:assertTensorEq(outputs[i+4], outputs2[i], 0.000001)
+      mytester:assertTensorEq(gradInputs[i+4], gradInputs2[i], 0.000001)
+   end
+end
+
 function rnntest.issue129()
    -- test without rnn
    local model1 = nn.Sequential()
