@@ -47,16 +47,15 @@ function TrimZero:recursiveMask(output, input, mask)
       mask:resize(inputSize)
       -- build mask
       if input:dim() - 1 == self.nInputDim then
-         output:resizeAs(input):copy(input)
          assert(torch.find, 'install torchx package : luarocks install torchx')
          local indexes = torch.find(mask, 0)
          if 0 < #indexes then
-            output = output:index(1, torch.LongTensor(indexes))
+            output = input:index(1, torch.LongTensor(indexes))
          else
-            output = output:index(1, torch.LongTensor{1}):zero()
+            output = input:index(1, torch.LongTensor{1}):zero()
          end
       else
-         if mask[1] == 1 then output = input:clone():zero() 
+         if mask[1] == 1 then output:resize(input:size()):zero() 
                          else output = input end
       end
    end
