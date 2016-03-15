@@ -1,3 +1,12 @@
+------------------------------------------------------------------------
+--[[ Dropout ]]--
+
+-- Implementation of Lazy Dropout. 
+-- `lazy` option is used to to only resample after backward is called. 
+-- This mechanism is used by Bayesian GRUs to use the same dropout mask 
+-- for each sequence, not for each word. 
+-- See GRU part in README.md (Ref. E & F)
+------------------------------------------------------------------------
 local Dropout, Parent = nn.Dropout, nn.Module
 
 function Dropout:__init(p,v1,inplace,lazy)
