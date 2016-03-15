@@ -49,7 +49,6 @@ cmd:option('--imageHiddenSize', 256, 'size of hidden layer combining glimpse and
 --[[ recurrent layer ]]--
 cmd:option('--rho', 7, 'back-propagate through time (BPTT) for rho time-steps')
 cmd:option('--hiddenSize', 256, 'number of hidden units used in Simple RNN.')
-cmd:option('--dropout', false, 'apply dropout on hidden neurons')
 cmd:option('--FastLSTM', false, 'use LSTM instead of linear layer')
 
 --[[ data ]]--

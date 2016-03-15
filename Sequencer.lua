@@ -27,6 +27,7 @@ function Sequencer:__init(module)
    -- table of buffers used for evaluation
    self._output = {}
    -- so that these buffers aren't serialized :
+   local _ = require 'moses'
    self.dpnn_mediumEmpty = _.clone(self.dpnn_mediumEmpty)
    table.insert(self.dpnn_mediumEmpty, '_output')
    -- default is to forget previous inputs before each forward()
@@ -111,6 +112,7 @@ end
 -- Essentially, forget() isn't called on rnn module when remember is on
 function Sequencer:remember(remember)
    self._remember = (remember == nil) and 'both' or remember
+   local _ = require 'moses'
    assert(_.contains({'both','eval','train','neither'}, self._remember), 
       "Sequencer : unrecognized value for remember : "..self._remember)
    return self

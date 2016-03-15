@@ -52,7 +52,6 @@ function AbstractRecurrent:updateGradInput(input, gradOutput)
    self.gradInput = self:_updateGradInput(input, gradOutput, self.updateGradInputStep)
    
    self.updateGradInputStep = self.updateGradInputStep - 1
-   assert(self.gradInput, "Missing gradInput")
    return self.gradInput
 end
 
@@ -111,15 +110,22 @@ function AbstractRecurrent:forget()
       -- Asserts that issue 129 is solved. In forget as it is often called.
       -- Asserts that self.recurrentModule is part of the sharedClones.
       -- Since its used for evaluation, it should be used for training. 
-      local nClone = 0
+      local nClone, maxIdx = 0, 1
       for k,v in pairs(self.sharedClones) do -- to prevent odd bugs
          if torch.pointer(v) == torch.pointer(self.recurrentModule) then
             self.rmInSharedClones = true
+            maxIdx = math.max(k, maxIdx)
          end
          nClone = nClone + 1
       end
       if nClone > 1 then
-         assert(self.rmInSharedClones, "recurrentModule should be added to sharedClones in constructor")
+         if not self.rmInSharedClones then
+            print"WARNING : recurrentModule should be added to sharedClones in constructor."
+            print"Adding it for you."
+            assert(torch.type(self.sharedClones[maxIdx]) == torch.type(self.recurrentModule))
+            self.recurrentModule = self.sharedClones[maxIdx]
+            self.rmInSharedClones = true
+         end
       end
    end
    return self

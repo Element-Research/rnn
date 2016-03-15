@@ -2403,44 +2403,54 @@ function rnntest.RecurrentAttention()
    -- output layer (actions)
    local locator = nn.Sequential()
    locator:add(nn.Linear(opt.hiddenSize, 2))
-   locator:add(nn.HardTanh())
+   locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
+   local rn = nn.ReinforceNormal(2*opt.locatorStd)
+   rn:evaluate() -- so we can match the output from sg to sg2 (i.e deterministic)
+   locator:add(rn) -- sample from normal, uses REINFORCE learning rule
+   locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
    
    -- model is a reinforcement learning agent
    local rva2 = nn.RATest(rnn2:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
    local rva = nn.RecurrentAttention(rnn:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
    
-   local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
-   local gradOutput = {}
-   for step=1,opt.rho do
-      table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
-   end
+   for i=1,3 do
    
-   -- now we compare to the nn.RATest class (which, we know, works)
-   rva:zeroGradParameters()
-   rva2:zeroGradParameters()
-   
-   local output = rva:forward(input)
-   local output2 = rva2:forward(input)
-   
-   mytester:assert(#output == #output2, "RecurrentAttention #output err")
-   for i=1,#output do
-      mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention output err "..i)
-   end
-   
-   local gradInput = rva:backward(input, gradOutput)
-   local gradInput2 = rva2:backward(input, gradOutput)
-   
-   mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention gradInput err")
-   
-   rva:updateParameters(1)
-   rva2:updateParameters(1)
-   
-   local params, gradParams = rva:parameters()
-   local params2, gradParams2 = rva2:parameters()
-   
-   for i=1,#params do
-      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention, param err "..i)
-      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention, gradParam err "..i)
+      local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
+      local gradOutput = {}
+      for step=1,opt.rho do
+         table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+      end
+      
+      -- now we compare to the nn.RATest class (which, we know, works)
+      rva:zeroGradParameters()
+      rva2:zeroGradParameters()
+      
+      local output = rva:forward(input)
+      local output2 = rva2:forward(input)
+      
+      mytester:assert(#output == #output2, "RecurrentAttention #output err")
+      for i=1,#output do
+         mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention output err "..i)
+      end
+      
+      local reward = torch.randn(opt.batchSize)
+      rva:reinforce(reward)
+      rva2:reinforce(reward:clone())
+      local gradInput = rva:backward(input, gradOutput)
+      local gradInput2 = rva2:backward(input, gradOutput)
+      
+      mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention gradInput err")
+      
+      rva:updateParameters(1)
+      rva2:updateParameters(1)
+      
+      local params, gradParams = rva:parameters()
+      local params2, gradParams2 = rva2:parameters()
+      
+      for i=1,#params do
+         mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention, param err "..i)
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention, gradParam err "..i)
+      end
    end
    
    -- test with explicit recursor
@@ -2449,40 +2459,44 @@ function rnntest.RecurrentAttention()
    local rva2 = nn.RATest(rnn2:clone(), locator:clone(), opt.rho, {opt.hiddenSize})
    local rva = nn.RecurrentAttention(nn.Recursor(rnn:clone()), locator:clone(), opt.rho, {opt.hiddenSize})
    
-   local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
-   local gradOutput = {}
-   for step=1,opt.rho do
-      table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+   for i=1,3 do
+      local input = torch.randn(opt.batchSize,1,opt.inputSize,opt.inputSize)
+      local gradOutput = {}
+      for step=1,opt.rho do
+         table.insert(gradOutput, torch.randn(opt.batchSize, opt.hiddenSize))
+      end
+      
+      -- now we compare to the nn.RATest class (which, we know, works)
+      rva:zeroGradParameters()
+      rva2:zeroGradParameters()
+      
+      local output = rva:forward(input)
+      local output2 = rva2:forward(input)
+      
+      mytester:assert(#output == #output2, "RecurrentAttention(Recursor) #output err")
+      for i=1,#output do
+         mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention(Recursor) output err "..i)
+      end
+      
+      local reward = torch.randn(opt.batchSize)
+      rva:reinforce(reward)
+      rva2:reinforce(reward:clone())
+      local gradInput = rva:backward(input, gradOutput)
+      local gradInput2 = rva2:backward(input, gradOutput)
+      
+      mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention(Recursor) gradInput err")
+      
+      rva:updateParameters(1)
+      rva2:updateParameters(1)
+      
+      local params, gradParams = rva:parameters()
+      local params2, gradParams2 = rva2:parameters()
+      
+      for i=1,#params do
+         mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention(Recursor), param err "..i)
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention(Recursor), gradParam err "..i)
+      end
    end
-   
-   -- now we compare to the nn.RATest class (which, we know, works)
-   rva:zeroGradParameters()
-   rva2:zeroGradParameters()
-   
-   local output = rva:forward(input)
-   local output2 = rva2:forward(input)
-   
-   mytester:assert(#output == #output2, "RecurrentAttention(Recursor) #output err")
-   for i=1,#output do
-      mytester:assertTensorEq(output[i], output2[i], 0.0000001, "RecurrentAttention(Recursor) output err "..i)
-   end
-   
-   local gradInput = rva:backward(input, gradOutput)
-   local gradInput2 = rva2:backward(input, gradOutput)
-   
-   mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "RecurrentAttention(Recursor) gradInput err")
-   
-   rva:updateParameters(1)
-   rva2:updateParameters(1)
-   
-   local params, gradParams = rva:parameters()
-   local params2, gradParams2 = rva2:parameters()
-   
-   for i=1,#params do
-      mytester:assertTensorEq(params[i], params2[i], 0.0000001, "RecurrentAttention(Recursor), param err "..i)
-      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.0000001, "RecurrentAttention(Recursor), gradParam err "..i)
-   end
-   
 end
    
 function rnntest.LSTM_nn_vs_nngraph()
@@ -4022,6 +4036,115 @@ function rnntest.MaskZeroCriterion()
    
    local gradInput = crit:backward(input, target)
    mytester:assert(gradInput:sum() == 0, "MaskZeroCriterion all zeros bwd err")
+end
+
+function rnntest.MaskZero_where()
+   local hiddensize = 5
+   local batchsize = 4
+   local seqlen = 7
+   
+   local rnn = nn.FastLSTM(hiddensize, hiddensize)
+   rnn:maskZero(1)
+   rnn = nn.Sequencer(rnn)
+   
+   -- is there any difference between start and end padding?
+   
+   local inputs, gradOutputs = {}, {}
+   
+   for i=1,seqlen do
+      if i==1 then
+         inputs[i] = torch.zeros(batchsize, hiddensize)
+      else
+         inputs[i] = torch.randn(batchsize, hiddensize)
+      end
+      gradOutputs[i] = torch.randn(batchsize, hiddensize)
+   end
+   
+   local outputs = rnn:forward(inputs)
+   rnn:zeroGradParameters()
+   local gradInputs = rnn:backward(inputs, gradOutputs)
+   
+   local params, gradParams = rnn:parameters()
+   local params2, gradParams2 = {}, {}
+   for i=1,#params do
+      params2[i] = params[i]:clone()
+      gradParams2[i] = gradParams[i]:clone()
+   end
+   
+   local outputs2, gradInputs2 = {}, {}
+   for i=1,seqlen do
+      outputs2[i] = outputs[i]:clone()
+      gradInputs2[i] = gradInputs[i]:clone()
+   end
+   inputs[seqlen] = table.remove(inputs, 1)
+   gradOutputs[seqlen] = table.remove(gradOutputs, 1)
+
+   rnn:forget()
+   local outputs = rnn:forward(inputs)
+   rnn:zeroGradParameters()
+   local gradInputs = rnn:backward(inputs, gradOutputs)
+   
+   for i=1,seqlen-1 do
+      mytester:assertTensorEq(outputs[i], outputs2[i+1], 0.000001)
+      mytester:assertTensorEq(gradInputs[i], gradInputs2[i+1], 0.000001)
+   end
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams2[i], gradParams[i], 0.000001)
+   end
+   
+   -- how about in the middle? is it the same as a forget() in between
+   
+   local inputs, gradOutputs = {}, {}
+   
+   for i=1,seqlen do
+      if i==4 then
+         inputs[i] = torch.zeros(batchsize, hiddensize)
+      else
+         inputs[i] = torch.randn(batchsize, hiddensize)
+      end
+      gradOutputs[i] = torch.randn(batchsize, hiddensize)
+   end
+   
+   rnn:forget()
+   local rnn2 = rnn:clone()
+   
+   local outputs = rnn:forward(inputs)
+   rnn:zeroGradParameters()
+   local gradInputs = rnn:backward(inputs, gradOutputs)
+   
+   local _ = require 'moses'
+   local inputs1 = _.first(inputs, 3)
+   local gradOutputs1 = _.first(gradOutputs, 3)
+   
+   local outputs1 = rnn2:forward(inputs1)
+   rnn2:zeroGradParameters()
+   local gradInputs1 = rnn2:backward(inputs1, gradOutputs1)
+   
+   for i=1,3 do
+      mytester:assertTensorEq(outputs[i], outputs1[i], 0.000001)
+      mytester:assertTensorEq(gradInputs[i], gradInputs1[i], 0.000001)
+   end
+   
+   rnn2:forget() -- forget at mask zero
+   
+   local inputs2 = _.last(inputs, 3)
+   local gradOutputs2 = _.last(gradOutputs, 3)
+   
+   local outputs2 = rnn2:forward(inputs2)
+   local gradInputs2 = rnn2:backward(inputs2, gradOutputs2)
+   
+   local params, gradParams = rnn:parameters()
+   local params2, gradParams2 = rnn2:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams2[i], gradParams[i], 0.000001)
+   end
+   
+   for i=1,3 do
+      mytester:assertTensorEq(outputs[i+4], outputs2[i], 0.000001)
+      mytester:assertTensorEq(gradInputs[i+4], gradInputs2[i], 0.000001)
+   end
 end
 
 function rnntest.issue129()

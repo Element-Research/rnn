@@ -2,11 +2,6 @@
 --[[ MaskZero ]]--
 -- Decorator that zeroes the output rows of the encapsulated module
 -- for commensurate input rows which are tensors of zeros
-
--- Zero vectors (i.e. padding) must be at the beginning of the sequence
--- because this decorator will otherwise reset the recurrentModule
--- in the middle or after the sequence
--- TODO add assertion in case padding in uncountered after non padding ?
 ------------------------------------------------------------------------
 local MaskZero, parent = torch.class("nn.MaskZero", "nn.Decorator")
 
