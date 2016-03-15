@@ -23,7 +23,7 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
 
 Miscellaneous modules and criterions :
  * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
- * [TrimZero](#rnn.TrimZero) : More computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward.
+ * [TrimZero](#rnn.TrimZero) : is more computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward.
  * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
  * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros
 
@@ -399,7 +399,7 @@ __Memory__ is measured by the size of `dp.Experiment` save file. __examples/s__ 
 
 ![GRU-BENCHMARK](doc/image/gru-benchmark.png)
 
-RNN dropout (see Ref. E and F) was benchmark on `PennTreeBank` dataset using `recurrent-language-model.lua` script, too. The details can be found in the script. `BGRU` stands for Bayesian GRUs which uses dropouts on inner connections (naming as Ref. F).
+RNN dropout (see Ref. E and F) was benchmark on `PennTreeBank` dataset using `recurrent-language-model.lua` script, too. The details can be found in the script. In the benchmark, `GRU` utilizes a dropout after `LookupTable`, while `BGRU`, stands for Bayesian GRUs, uses dropouts on inner connections (naming as Ref. F), but not after `LookupTable`.
 
 As Yarin Gal (Ref. F) mentioned, it is recommended that one may use `p = 0.25` for the first attempt.
 
