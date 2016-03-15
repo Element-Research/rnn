@@ -1208,7 +1208,7 @@ function rnntest.FastLSTM_nngraph()
       local lstm1 = nn.Sequencer(nn.FastLSTM(lstmSize)):cuda()
       nn.FastLSTM.usenngraph = true
       local lstm2 = nn.Sequencer(nn.FastLSTM(lstmSize)):cuda()
-      
+      nn.FastLSTM.usenngraph = false
       -- nn
       
       local output = lstm1:forward(input)
@@ -1757,14 +1757,14 @@ function rnntest.Sequencer()
    seq:backward(inputs, gradOutputs)
    local params, gradParams = seq:parameters()
    for i,gradParam in ipairs(gradParams) do
-      mytester:assert(gradParam:sum() ~= 0, 0.000001, "Sequencer:backward err "..i)
+      mytester:assert(gradParam:sum() ~= 0, "Sequencer:backward err "..i)
    end
    local param, gradParam = seq:getParameters()
    seq:zeroGradParameters()
-   mytester:assert(gradParam:sum() == 0, 0.000001, "Sequencer:getParameters err")
+   mytester:assert(gradParam:sum() == 0, "Sequencer:getParameters err")
    local params, gradParams = seq:parameters()
    for i,gradParam in ipairs(gradParams) do
-      mytester:assert(gradParam:sum() == 0, 0.000001, "Sequencer:zeroGradParameters err "..i)
+      mytester:assert(gradParam:sum() == 0, "Sequencer:zeroGradParameters err "..i)
    end
    
    -- test with LSTM
@@ -2066,7 +2066,7 @@ function rnntest.SequencerCriterion()
       gradInput2[i] = criterion:backward(input[i], target[i]):clone()
    end
    local err = sc:forward(input, target)
-   mytester:asserteq(err, err2, 0.000001, "SequencerCriterion forward err") 
+   mytester:assert(math.abs(err-err2) < 0.000001, "SequencerCriterion forward err")
    local gradInput = sc:backward(input, target)
    for i=1,nStep do
       mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "SequencerCriterion backward err "..i)
@@ -2125,7 +2125,7 @@ function rnntest.RepeaterCriterion()
       gradInput2[i] = criterion:backward(input[i], target):clone()
    end
    local err = sc:forward(input, target)
-   mytester:asserteq(err, err2, 0.000001, "RepeaterCriterion forward err") 
+   mytester:assert(math.abs(err-err2) < 0.000001, "RepeaterCriterion forward err") 
    local gradInput = sc:backward(input, target)
    for i=1,nStep do
       mytester:assertTensorEq(gradInput[i], gradInput2[i], 0.000001, "RepeaterCriterion backward err "..i)
@@ -2743,7 +2743,7 @@ function rnntest.LSTM_nn_vs_nngraph()
    local targets2 = inputs:narrow(1,2,nStep):transpose(1,2)
    local outputs2 = model2:forward(inputs2)
    local err2 = criterion2:forward(outputs2, targets2)
-   mytester:asserteq(err, err2/nStep, 0.0001, "nn vs nngraph err error")
+   mytester:assert(math.abs(err - err2/nStep) < 0.0001, "nn vs nngraph err error")
    
    -- backward/update
    bp(state)
@@ -2802,7 +2802,7 @@ function rnntest.LSTM_nn_vs_nngraph()
    local err2 = criterion2:forward(outputs2, targets2)
    local state = {pos=nStep+1,data=inputs}
    local err = fp(state)
-   mytester:asserteq(err2/nStep, err, 0.00001, "nn vs nngraph err error")
+   mytester:assert(math.abs(err2/nStep - err) < 0.00001, "nn vs nngraph err error")
    -- backward/update
    bp(state)
    
@@ -3131,11 +3131,11 @@ function rnntest.LSTM_char_rnn()
    print("runtime: char, rnn, char/rnn", chartime, rnntime, chartime/rnntime)
    
    -- on NVIDIA Titan Black :
-   -- with FastLSTM.usenngraph = true  :
+   -- with FastLSTM.usenngraph = false  :
    -- setuptime : char, rnn, char/rnn 1.5070691108704 1.1547832489014 1.3050666541138 
    -- runtime: char, rnn, char/rnn    1.0558769702911 1.7060630321503 0.61889681119246
    
-   -- with FastLSTM.usenngraph = false :
+   -- with FastLSTM.usenngraph = true :
    -- setuptime : char, rnn, char/rnn 1.5920469760895 2.4352579116821 0.65374881586558
    -- runtime: char, rnn, char/rnn    1.0614919662476 1.124755859375  0.94375322199913
 end
@@ -3827,7 +3827,7 @@ function rnntest.MaskZeroCriterion()
    local gradInput2 = nll:backward(input, target)
    
    mytester:assert(math.abs(err - err2) < 0.0000001, "MaskZeroCriterion No-mask fwd err")
-   mytester:assert(gradInput, gradInput2, 0.0000001, "MaskZeroCriterion No-mask bwd err") 
+   mytester:assertTensorEq(gradInput, gradInput2, 0.0000001, "MaskZeroCriterion No-mask bwd err")
    
    -- test that it works when last row to mask
    input[batchSize]:zero()
@@ -3852,7 +3852,7 @@ function rnntest.MaskZeroCriterion()
    local gradInput3 = mznll:backward(input3, target):clone()
    
    mytester:assert(math.abs(err3 - err) < 0.0000001, "MaskZeroCriterion cast fwd err")
-   mytester:assert(gradInput3, gradInput:float(), 0.0000001, "MaskZeroCriterion cast bwd err")
+   mytester:assertTensorEq(gradInput3, gradInput:float(), 0.0000001, "MaskZeroCriterion cast bwd err")
    
    if pcall(function() require 'cunn' end) then
       -- test cuda
@@ -3863,7 +3863,7 @@ function rnntest.MaskZeroCriterion()
       local gradInput4 = mznll:backward(input4, target4):clone()
       
       mytester:assert(math.abs(err4 - err) < 0.0000001, "MaskZeroCriterion cuda fwd err")
-      mytester:assert(gradInput4:float(), gradInput3, 0.0000001, "MaskZeroCriterion cuda bwd err")
+      mytester:assertTensorEq(gradInput4:float(), gradInput3, 0.0000001, "MaskZeroCriterion cuda bwd err")
    end
    
    -- issue 128
@@ -4219,7 +4219,7 @@ function rnntest.rnnlm()
       stepmodule:add(rnn)
       inputsize = hiddensize
    end
-
+   nn.FastLSTM.usenngraph = false
    -- output layer
    local linear = nn.Linear(inputsize, vocabsize)
    stepmodule:add(linear)

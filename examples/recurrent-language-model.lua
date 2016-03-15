@@ -155,9 +155,9 @@ xplog.opt = opt -- save all hyper-parameters and such
 xplog.dataset = 'PennTreeBank'
 xplog.vocab = trainset.vocab
 -- will only serialize params
---xplog.model = nn.Serial(lm)
---xplog.model:mediumSerial()
-xplog.model = lm
+xplog.model = nn.Serial(lm)
+xplog.model:mediumSerial()
+--xplog.model = lm
 xplog.criterion = criterion
 xplog.targetmodule = targetmodule
 -- keep a log of NLL for each epoch
@@ -267,11 +267,11 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    elseif ntrial >= opt.earlystop then
       print("No new minima found after "..ntrial.." epochs.")
       print("Stopping experiment.")
-      print("Best model can be found in "..paths.concat(opt.savepath, opt.id..'.t7'))
-      os.exit()
+      break
    end
 
    collectgarbage()
    epoch = epoch + 1
 end
-
+print("Evaluate model using : ")
+print("th scripts/evaluate-rnnlm.lua --xplogpath "..paths.concat(opt.savepath, opt.id..'.t7')..(opt.cuda and '--cuda' or ''))
