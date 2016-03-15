@@ -27,8 +27,6 @@ cmd:option('--earlystop', 50, 'maximum number of epochs to wait to find a better
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
-cmd:option('--nce', false, 'train with Noise Contrastive Estimation')
-cmd:option('--k', 25, 'how many noise samples to use for NCE')
 -- rnn layer 
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
@@ -105,16 +103,8 @@ for i,hiddensize in ipairs(opt.hiddensize) do
 end
 
 -- output layer
-if opt.nce then
-   local unigram = torch.FloatTensor(#trainset.ivocab)
-   for word,freq in pairs(trainset.wordfreq) do
-      unigram[trainset.vocab[word]] = freq
-   end
-   stepmodule:add(nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram))
-else
-   stepmodule:add(nn.Linear(inputsize, #trainset.ivocab))
-   stepmodule:add(nn.LogSoftMax())
-end
+stepmodule:add(nn.Linear(inputsize, #trainset.ivocab))
+stepmodule:add(nn.LogSoftMax())
 
 -- encapsulate stepmodule into a Sequencer
 lm:add(nn.Sequencer(stepmodule))
@@ -135,7 +125,7 @@ end
 
 --[[ loss function ]]--
 
-local crit = opt.nce and nn.NCECriterion() or nn.ClassNLLCriterion()
+local crit = nn.ClassNLLCriterion()
 
 -- target is also seqlen x batchsize.
 local targetmodule = nn.SplitTable(1)
@@ -145,7 +135,7 @@ if opt.cuda then
       :add(targetmodule)
 end
  
-local criterion = nn.ModuleCriterion(nn.SequencerCriterion(crit), nil, targetmodule)
+local criterion = nn.SequencerCriterion(crit)
 
 --[[ CUDA ]]--
 
@@ -154,6 +144,7 @@ if opt.cuda then
    cutorch.setDevice(opt.device)
    lm:cuda()
    criterion:cuda()
+   targetmodule:cuda()
 end
 
 --[[ experiment log ]]--
@@ -162,10 +153,13 @@ end
 local xplog = {}
 xplog.opt = opt -- save all hyper-parameters and such
 xplog.dataset = 'PennTreeBank'
+xplog.vocab = trainset.vocab
 -- will only serialize params
-xplog.model = nn.Serial(lm)
-xplog.model:mediumSerial()
+--xplog.model = nn.Serial(lm)
+--xplog.model:mediumSerial()
+xplog.model = lm
 xplog.criterion = criterion
+xplog.targetmodule = targetmodule
 -- keep a log of NLL for each epoch
 xplog.trainppl = {}
 xplog.valppl = {}
@@ -189,7 +183,8 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    lm:training()
    local sumErr = 0
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
-   
+      targets = targetmodule:forward(targets)
+      
       -- forward
       local outputs = lm:forward(inputs)
       local err = criterion:forward(outputs, targets)
@@ -239,7 +234,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    print(string.format("Speed : %f sec/batch ", speed))
 
    local ppl = torch.exp(sumErr/opt.trainsize)
-   print("Training PPL : "..ppl, sumErr/opt.trainsize)
+   print("Training PPL : "..ppl)
 
    xplog.trainppl[epoch] = ppl
 
@@ -248,7 +243,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    lm:evaluate()
    local sumErr = 0
    for i, inputs, targets in validset:subiter(opt.seqlen, opt.validsize) do
-   
+      targets = targetmodule:forward(targets)
       local outputs = lm:forward(inputs)
       local err = criterion:forward(outputs, targets)
       sumErr = sumErr + err
