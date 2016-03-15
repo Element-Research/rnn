@@ -1,5 +1,8 @@
 ------------------------------------------------------------------------
 --[[ TrimZero ]]--
+-- Author: Jin-Hwa Kim
+-- License: LICENSE.2nd.txt
+
 -- Decorator that zeroes the output rows of the encapsulated module
 -- for commensurate input rows which are tensors of zeros
 

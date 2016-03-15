@@ -1,5 +1,8 @@
 ------------------------------------------------------------------------
 --[[ GRU ]]--
+-- Author: Jin-Hwa Kim
+-- License: LICENSE.2nd.txt
+
 -- Gated Recurrent Units architecture.
 -- http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-gruGRU-rnn-with-python-and-theano/
 -- Expects 1D or 2D input.
