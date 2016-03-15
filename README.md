@@ -23,6 +23,7 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
 
 Miscellaneous modules and criterions :
  * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
+ * [TrimZero](#rnn.TrimZero) : More computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward.
  * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
  * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros
 
@@ -126,6 +127,9 @@ Calling this method makes it possible to pad sequences with different lengths in
 When a sample time-step is masked (i.e. `input` is a row of zeros), then 
 the hidden state is effectively reset (i.e. forgotten) for the next non-mask time-step.
 In other words, it is possible seperate unrelated sequences with a masked element.
+
+### trimZero(nInputDim) ###
+Decorates the internal `recurrentModule` with [TrimZero](#rnn.TrimZero). 
 
 ### [output] updateOutput(input) ###
 Forward propagates the input for the current step. The outputs or intermediate 
@@ -358,13 +362,16 @@ References :
  * B. [Implementing a GRU/LSTM RNN with Python and Theano](http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-grulstm-rnn-with-python-and-theano/)
  * C. [An Empirical Exploration of Recurrent Network Architectures](http://jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
  * D. [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555)
+ * E. [RnnDrop: A Novel Dropout for RNNs in ASR](http://www.stat.berkeley.edu/~tsmoon/files/Conference/asru2015.pdf)
+ * F. [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
 
 This is an implementation of Gated Recurrent Units module. 
 
-The `nn.GRU(inputSize, outputSize, [rho])` constructor takes 3 arguments likewise `nn.LSTM`:
+The `nn.GRU(inputSize, outputSize [,rho [,p]])` constructor takes 3 arguments likewise `nn.LSTM` or 4 arguments for dropout:
  * `inputSize` : a number specifying the size of the input;
  * `outputSize` : a number specifying the size of the output;
- * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999.
+ * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999;
+ * `p` : dropout probability for inner connections of GRUs.
 
 ![GRU](http://d3kbpzbmcynnmx.cloudfront.net/wp-content/uploads/2015/10/Screen-Shot-2015-10-23-at-10.36.51-AM.png) 
 
@@ -390,7 +397,13 @@ Don't be too hasty to judge on which one is the better of the two (see Ref. C an
 
 __Memory__ is measured by the size of `dp.Experiment` save file. __examples/s__ is measured by the training speed at 1 epoch, so, it may have a disk IO bias.
 
-![GRU-BENCHMARK](doc/image/gru-benchmark.png) 
+![GRU-BENCHMARK](doc/image/gru-benchmark.png)
+
+RNN dropout (see Ref. E and F) was benchmark on `PennTreeBank` dataset using `recurrent-language-model.lua` script, too. The details can be found in the script. `BGRU` stands for Bayesian GRUs which uses dropouts on inner connections (naming as Ref. F).
+
+As Yarin Gal (Ref. F) mentioned, it is recommended that one may use `p = 0.25` for the first attempt.
+
+![GRU-BENCHMARK](doc/image/bgru-benchmark.png)
 
 <a name='rnn.Recursor'></a>
 ## Recursor ##
@@ -800,6 +813,20 @@ in the first Tensor of the `input`. In the case of an `input` table,
 the first Tensor is the first one encountered when doing a depth-first search.
 
 This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
+
+<a name='rnn.TrimZero'></a>
+## TrimZero ##
+The usage is the same with `MaskZero`.
+
+```lua
+mz = nn.TrimZero(module, nInputDim)
+```
+
+The only difference from `MaskZero` is that it reduces computational costs by varying a batch size, if any, for the case that varying lengths are provided in the input. Notice that when the lengths are consistent, `MaskZero` will be faster, because `TrimZero` has an operational cost. 
+
+In short, the result is the same with `MaskZero`'s, however, `TrimZero` is faster than `MaskZero` only when sentence lengths is costly vary.
+
+In practice, e.g. language model, `TrimZero` is expected to be faster than `MaskZero` about 30%. (You can test with it using `test/test_trimzero.lua`.)
 
 <a name='rnn.LookupTableMaskZero'></a>
 ## LookupTableMaskZero ##
