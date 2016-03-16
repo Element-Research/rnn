@@ -20,7 +20,6 @@ cmd:option('--schedule', '', 'learning rate schedule. e.g. {[5] = 0.004, [6] = 0
 cmd:option('--momentum', 0.9, 'momentum')
 cmd:option('--maxnormout', -1, 'max l2-norm of each layer\'s output neuron weights')
 cmd:option('--cutoff', -1, 'max l2-norm of concatenation of all gradParam tensors')
-cmd:option('--weightDecay', 1e-4, 'weight decay factor')
 cmd:option('--batchSize', 32, 'number of examples per batch')
 cmd:option('--cuda', false, 'use CUDA')
 cmd:option('--device', 1, 'sets the device (GPU) to use')
