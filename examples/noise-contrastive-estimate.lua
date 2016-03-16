@@ -27,12 +27,13 @@ cmd:option('--earlystop', 50, 'maximum number of epochs to wait to find a better
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
+cmd:option('--k', 25, 'how many noise samples to use for NCE')
 -- rnn layer 
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
-cmd:option('--dropout', 0, 'apply dropout with this probability after each rnn layer. dropout <= 0 disables it.')
+cmd:option('--dropout', 0, 'ancelossy dropout with this probability after each rnn layer. dropout <= 0 disables it.')
 -- data
 cmd:option('--batchsize', 32, 'number of examples per batch')
 cmd:option('--trainsize', -1, 'number of train examples seen between each epoch')
@@ -72,7 +73,7 @@ if opt.dropout > 0 then
 end
 
 -- rnn layers
-local stepmodule = nn.Sequential() -- applied at each time-step
+local stepmodule = nn.Sequential() -- ancelossied at each time-step
 local inputsize = opt.hiddensize[1]
 for i,hiddensize in ipairs(opt.hiddensize) do 
    local rnn
@@ -103,8 +104,20 @@ for i,hiddensize in ipairs(opt.hiddensize) do
 end
 
 -- output layer
-stepmodule:add(nn.Linear(inputsize, #trainset.ivocab))
-stepmodule:add(nn.LogSoftMax())
+local unigram = torch.FloatTensor(#trainset.ivocab)
+for word,freq in pairs(trainset.wordfreq) do
+   unigram[trainset.vocab[word]] = freq
+end
+-- NCE requires {input, target} as inputs
+stepmodule = nn.Sequential()
+   :add(nn.ParallelTable()
+      :add(stepmodule):add(nn.Identity())) -- {input, target}
+   :add(nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram))
+
+lm = nn.Sequential()
+   :add(nn.ParallelTable()
+      :add(lm):add(nn.Identity()))
+   :add(nn.ZipTable()) -- {input, target} -> {{x1,t1},{x2,t2},...}
 
 -- encapsulate stepmodule into a Sequencer
 lm:add(nn.Sequencer(stepmodule))
@@ -125,7 +138,7 @@ end
 
 --[[ loss function ]]--
 
-local crit = nn.ClassNLLCriterion()
+local crit = nn.NCECriterion()
 
 -- target is also seqlen x batchsize.
 local targetmodule = nn.SplitTable(1)
@@ -160,10 +173,10 @@ xplog.model:mediumSerial()
 xplog.criterion = criterion
 xplog.targetmodule = targetmodule
 -- keep a log of NLL for each epoch
-xplog.trainppl = {}
-xplog.valppl = {}
+xplog.trainnceloss = {}
+xplog.valnceloss = {}
 -- will be used for early-stopping
-xplog.minvalppl = 99999999
+xplog.minvalnceloss = 99999999
 xplog.epoch = 0
 local ntrial = 0
 paths.mkdir(opt.savepath)
@@ -183,6 +196,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    local sumErr = 0
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
       targets = targetmodule:forward(targets)
+      inputs = {inputs, targets}
       
       -- forward
       local outputs = lm:forward(inputs)
@@ -232,10 +246,10 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    local speed = a:time().real/opt.trainsize
    print(string.format("Speed : %f sec/batch ", speed))
 
-   local ppl = torch.exp(sumErr/opt.trainsize)
-   print("Training PPL : "..ppl)
+   local nceloss = sumErr/opt.trainsize
+   print("Training error : "..nceloss)
 
-   xplog.trainppl[epoch] = ppl
+   xplog.trainnceloss[epoch] = nceloss
 
    -- 2. cross-validation
 
@@ -243,21 +257,21 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    local sumErr = 0
    for i, inputs, targets in validset:subiter(opt.seqlen, opt.validsize) do
       targets = targetmodule:forward(targets)
-      local outputs = lm:forward(inputs)
+      local outputs = lm:forward{inputs, targets}
       local err = criterion:forward(outputs, targets)
       sumErr = sumErr + err
    end
 
-   local ppl = torch.exp(sumErr/opt.validsize)
-   print("Validation PPL : "..ppl)
+   local nceloss = sumErr/opt.validsize
+   print("Validation error : "..nceloss)
 
-   xplog.valppl[epoch] = ppl
+   xplog.valnceloss[epoch] = nceloss
    ntrial = ntrial + 1
 
    -- early-stopping
-   if ppl < xplog.minvalppl then
+   if nceloss < xplog.minvalnceloss then
       -- save best version of model
-      xplog.minvalppl = ppl
+      xplog.minvalnceloss = nceloss
       xplog.epoch = epoch 
       local filename = paths.concat(opt.savepath, opt.id..'.t7')
       print("Found new minima. Saving to "..filename)
@@ -266,11 +280,11 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    elseif ntrial >= opt.earlystop then
       print("No new minima found after "..ntrial.." epochs.")
       print("Stopping experiment.")
-      break
+      print("Best model can be found in "..paths.concat(opt.savepath, opt.id..'.t7'))
+      os.exit()
    end
 
    collectgarbage()
    epoch = epoch + 1
 end
-print("Evaluate model using : ")
-print("th scripts/evaluate-rnnlm.lua --xplogpath "..paths.concat(opt.savepath, opt.id..'.t7')..(opt.cuda and '--cuda' or ''))
+

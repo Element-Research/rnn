@@ -37,6 +37,14 @@ local trainset, validset, testset = dl.loadPTB({50, 1, 1})
 
 assert(trainset.vocab['the'] == xplog.vocab['the'])
 
+for i,nce in ipairs(lm:findModules('nn.NCEModule')) do
+   nce.normalized = true
+   nce.logsoftmax = true
+   criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+   if opt.cuda then criterion:cuda() end
+   opt.nce = true
+end
+
 print(lm)
 
 lm:forget()
@@ -65,6 +73,7 @@ else
    
    for i, inputs, targets in testset:subiter(100) do
       local targets = targetmodule:forward(targets)
+      local inputs = opt.nce and {inputs, targets} or inputs
       local outputs = lm:forward(inputs)
       local err = criterion:forward(outputs, targets)
       sumErr = sumErr + err
