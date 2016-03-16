@@ -27,6 +27,8 @@ require 'torchx'
 
 function TrimZero:__init(module, nInputDim, silent)
    parent.__init(self, module, nInputDim, silent)
+   self.temp = torch.Tensor()
+   self.gradTemp = torch.Tensor()
 end
 
 function TrimZero:recursiveMask(output, input, mask)
@@ -50,13 +52,13 @@ function TrimZero:recursiveMask(output, input, mask)
          assert(torch.find, 'install torchx package : luarocks install torchx')
          local indexes = torch.find(mask, 0)
          if 0 < #indexes then
-            output = input:index(1, torch.LongTensor(indexes))
+            output:index(input, 1, torch.LongTensor(indexes))
          else
-            output = input:index(1, torch.LongTensor{1}):zero()
+            output:index(input, 1, torch.LongTensor{1}):zero()
          end
       else
          if mask[1] == 1 then output:resize(input:size()):zero() 
-                         else output = input end
+                         else output:resize(input:size()):copy(input) end
       end
    end
    return output
@@ -114,18 +116,18 @@ function TrimZero:updateOutput(input)
    self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)
    
    -- forward through decorated module
-   input = self:recursiveMask(input, input, self.zeroMask)
-   output = self.module:updateOutput(input)
+   self.temp = self:recursiveMask(self.temp, input, self.zeroMask)
+   output = self.module:updateOutput(self.temp)
    self.output = self:recursiveUnMask(self.output, output, self.zeroMask, true)
 
    return self.output
 end
 
 function TrimZero:updateGradInput(input, gradOutput)
-   input = self:recursiveMask(input, input, self.zeroMask)
-   gradOutput = self:recursiveMask(gradOutput, gradOutput, self.zeroMask)
+   self.temp = self:recursiveMask(self.temp, input, self.zeroMask)
+   self.gradTemp = self:recursiveMask(self.gradTemp, gradOutput, self.zeroMask)
 
-   self.gradInput = self.module:updateGradInput(input, gradOutput)
+   self.gradInput = self.module:updateGradInput(self.temp, self.gradTemp)
 
    self.gradInput = self:recursiveUnMask(self.gradInput, self.gradInput, self.zeroMask)
 
@@ -133,6 +135,6 @@ function TrimZero:updateGradInput(input, gradOutput)
 end
 
 function TrimZero:accGradParameters(input, gradOutput, scale)
-   input = self:recursiveMask(input, input, self.zeroMask)
-   self.module:accGradParameters(input, gradOutput, scale)
+   self.temp = self:recursiveMask(self.temp, input, self.zeroMask)
+   self.module:accGradParameters(self.temp, gradOutput, scale)
 end
