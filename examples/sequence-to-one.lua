@@ -21,7 +21,7 @@ rnn = nn.Sequential()
    :add(nn.SplitTable(1,2))
    :add(nn.Sequencer(r))
    :add(nn.SelectTable(-1)) -- this selects the last time-step of the rnn output sequence
-   :add(nn.Linear(hiddenSize, nIndex))
+   :add(nn.Linear(hiddenSize, nClass))
    :add(nn.LogSoftMax())
 
 -- build criterion
