@@ -52,7 +52,7 @@ local decInSeq = torch.Tensor({{1,2,3,4},{4,3,2,1}})
 local decOutSeq = torch.Tensor({{2,3,4,1},{1,2,4,3}})
 decOutSeq = nn.SplitTable(1, 1):forward(decOutSeq)
 
-for i=1,1000 do
+for i=1,opt.niter do
    enc:zeroGradParameters()
    dec:zeroGradParameters()
 
