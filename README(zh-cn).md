@@ -234,65 +234,65 @@ RNN用来处理一个序列的输入.
 一个不同的同尺寸的序列, 并且每 `rho` 步
 调用 `updateParameters`, 并在序列的最后 `forget` . 
 
-Note that calling the `evaluate` method turns off long-term memory; 
-the RNN will only remember the previous output. This allows the RNN 
-to handle long sequences without allocating any additional memory.
+注意调用 `evaluate` 方法会关闭长期的记忆; 
+RNN 只会记录前一个输出. 这允许 RNN 
+不需要额外的分配内存就可以处理长序列.
 
 
-For a simple concise example of how to make use of this module, please consult the 
+一个简单简明的样例来展示如何使用这个模块, 请翻阅
 [simple-recurrent-network.lua](examples/simple-recurrent-network.lua)
-training script.
+训练脚本.
 
 <a name='rnn.Recurrent.Sequencer'></a>
-### Decorate it with a Sequencer ###
+### 用一个Sequencer来封装它 ###
 
-Note that any `AbstractRecurrent` instance can be decorated with a [Sequencer](#rnn.Sequencer) 
-such that an entire sequence (a table) can be presented with a single `forward/backward` call.
-This is actually the recommended approach as it allows RNNs to be stacked and makes the 
-rnn conform to the Module interface, i.e. each call to `forward` can be 
-followed by its own immediate call to `backward` as each `input` to the 
-model is an entire sequence, i.e. a table of tensors where each tensor represents
-a time-step.
+注意任何 `AbstractRecurrent` 实例都可以被一个 [Sequencer](#rnn.Sequencer) 封装
+这样一个完整的序列 (表) 可以被一个 `forward/backward` 调用处理.
+实际上这是被建议的方法因为它允许 RNNs 的堆叠而且使
+rnn 符合模块的接口, 也就是每一个 `forward` 调用可以被
+可以被它自身最接近的 `backward` 调用跟随只要每一个对模块的 `input`
+是一个完整的序列, 也就是一个张量的表其中每一个张量表示
+一步输入.
 
 ```lua
 seq = nn.Sequencer(module)
 ```
 
-The [simple-sequencer-network.lua](examples/simple-sequencer-network.lua) training script
-is equivalent to the above mentionned [simple-recurrent-network.lua](examples/simple-recurrent-network.lua)
-script, except that it decorates the `rnn` with a `Sequencer` which takes 
-a table of `inputs` and `gradOutputs` (the sequence for that batch).
-This lets the `Sequencer` handle the looping over the sequence.
+[simple-sequencer-network.lua](examples/simple-sequencer-network.lua)训练脚本
+与上面提到的[simple-recurrent-network.lua](examples/simple-recurrent-network.lua)是等价的
+脚本, 除了它把 `rnn` 用一个从表获取 `inputs` 和 `gradOutputs`
+(那一批的序列)的 `Sequencer` 来封装之外.
+这让 `Sequencer` 处理序列的循环.
 
-You should only think about using the `AbstractRecurrent` modules without 
-a `Sequencer` if you intend to use it for real-time prediction. 
-Actually, you can even use an `AbstractRecurrent` instance decorated by a `Sequencer`
-for real time prediction by calling `Sequencer:remember()` and presenting each 
-time-step `input` as `{input}`.
+你只需要考虑使用 `AbstractRecurrent` 模块而没有
+一个 `Sequencer` 如果你打算使用它来进行实时预测. 
+实际上, 你可以使用一个被 `Sequencer` 封装的`AbstractRecurrent` 实例
+只要每一个实时步骤预测调用 `Sequencer:remember()` 并把`input` 表示为 `{input}`
+来作为每一步的传入 .
 
-Other decorators can be used such as the [Repeater](#rnn.Repeater) or [RecurrentAttention](#rnn.RecurrentAttention).
-The `Sequencer` is only the most common one. 
+其它可能使用到的封装器例如 [Repeater](#rnn.Repeater) 或者 [RecurrentAttention](#rnn.RecurrentAttention).
+`Sequencer` 只是最通用的一个. 
 
 <a name='rnn.LSTM'></a>
 ## LSTM ##
-References :
+参考:
  * A. [Speech Recognition with Deep Recurrent Neural Networks](http://arxiv.org/pdf/1303.5778v1.pdf)
  * B. [Long-Short Term Memory](http://web.eecs.utk.edu/~itamar/courses/ECE-692/Bobby_paper1.pdf)
  * C. [LSTM: A Search Space Odyssey](http://arxiv.org/pdf/1503.04069v1.pdf)
  * D. [nngraph LSTM implementation on github](https://github.com/wojzaremba/lstm)
 
-This is an implementation of a vanilla Long-Short Term Memory module. 
-We used Ref. A's LSTM as a blueprint for this module as it was the most concise.
-Yet it is also the vanilla LSTM described in Ref. C. 
+这是一个普通长短期记忆模块的实现. 
+我们使用引用 A 的 LSTM 作为这个模型的蓝本因为它最简明.
+而然在引用 C 中描述的也是普通的 LSTM. 
 
-The `nn.LSTM(inputSize, outputSize, [rho])` constructor takes 3 arguments:
- * `inputSize` : a number specifying the size of the input;
- * `outputSize` : a number specifying the size of the output;
- * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999.
+`nn.LSTM(inputSize, outputSize, [rho])` 的构造函数获得3个参数:
+ * `inputSize` : 一个用来指定输入尺寸的数;
+ * `outputSize` : 一个用来指定输出尺寸的数;
+ * `rho` : 反向传播时处理序列的最大长度. 限制存储在内存中的之前步骤的数量. 默认是 9999.
 
 ![LSTM](doc/image/LSTM.png) 
 
-The actual implementation corresponds to the following algorithm:
+实际的实现与下面的算法相应:
 ```lua
 i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + W[c->i]c[t−1] + b[1->i])      (1)
 f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + W[c->f]c[t−1] + b[1->f])      (2)
@@ -301,14 +301,14 @@ c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
 o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 h[t] = o[t]tanh(c[t])                                                (6)
 ```
-where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step,
-`b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input,
-`i[t]` is the input gate (eq. 1), `f[t]` is the forget gate (eq. 2), 
-`z[t]` is the input to the cell (which we call the hidden) (eq. 3), 
-`c[t]` is the cell (eq. 4), `o[t]` is the output gate (eq. 5), 
-and `h[t]` is the output of this module (eq. 6). Also note that the 
-weight matrices from cell to gate vectors are diagonal `W[c->s]`, where `s` 
-is `i`,`f`, or `o`.
+`W[s->q]` 是从 `s` 到 `q`的权重矩阵, `t` 索引时间步长,
+`b[1->q]` 是引入到 `q` 中的偏差, `σ()` 是 `Sigmoid`, `x[t]` 是输入,
+`i[t]` 是输入门 (公式. 1), `f[t]` 是遗忘门 (公式. 2), 
+`z[t]` 是到单元 (我们称之为隐藏) 的输入 (公式. 3), 
+`c[t]` 是单元 (公式. 4), `o[t]` 是输出门 (公式. 5), 
+`h[t]` 是这个模块的输出 (公式. 6). 也要说明
+从单元到们向量的权重矩阵 `W[c->s]` 是对角的, 这里 `s` 
+可以是 `i`,`f`, 或者 `o`.
 
 As you can see, unlike [Recurrent](#rnn.Recurrent), this 
 implementation isn't generic enough that it can take arbitrary component Module
