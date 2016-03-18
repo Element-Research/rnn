@@ -393,24 +393,24 @@ __Memory__ 用 `dp.Experiment` 保存文件的尺寸来衡量. __examples/s__ �
 <a name='rnn.Recursor'></a>
 ## Recursor ##
 
-This module decorates a `module` to be used within an `AbstractSequencer` instance.
-It does this by making the decorated module conform to the `AbstractRecurrent` interface,
-which like the `LSTM` and `Recurrent` classes, this class inherits. 
+这一个模块封装一个 `module` 以在一个 `AbstractSequencer` 实例内使用.
+它通过装饰模块使其符合 `AbstractRecurrent` 的接口来实现这个,
+就像 `LSTM` 和 `Recurrent` 类, 这个类继承. 
 
 ```lua
 rec = nn.Recursor(module[, rho])
 ```
 
-For each successive call to `updateOutput` (i.e. `forward`), this 
-decorator will create a `stepClone()` of the decorated `module`. 
-So for each time-step, it clones the `module`. Both the clone and 
-original share parameters and gradients w.r.t. parameters. However, for 
-modules that already conform to the `AbstractRecurrent` interface, 
-the clone and original module are one and the same (i.e. no clone).
+对每一个成功的 `updateOutput` (也就是说 `forward`)调用, 这个
+封装器将会产生一个被封装 `module` 的 `stepClone()`. 
+所以对每一个时间步骤, 它克隆了 `module`. 克隆和
+原始共享参数和下降 w.r.t. 参数. 然而, 对于 
+已经符合模块 `AbstractRecurrent` 的接口, 
+克隆和原始模型是同一个 (也就是说没有克隆).
 
-Examples :
+例子 :
 
-Let's assume I want to stack two LSTMs. I could use two sequencers :
+让我们假设我想堆两个 LSTMs. 我可以使用两个序列器 :
 
 ```lua
 lstm = nn.Sequential()
@@ -418,7 +418,7 @@ lstm = nn.Sequential()
    :add(nn.Sequencer(nn.LSTM(100,100)))
 ```
 
-Using a `Recursor`, I make the same model with a single `Sequencer` :
+使用一个 `Recursor`, 我用一个单一的 `Sequencer` 创造了相同的模型 :
 
 ```lua
 lstm = nn.Sequencer(
@@ -430,8 +430,8 @@ lstm = nn.Sequencer(
    )
 ```
 
-Actually, the `Sequencer` will wrap any non-`AbstractRecurrent` module automatically, 
-so I could simplify this further to :
+实际上, `Sequencer` 会自动地包裹任何非-`AbstractRecurrent` 模块, 
+所以我可以进一步简化为:
 
 ```lua
 lstm = nn.Sequencer(
@@ -441,9 +441,9 @@ lstm = nn.Sequencer(
    )
 ```
 
-I can also add a `Linear` between the two `LSTM`s. In this case,
-a `Linear` will be cloned (and have its parameters shared) for each time-step,
-while the `LSTM`s will do whatever cloning internally :
+我也可以在两个 `LSTM` 中间添加一个 `Linear`. 这种情况下,
+一个 `Linear` 将会在每一个时间步骤被克隆 (并且它的参数被共享),
+`LSTM`会做任何内部克隆:
 
 ```lua
 lstm = nn.Sequencer(
