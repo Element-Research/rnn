@@ -310,28 +310,28 @@ h[t] = o[t]tanh(c[t])                                                (6)
 从单元到们向量的权重矩阵 `W[c->s]` 是对角的, 这里 `s` 
 可以是 `i`,`f`, 或者 `o`.
 
-As you can see, unlike [Recurrent](#rnn.Recurrent), this 
-implementation isn't generic enough that it can take arbitrary component Module
-definitions at construction. However, the LSTM module can easily be adapted 
-through inheritance by overriding the different factory methods :
-  * `buildGate` : builds generic gate that is used to implement the input, forget and output gates;
-  * `buildInputGate` : builds the input gate (eq. 1). Currently calls `buildGate`;
-  * `buildForgetGate` : builds the forget gate (eq. 2). Currently calls `buildGate`;
-  * `buildHidden` : builds the hidden (eq. 3);
-  * `buildCell` : builds the cell (eq. 4);
-  * `buildOutputGate` : builds the output gate (eq. 5). Currently calls `buildGate`;
-  * `buildModel` : builds the actual LSTM model which is used internally (eq. 6).
+就像你可以看到的, 不像 [Recurrent](#rnn.Recurrent), 这个
+实现不是足够的通用以至于可以使用任意通过构造
+定义模块组件. 然而, LSTM模块可以轻松的被适用
+通过继承并重写不同的默认函数 :
+  * `buildGate` : 创造一个被用做输入,遗忘和输出的通用门;
+  * `buildInputGate` : 创造一个输入门 (公式. 1). 现在调用 `buildGate`;
+  * `buildForgetGate` : 创造一个遗忘门 (公式. 2). 现在调用 `buildGate`;
+  * `buildHidden` : 创造隐藏 (公式. 3);
+  * `buildCell` : 创造单元 (公式. 4);
+  * `buildOutputGate` : 创造输出门 (公式. 5). 现在调用 `buildGate`;
+  * `buildModel` : 创造一个内部使用的实际的 LSTM 模块 (公式. 6).
   
-Note that we recommend decorating the `LSTM` with a `Sequencer` 
-(refer to [this](#rnn.Recurrent.Sequencer) for details).
+注意我们推荐用一个 `Sequencer` 来封装 `LSTM`
+(具体细节参考 [这个](#rnn.Recurrent.Sequencer) ).
   
 <a name='rnn.FastLSTM'></a>
 ## FastLSTM ##
 
-A faster version of the [LSTM](#rnn.LSTM). 
-Basically, the input, forget and output gates, as well as the hidden state are computed at one fell swoop.
+一个快速的 [LSTM](#rnn.LSTM) 版本. 
+从根本上说, 输入, 遗忘和输出门, 和隐藏状态被一举计算.
 
-Note that `FastLSTM` does not use peephole connections between cell and gates. The algorithm from `LSTM` changes as follows:
+注意 `FastLSTM` 没有在单元和门之间使用窥视孔连接. 这个算法与 `LSTM` 相比变成了下面:
 ```lua
 i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + b[1->i])                      (1)
 f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + b[1->f])                      (2)
@@ -340,45 +340,45 @@ c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
 o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
 h[t] = o[t]tanh(c[t])                                                (6)
 ```
-i.e. omitting the summands `W[c->i]c[t−1]` (eq. 1), `W[c->f]c[t−1]` (eq. 2), and `W[c->o]c[t]` (eq. 5).
+也就是说遗漏了这个和项 `W[c->i]c[t−1]` (公式. 1), `W[c->f]c[t−1]` (公式. 2), 和 `W[c->o]c[t]` (公式. 5).
 
 ### usenngraph ###
-This is a static attribute of the `FastLSTM` class. The default value is `false`.
-Setting `usenngraph = true` will force all new instantiated instances of `FastLSTM` 
-to use `nngraph`'s `nn.gModule` to build the internal `recurrentModule` which is 
-cloned for each time-step.
+这是 `FastLSTM` 类的一个静态属性. 默认值是 `false`.
+设置 `usenngraph = true` 将会强制 `FastLSTM` 所有新的实例化的实例
+来使用 `nngraph` 的 `nn.gModule` 来创建内部的每一个时间步长
+克隆的 `recurrentModule` .
 
 <a name='rnn.GRU'></a>
 ## GRU ##
 
-References :
+参考 :
  * A. [Learning Phrase Representations Using RNN Encoder-Decoder For Statistical Machine Translation.](http://arxiv.org/pdf/1406.1078.pdf)
  * B. [Implementing a GRU/LSTM RNN with Python and Theano](http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-grulstm-rnn-with-python-and-theano/)
  * C. [An Empirical Exploration of Recurrent Network Architectures](http://jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
  * D. [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555)
 
-This is an implementation of Gated Recurrent Units module. 
+这是 Gated Recurrent Units 模块的一个实现. 
 
-The `nn.GRU(inputSize, outputSize, [rho])` constructor takes 3 arguments likewise `nn.LSTM`:
- * `inputSize` : a number specifying the size of the input;
- * `outputSize` : a number specifying the size of the output;
- * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999.
+`nn.GRU(inputSize, outputSize, [rho])` 的构造函数和 `nn.LSTM` 一样获取 3 个参数:
+ * `inputSize` : 一个指定输入尺寸的数字;
+ * `outputSize` : 一个指定输出尺寸的数字;
+ * `rho` : 反向传播时处理序列的最大长度. 限制存储在内存中的之前步骤的数量. 默认是 9999.
 
 ![GRU](http://d3kbpzbmcynnmx.cloudfront.net/wp-content/uploads/2015/10/Screen-Shot-2015-10-23-at-10.36.51-AM.png) 
 
-The actual implementation corresponds to the following algorithm:
+实际的实现与下面的算法对应:
 ```lua
 z[t] = σ(W[x->z]x[t] + W[s->z]s[t−1] + b[1->z])            (1)
 r[t] = σ(W[x->r]x[t] + W[s->r]s[t−1] + b[1->r])            (2)
 h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 ```
-where `W[s->q]` is the weight matrix from `s` to `q`, `t` indexes the time-step, `b[1->q]` are the biases leading into `q`, `σ()` is `Sigmoid`, `x[t]` is the input and `s[t]` is the output of the module (eq. 4). Note that unlike the [LSTM](#rnn.LSTM), the GRU has no cells.
+`W[s->q]` 是从 `s` 到 `q` 的权重矩阵, `t` 索引时间步长, `b[1->q]` 是引入到 `q` 中的偏差, `σ()` 是 `Sigmoid`, `x[t]` 是输入 `s[t]` 是这个模块 (公式. 4) 的输出. 注意不像 [LSTM](#rnn.LSTM), GRU 没有单元.
 
-The GRU was benchmark on `PennTreeBank` dataset using [recurrent-language-model.lua](examples/recurrent-language-model.lua) script. 
-It slightly outperfomed `FastLSTM`, however, since LSTMs have more parameters than GRUs, 
-the dataset larger than `PennTreeBank` might change the performance result. 
-Don't be too hasty to judge on which one is the better of the two (see Ref. C and D).
+GRU 被在 `PennTreeBank` 数据集上使用 [recurrent-language-model.lua](examples/recurrent-language-model.lua) 脚本检测. 
+它的性能比 `FastLSTM` 出色一点, 然而, 既然 LSTMs 比 GRUs 有更多的参数, 
+比 `PennTreeBank` 大的数据集可能改变性能的结果. 
+不要太草率的去判断两个中的哪一个更好 (参加 参考. C 和 D).
 
 ```
                 Memory   examples/s
@@ -386,7 +386,7 @@ Don't be too hasty to judge on which one is the better of the two (see Ref. C an
     GRU            92M        15.8K
 ```
 
-__Memory__ is measured by the size of `dp.Experiment` save file. __examples/s__ is measured by the training speed at 1 epoch, so, it may have a disk IO bias.
+__Memory__ 用 `dp.Experiment` 保存文件的尺寸来衡量. __examples/s__ 用1轮训练的速度来衡量, 所以, 这可能存在硬盘 IO 的偏差.
 
 ![GRU-BENCHMARK](doc/image/gru-benchmark.png) 
 
