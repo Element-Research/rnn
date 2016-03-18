@@ -17,6 +17,7 @@ function AbstractRecurrent:__init(rho)
    
    -- stores internal states of Modules at different time-steps
    self.sharedClones = {}
+   self.trim = false
    
    self:reset()
 end
@@ -40,7 +41,8 @@ end
 
 function AbstractRecurrent:trimZero(nInputDim)
    self.recurrentModule = nn.TrimZero(self.recurrentModule, nInputDim, true)
-   self.sharedClones = {self.recurrentModule}
+   self.sharedClones = {self.recurrentModule:stepClone()}
+   self.trim = true
    return self
 end
 
@@ -112,7 +114,7 @@ function AbstractRecurrent:forget()
       -- Since its used for evaluation, it should be used for training. 
       local nClone, maxIdx = 0, 1
       for k,v in pairs(self.sharedClones) do -- to prevent odd bugs
-         if torch.pointer(v) == torch.pointer(self.recurrentModule) then
+         if self.trim or torch.pointer(v) == torch.pointer(self.recurrentModule) then
             self.rmInSharedClones = true
             maxIdx = math.max(k, maxIdx)
          end
