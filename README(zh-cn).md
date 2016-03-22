@@ -10,8 +10,8 @@
  * [LSTM](#rnn.LSTM) : 一个普通的Long-Short Term Memory模块;
   * [FastLSTM](#rnn.FastLSTM) : 一个更快的[LSTM](#rnn.LSTM);
  * [GRU](#rnn.GRU) : Gated Recurrent Units模块;
- * [Recursor](#rnn.Recursor) : 用来装饰一个模型来使它符合[AbstractRecurrent](#rnn.AbstractRecurrent)的接口;
- * [Recurrence](#rnn.Recurrence) : 装饰一个模块当输入`{input(t), output(t-1)}`时输出`output(t)`;
+ * [Recursor](#rnn.Recursor) : 用来封装一个模型来使它符合[AbstractRecurrent](#rnn.AbstractRecurrent)的接口;
+ * [Recurrence](#rnn.Recurrence) : 封装一个模块当输入`{input(t), output(t-1)}`时输出`output(t)`;
 
 通过装饰`AbstractRecurrent`实例一次`forward`整个序列的模块:
  * [AbstractSequencer](#rnn.AbstractSequencer) : 一个被Sequencer, Repeater, RecurrentAttention等继承的抽象类.;
@@ -454,53 +454,53 @@ lstm = nn.Sequencer(
    )
 ``` 
 
-`AbstractRecurrent` instances like `Recursor`, `Recurrent` and `LSTM` are 
-expcted to manage time-steps internally. Non-`AbstractRecurrent` instances
-can be wrapped by a `Recursor` to have the same behavior. 
+`AbstractRecurrent` 实例就像 `Recursor`, `Recurrent` 和 `LSTM` 一样
+被期待内部的时间步骤管理. 非-`AbstractRecurrent` 实例
+可以被一个 `Recursor` 包裹来获得相同的行为. 
 
-Every call to `forward` on an `AbstractRecurrent` instance like `Recursor` 
-will increment the `self.step` attribute by 1, using a shared parameter clone
-for each successive time-step (for a maximum of `rho` time-steps, which defaults to 9999999).
-In this way, `backward` can be called in reverse order of the `forward` calls 
-to perform backpropagation through time (BPTT). Which is exactly what 
-[AbstractSequencer](#rnn.AbstractSequencer) instances do internally.
-The `backward` call, which is actually divided into calls to `updateGradInput` and 
-`accGradParameters`, decrements by 1 the `self.udpateGradInputStep` and `self.accGradParametersStep`
-respectively, starting at `self.step`.
-Successive calls to `backward` will decrement these counters and use them to 
-backpropagate through the appropriate internall step-wise shared-parameter clones.
+每一个对一个 `AbstractRecurrent` 的 `forward` 调用 例如 `Recursor` 
+将会增加 `self.step` 属性1, 对每一个成功的时间步骤(对一个最大时间步长为 `rho` ,
+默认为 9999999)使用一个共享的参数来克隆.
+在这种方式下, `backward` 可以被以 `forward` 调用相反的顺序
+来进行反向传播序列 (BPTT). 这实际上是
+[AbstractSequencer](#rnn.AbstractSequencer) 实例内部进行的.
+`backward` 调用, 实际上被分别的调用为 `updateGradInput` 和
+`accGradParameters`, 对分别地从 self.step 开始的 `self.udpateGradInputStep` 
+和 `self.accGradParametersStep` 减少1. 
+成功得 `backward` 调用将会递减这些计数器并利用他们来
+适当地对内部的对应步数的共享参数的克隆进行反向传播.
 
-Anyway, in most cases, you will not have to deal with the `Recursor` object directly as
-`AbstractSequencer` instances automatically decorate non-`AbstractRecurrent` instances
-with a `Recursor` in their constructors.
+无论如何, 对大多数情况来说, 你不需要直接地处理 `Recursor` 对象因为
+`AbstractSequencer` 实例自动地在构造中将 非-`AbstractRecurrent` 
+实例与一个 `Recursor` 封装.
 
-For a concrete example of its use, please consult the [simple-recurrent-network.lua](examples/simple-recurrent-network.lua)
-training script for an example of its use.
+对一个具体它的使用样例, 请参考一个使用它的例子
+训练脚本 [simple-recurrent-network.lua](examples/simple-recurrent-network.lua) .
 
 <a name='rnn.Recurrence'></a>
 ## Recurrence ##
 
-A extremely general container for implementing pretty much any type of recurrence.
+一个非常通用的容器用来实现非常多种类的循环.
 
 ```lua
 rnn = nn.Recurrence(recurrentModule, outputSize, nInputDim, [rho])
 ```
 
-Unlike [Recurrent](#rnn.Recurrent), this module doesn't manage a separate 
-modules like `inputModule`, `startModule`, `mergeModule` and the like.
-Instead, it only manages a single `recurrentModule`, which should 
-output a Tensor or table : `output(t)` 
-given an input table : `{input(t), output(t-1)}`.
-Using a mix of `Recursor` (say, via `Sequencer`) with `Recurrence`, one can implement 
-pretty much any type of recurrent neural network, including LSTMs and RNNs.
+不像[Recurrent](#rnn.Recurrent), 这个模块不管理分离的
+模块 像 `inputModule`, `startModule`, `mergeModule` 和相像的.
+替代的, 它只管理一个 `recurrentModule`, 应该
+输出一个张量或者表 : `output(t)` 
+给定一个输入表 : `{input(t), output(t-1)}`.
+使用一个 `Recursor` (或者说, 通过 `Sequencer`) 和 `Recurrence` 的混合, 可以实现
+非常多种类型的循环神经网络, 包括 LSTMs 和 RNNs.
 
-For the first step, the `Recurrence` forwards a Tensor (or table thereof)
-of zeros through the recurrent layer (like LSTM, unlike Recurrent).
-So it needs to know the `outputSize`, which is either a number or 
-`torch.LongStorage`, or table thereof. The batch dimension should be 
-excluded from the `outputSize`. Instead, the size of the batch dimension 
-(i.e. number of samples) will be extrapolated from the `input` using 
-the `nInputDim` argument. For example, say that our input is a Tensor of size 
+第一步, `Recurrence` 前向传播一个0张量 (或者它的表)
+通过循环层 (像 LSTM, 不像 Recurrent).
+所以这需要知道 `outputSize`, 可以是一个数或者
+`torch.LongStorage`, 或者它的表. 批的维度应该被从
+`outputSize` 中排除. 代替的, 批量的维度
+(换句话说样例的数量) 将会从 `input` 中使用
+`nInputDim` 参数推断. For example, say that our input is a Tensor of size 
 `4 x 3` where `4` is the number of samples, then `nInputDim` should be `1`.
 As another example, if our input is a table of table [...] of tensors 
 where the first tensor (depth first) is the same as in the previous example,
