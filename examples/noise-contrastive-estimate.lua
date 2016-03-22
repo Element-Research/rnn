@@ -183,6 +183,37 @@ xplog.epoch = 0
 local ntrial = 0
 paths.mkdir(opt.savepath)
 
+ltmzfwd = nn.LookupTableMaskZero.updateOutput
+
+nn.LookupTableMaskZero.updateOutput = function(self, input)
+   print"lookup"
+   return ltmzfwd(self, input)
+end
+
+stfwd = nn.SplitTable.updateOutput
+
+nn.SplitTable.updateOutput = function(self, input)
+   print("splittable", input:size())
+   return stfwd(self, input)
+end
+
+lstmfwd = nn.FastLSTM.updateOutput
+
+nn.FastLSTM.updateOutput = function(self, input)
+   print("lstm", input:sum())
+   local rtn = lstmfwd(self, input)
+   print"lstmout"
+   return rtn
+end
+
+ncefwd = nn.NCEModule.updateOutput
+
+nn.NCEModule.updateOutput = function(self, input)
+   print"nce"
+   return ncefwd(self, input)
+end
+
+
 local epoch = 1
 opt.lr = opt.startlr
 opt.trainsize = opt.trainsize == -1 and trainset:size() or opt.trainsize
@@ -197,33 +228,50 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    lm:training()
    local sumErr = 0
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
+      print(1)
+      local _ = require 'moses'
+      assert(not _.isNaN(inputs:sum()))
+      assert(not _.isNaN(targets:sum()))
       targets = targetmodule:forward(targets)
       inputs = {inputs, targets}
-      
+      print(2)
       -- forward
       local outputs = lm:forward(inputs)
+      print(3)
+      assert(not _.isNaN(outputs[1][1]:sum()))
+      assert(not _.isNaN(outputs[1][2]:sum()))
+      assert(not _.isNaN(outputs[1][3]:sum()))
+      assert(not _.isNaN(outputs[1][4]:sum()))
       local err = criterion:forward(outputs, targets)
+      assert(not _.isNaN(err))
       sumErr = sumErr + err
-      
+      print(4)
       -- backward 
       local gradOutputs = criterion:backward(outputs, targets)
+      print(5)
+      assert(not _.isNaN(gradOutputs[1][1]:sum()))
+      assert(not _.isNaN(gradOutputs[1][2]:sum()))
       lm:zeroGradParameters()
       lm:backward(inputs, gradOutputs)
-      
+      print(6)
       -- update
       if opt.cutoff > 0 then
          local norm = lm:gradParamClip(opt.cutoff) -- affects gradParams
          opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
       end
+      print(7)
       lm:updateGradParameters(opt.momentum) -- affects gradParams
+      print(8)
       lm:updateParameters(opt.lr) -- affects params
+      print(9)
       lm:maxParamNorm(opt.maxnormout) -- affects params
+      print(10)
 
       if opt.progress then
-         xlua.progress(math.min(i + opt.seqlen, opt.trainsize), opt.trainsize)
+         xlua.progress(i, opt.trainsize)
       end
 
-      if i % 1000 == 0 then
+      if i % 2000 == 0 then
          collectgarbage()
       end
 
