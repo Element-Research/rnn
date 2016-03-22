@@ -1,4 +1,5 @@
 require 'dpnn'
+require 'torchx'
 dpnn.version = dpnn.version or 0
 assert(dpnn.version > 1, "Please update dpnn : luarocks install dpnn")
 

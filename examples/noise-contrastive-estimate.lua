@@ -7,7 +7,7 @@ version = 2
 --[[ command line arguments ]]--
 cmd = torch.CmdLine()
 cmd:text()
-cmd:text('Train a Language Model on PennTreeBank dataset using RNN or LSTM or GRU')
+cmd:text('Train a Language Model on Google Billion Words dataset using RNN or LSTM or GRU')
 cmd:text('Example:')
 cmd:text('th recurrent-language-model.lua --cuda --device 2 --progress --cutoff 4 --seqlen 10')
 cmd:text("th recurrent-language-model.lua --progress --cuda --lstm --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --cutoff 5 --maxepoch 13 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
@@ -36,10 +36,11 @@ cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of ea
 cmd:option('--dropout', 0, 'ancelossy dropout with this probability after each rnn layer. dropout <= 0 disables it.')
 -- data
 cmd:option('--batchsize', 32, 'number of examples per batch')
-cmd:option('--trainsize', -1, 'number of train examples seen between each epoch')
-cmd:option('--validsize', -1, 'number of valid examples used for early stopping and cross-validation') 
+cmd:option('--trainsize', -1, 'number of train time-steps seen between each epoch')
+cmd:option('--validsize', -1, 'number of valid time-steps used for early stopping and cross-validation') 
 cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'rnnlm'), 'path to directory where experiment log (includes model) will be saved')
 cmd:option('--id', '', 'id string of this experiment (used to name output file) (defaults to a unique id)')
+cmd:option('--tiny', false, 'use train_tiny.th7 training file')
 
 cmd:text()
 local opt = cmd:parse(arg or {})
@@ -48,11 +49,11 @@ opt.schedule = loadstring(" return "..opt.schedule)()
 if not opt.silent then
    table.print(opt)
 end
-opt.id = opt.id == '' and ('ptb' .. ':' .. dl.uniqueid()) or opt.id
+opt.id = opt.id == '' and ('gbw' .. ':' .. dl.uniqueid()) or opt.id
 
 --[[ data set ]]--
 
-local trainset, validset, testset = dl.loadPTB({opt.batchsize,1,1})
+local trainset, validset, testset = dl.loadGBW({opt.batchsize,1,1}, opt.tiny and 'train_tiny.th7' or nil)
 if not opt.silent then 
    print("Vocabulary size : "..#trainset.ivocab) 
    print("Train set split into "..opt.batchsize.." sequences of length "..trainset:size())
@@ -63,7 +64,7 @@ end
 local lm = nn.Sequential()
 
 -- input layer (i.e. word embedding space)
-local lookup = nn.LookupTable(#trainset.ivocab, opt.hiddensize[1])
+local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.hiddensize[1])
 lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
 lm:add(nn.SplitTable(1)) -- tensor to table of tensors
@@ -93,6 +94,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
          :add(nn.Sigmoid()) -- transfer
       rnn = nn.Recurrence(rm, hiddensize, 1)
    end
+   rnn:maskZero(1)
 
    stepmodule:add(rnn)
    
@@ -104,15 +106,15 @@ for i,hiddensize in ipairs(opt.hiddensize) do
 end
 
 -- output layer
-local unigram = torch.FloatTensor(#trainset.ivocab)
-for word,freq in pairs(trainset.wordfreq) do
-   unigram[trainset.vocab[word]] = freq
-end
+local unigram = trainset.wordfreq:float()
+local ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram)
+ncemodule:fastNoise()
+
 -- NCE requires {input, target} as inputs
 stepmodule = nn.Sequential()
    :add(nn.ParallelTable()
       :add(stepmodule):add(nn.Identity())) -- {input, target}
-   :add(nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram))
+   :add(ncemodule)
 
 lm = nn.Sequential()
    :add(nn.ParallelTable()
@@ -138,7 +140,7 @@ end
 
 --[[ loss function ]]--
 
-local crit = nn.NCECriterion()
+local crit = nn.MaskZeroCriterion(nn.NCECriterion(), 0)
 
 -- target is also seqlen x batchsize.
 local targetmodule = nn.SplitTable(1)
@@ -165,7 +167,7 @@ end
 -- is saved to file every time a new validation minima is found
 local xplog = {}
 xplog.opt = opt -- save all hyper-parameters and such
-xplog.dataset = 'PennTreeBank'
+xplog.dataset = 'GoogleBillionWords'
 xplog.vocab = trainset.vocab
 -- will only serialize params
 xplog.model = nn.Serial(lm)
@@ -260,6 +262,10 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       local outputs = lm:forward{inputs, targets}
       local err = criterion:forward(outputs, targets)
       sumErr = sumErr + err
+      
+      if opt.progress then
+         xlua.progress(i, opt.validsize)
+      end
    end
 
    local nceloss = sumErr/opt.validsize
