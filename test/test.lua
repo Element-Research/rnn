@@ -3826,6 +3826,56 @@ function rnntest.TrimZero()
          end
       end
    end
+
+   -- check to have the same loss
+   rnn_size = 8
+   vocabSize = 7
+   word_embedding_size = 10
+
+   x = torch.Tensor{{{1,2,3},{0,4,5},{0,0,7}},
+                    {{1,2,3},{2,4,5},{0,0,7}},
+                    {{1,2,3},{2,4,5},{3,0,7}}}
+   t = torch.ceil(torch.rand(x:size(2)))
+
+   rnns = {'FastLSTM','GRU'}
+   methods = {'maskZero', 'trimZero'}
+   loss = torch.Tensor(#rnns, #methods, 3)
+
+   for ir,arch in pairs(rnns) do
+      local rnn = nn[arch](word_embedding_size, rnn_size)
+      local model = nn.Sequential()
+                  :add(nn.LookupTableMaskZero(vocabSize, word_embedding_size))
+                  :add(nn.SplitTable(2))
+                  :add(nn.Sequencer(rnn))
+                  :add(nn.SelectTable(-1))
+                  :add(nn.Linear(rnn_size, 10))
+      model:getParameters():uniform(-0.1, 0.1)
+      criterion = nn.CrossEntropyCriterion()
+      local models = {}
+      for j=1,#methods do
+         table.insert(models, model:clone())
+      end
+      for im,method in pairs(methods) do
+         -- print('-- '..arch..' with '..method)
+         model = models[im]
+         rnn = model:get(3).module
+         rnn[method](rnn, 1)
+         sys.tic()
+         for i=1,loss:size(3) do
+            model:zeroGradParameters()
+            y = model:forward(x[i])
+            loss[ir][im][i] = criterion:forward(y,t)
+            -- print('loss:', loss[ir][im][i])
+            dy = criterion:backward(y,t)
+            model:backward(x[i], dy)
+            w,dw = model:parameters()
+            model:updateParameters(.5)
+         end
+         elapse = sys.toc()
+         -- print('elapse time:', elapse)   
+      end
+   end
+   mytester:assertTensorEq(loss:select(2,1), loss:select(2,2), 0.0000001, "loss check")
 end
 
 function rnntest.AbstractRecurrent_maskZero()
@@ -4190,6 +4240,54 @@ function rnntest.issue129()
    local output2 = model:forward(input):clone()
 
    mytester:assertTensorEq(output, output2,  0.0002, "issue 129 err")
+end
+
+function rnntest.issue170()
+   torch.manualSeed(123)
+
+   rnn_size = 8
+   vocabSize = 7
+   word_embedding_size = 10
+   rnn_dropout = .00000001  -- dropout ignores manualSeed()
+   mono = true
+
+   x = torch.Tensor{{1,2,3},{0,4,5},{0,0,7}}
+   t = torch.ceil(torch.rand(x:size(2)))
+
+   rnns = {'GRU'}
+   methods = {'maskZero', 'trimZero'}
+   loss = torch.Tensor(#rnns, #methods,1)
+
+   for ir,arch in pairs(rnns) do
+      local rnn = nn[arch](word_embedding_size, rnn_size, nil, rnn_dropout, mono)
+      local model = nn.Sequential()
+                  :add(nn.LookupTableMaskZero(vocabSize, word_embedding_size))
+                  :add(nn.SplitTable(2))
+                  :add(nn.Sequencer(rnn))
+                  :add(nn.SelectTable(-1))
+                  :add(nn.Linear(rnn_size, 10))
+      model:getParameters():uniform(-0.1, 0.1)
+      criterion = nn.CrossEntropyCriterion()
+      local models = {}
+      for j=1,#methods do
+         table.insert(models, model:clone())
+      end
+      for im,method in pairs(methods) do
+         model = models[im]
+         rnn = model:get(3).module
+         rnn[method](rnn, 1)
+         for i=1,loss:size(3) do
+            model:zeroGradParameters()
+            y = model:forward(x)
+            loss[ir][im][i] = criterion:forward(y,t)
+            dy = criterion:backward(y,t)
+            model:backward(x, dy)
+            w,dw = model:parameters()
+            model:updateParameters(.5)
+         end
+      end
+   end
+   mytester:assertTensorEq(loss:select(2,1), loss:select(2,2), 0.0000001, "loss check")
 end
 
 function rnntest.encoderdecoder()

@@ -16,12 +16,13 @@
 assert(not nn.GRU, "update nnx package : luarocks install nnx")
 local GRU, parent = torch.class('nn.GRU', 'nn.AbstractRecurrent')
 
-function GRU:__init(inputSize, outputSize, rho, p)
+function GRU:__init(inputSize, outputSize, rho, p, mono)
    parent.__init(self, rho or 9999)
    self.p = p or 0
    if p and p ~= 0 then
       assert(nn.Dropout(p,false,false,true).lazy, 'only work with Lazy Dropout!')
    end
+   self.mono = mono or false  -- used by trimZero
    self.inputSize = inputSize
    self.outputSize = outputSize   
    -- build the model
@@ -46,16 +47,16 @@ function GRU:buildModel()
    if self.p ~= 0 then
       self.i2g = nn.Sequential()
                      :add(nn.ConcatTable()
-                        :add(nn.Dropout(self.p,false,false,true))
-                        :add(nn.Dropout(self.p,false,false,true)))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono)))
                      :add(nn.ParallelTable()
                         :add(nn.Linear(self.inputSize, self.outputSize))
                         :add(nn.Linear(self.inputSize, self.outputSize)))
                      :add(nn.JoinTable(2))
       self.o2g = nn.Sequential()
                      :add(nn.ConcatTable()
-                        :add(nn.Dropout(self.p,false,false,true))
-                        :add(nn.Dropout(self.p,false,false,true)))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono)))
                      :add(nn.ParallelTable()
                         :add(nn.LinearNoBias(self.outputSize, self.outputSize))
                         :add(nn.LinearNoBias(self.outputSize, self.outputSize)))
@@ -96,8 +97,8 @@ function GRU:buildModel()
    local t2 = nn.Sequential()
    t2:add(nn.NarrowTable(2,2)):add(nn.CMulTable())
    if self.p ~= 0 then
-      t1:add(nn.Dropout(self.p,false,false,true))
-      t2:add(nn.Dropout(self.p,false,false,true))
+      t1:add(nn.Dropout(self.p,false,false,true,self.mono))
+      t2:add(nn.Dropout(self.p,false,false,true,self.mono))
    end
    t1:add(nn.Linear(self.inputSize, self.outputSize))
    t2:add(nn.LinearNoBias(self.outputSize, self.outputSize))
