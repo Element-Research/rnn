@@ -4259,7 +4259,7 @@ function rnntest.issue170()
    loss = torch.Tensor(#rnns, #methods,1)
 
    for ir,arch in pairs(rnns) do
-      local rnn = nn[arch](word_embedding_size, rnn_size, nil, rnn_dropout, mono)
+      local rnn = nn[arch](word_embedding_size, rnn_size, nil, rnn_dropout)
       local model = nn.Sequential()
                   :add(nn.LookupTableMaskZero(vocabSize, word_embedding_size))
                   :add(nn.SplitTable(2))
