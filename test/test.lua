@@ -3828,18 +3828,16 @@ function rnntest.TrimZero()
    end
 
    -- check to have the same loss
-   rnn_size = 8
-   vocabSize = 7
-   word_embedding_size = 10
-
-   x = torch.Tensor{{{1,2,3},{0,4,5},{0,0,7}},
-                    {{1,2,3},{2,4,5},{0,0,7}},
-                    {{1,2,3},{2,4,5},{3,0,7}}}
-   t = torch.ceil(torch.rand(x:size(2)))
-
-   rnns = {'FastLSTM','GRU'}
-   methods = {'maskZero', 'trimZero'}
-   loss = torch.Tensor(#rnns, #methods, 3)
+   local rnn_size = 8
+   local vocabSize = 7
+   local word_embedding_size = 10
+   local x = torch.Tensor{{{1,2,3},{0,4,5},{0,0,7}},
+                          {{1,2,3},{2,4,5},{0,0,7}},
+                          {{1,2,3},{2,4,5},{3,0,7}}}
+   local t = torch.ceil(torch.rand(x:size(2)))
+   local rnns = {'FastLSTM','GRU'}
+   local methods = {'maskZero', 'trimZero'}
+   local loss = torch.Tensor(#rnns, #methods, 3)
 
    for ir,arch in pairs(rnns) do
       local rnn = nn[arch](word_embedding_size, rnn_size)
@@ -3850,7 +3848,7 @@ function rnntest.TrimZero()
                   :add(nn.SelectTable(-1))
                   :add(nn.Linear(rnn_size, 10))
       model:getParameters():uniform(-0.1, 0.1)
-      criterion = nn.CrossEntropyCriterion()
+      local criterion = nn.CrossEntropyCriterion()
       local models = {}
       for j=1,#methods do
          table.insert(models, model:clone())
@@ -3858,20 +3856,20 @@ function rnntest.TrimZero()
       for im,method in pairs(methods) do
          -- print('-- '..arch..' with '..method)
          model = models[im]
-         rnn = model:get(3).module
+         local rnn = model:get(3).module
          rnn[method](rnn, 1)
-         sys.tic()
+         -- sys.tic()
          for i=1,loss:size(3) do
             model:zeroGradParameters()
-            y = model:forward(x[i])
+            local y = model:forward(x[i])
             loss[ir][im][i] = criterion:forward(y,t)
             -- print('loss:', loss[ir][im][i])
-            dy = criterion:backward(y,t)
+            local dy = criterion:backward(y,t)
             model:backward(x[i], dy)
-            w,dw = model:parameters()
+            local w,dw = model:parameters()
             model:updateParameters(.5)
          end
-         elapse = sys.toc()
+         -- elapse = sys.toc()
          -- print('elapse time:', elapse)   
       end
    end
@@ -4245,18 +4243,16 @@ end
 function rnntest.issue170()
    torch.manualSeed(123)
 
-   rnn_size = 8
-   vocabSize = 7
-   word_embedding_size = 10
-   rnn_dropout = .00000001  -- dropout ignores manualSeed()
-   mono = true
-
-   x = torch.Tensor{{1,2,3},{0,4,5},{0,0,7}}
-   t = torch.ceil(torch.rand(x:size(2)))
-
-   rnns = {'GRU'}
-   methods = {'maskZero', 'trimZero'}
-   loss = torch.Tensor(#rnns, #methods,1)
+   local rnn_size = 8
+   local vocabSize = 7
+   local word_embedding_size = 10
+   local rnn_dropout = .00000001  -- dropout ignores manualSeed()
+   local mono = true
+   local x = torch.Tensor{{1,2,3},{0,4,5},{0,0,7}}
+   local t = torch.ceil(torch.rand(x:size(2)))
+   local rnns = {'GRU'}
+   local methods = {'maskZero', 'trimZero'}
+   local loss = torch.Tensor(#rnns, #methods,1)
 
    for ir,arch in pairs(rnns) do
       local rnn = nn[arch](word_embedding_size, rnn_size, nil, rnn_dropout)
@@ -4267,22 +4263,22 @@ function rnntest.issue170()
                   :add(nn.SelectTable(-1))
                   :add(nn.Linear(rnn_size, 10))
       model:getParameters():uniform(-0.1, 0.1)
-      criterion = nn.CrossEntropyCriterion()
+      local criterion = nn.CrossEntropyCriterion()
       local models = {}
       for j=1,#methods do
          table.insert(models, model:clone())
       end
       for im,method in pairs(methods) do
          model = models[im]
-         rnn = model:get(3).module
+         local rnn = model:get(3).module
          rnn[method](rnn, 1)
          for i=1,loss:size(3) do
             model:zeroGradParameters()
-            y = model:forward(x)
+            local y = model:forward(x)
             loss[ir][im][i] = criterion:forward(y,t)
-            dy = criterion:backward(y,t)
+            local dy = criterion:backward(y,t)
             model:backward(x, dy)
-            w,dw = model:parameters()
+            local w,dw = model:parameters()
             model:updateParameters(.5)
          end
       end
