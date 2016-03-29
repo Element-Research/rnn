@@ -641,6 +641,8 @@ training script.
 
 ### remember([mode]) ###
 When `mode='neither'` (the default behavior of the class), the Sequencer will additionally call [forget](#nn.AbstractRecurrent.forget) before each call to `forward`. 
+When `mode='both'` (the default when calling this function), the Sequencer will never call [forget](#nn.AbstractRecurrent.forget).
+In which case, it is up to the user to call `forget` between independent sequences.
 This behavior is only applicable to decorated AbstractRecurrent `modules`.
 Accepted values for argument `mode` are as follows :
 
