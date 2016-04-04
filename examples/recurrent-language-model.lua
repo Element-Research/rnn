@@ -11,6 +11,7 @@ cmd:text('Train a Language Model on PennTreeBank dataset using RNN or LSTM or GR
 cmd:text('Example:')
 cmd:text('th recurrent-language-model.lua --cuda --device 2 --progress --cutoff 4 --seqlen 10')
 cmd:text("th recurrent-language-model.lua --progress --cuda --lstm --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --cutoff 5 --maxepoch 13 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
+cmd:text("th recurrent-language-model.lua --progress --cuda --lstm --seqlen 35 --uniform 0.04 --hiddensize '{1500,1500}' --batchsize 20 --startlr 1 --cutoff 10 --maxepoch 50 --schedule '{[15]=0.87,[16]=0.76,[17]=0.66,[18]=0.54,[19]=0.43,[20]=0.32,[21]=0.21,[22]=0.10}' -dropout 0.65")
 cmd:text('Options:')
 -- training
 cmd:option('--startlr', 0.05, 'learning rate at t=0')
@@ -66,11 +67,10 @@ local lm = nn.Sequential()
 local lookup = nn.LookupTable(#trainset.ivocab, opt.hiddensize[1])
 lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
-lm:add(nn.SplitTable(1)) -- tensor to table of tensors
-
 if opt.dropout > 0 and not opt.gru then  -- gru has a dropout option
-   lm:insert(nn.Dropout(opt.dropout), 1)
+   lm:add(nn.Dropout(opt.dropout))
 end
+lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 
 -- rnn layers
 local stepmodule = nn.Sequential() -- applied at each time-step
