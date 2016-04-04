@@ -13,7 +13,6 @@
 -- its own dropouts. First, try 0.25 for p as Gal (2016) suggested, presumably, 
 -- because of summations of two parts in GRUs connections. 
 ------------------------------------------------------------------------
-assert(not nn.GRU, "update nnx package : luarocks install nnx")
 local GRU, parent = torch.class('nn.GRU', 'nn.AbstractRecurrent')
 
 function GRU:__init(inputSize, outputSize, rho, p)
