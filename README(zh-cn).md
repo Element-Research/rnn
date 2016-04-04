@@ -500,15 +500,15 @@ rnn = nn.Recurrence(recurrentModule, outputSize, nInputDim, [rho])
 `torch.LongStorage`, 或者它的表. 批的维度应该被从
 `outputSize` 中排除. 代替的, 批量的维度
 (换句话说样例的数量) 将会从 `input` 中使用
-`nInputDim` 参数推断. For example, say that our input is a Tensor of size 
-`4 x 3` where `4` is the number of samples, then `nInputDim` should be `1`.
-As another example, if our input is a table of table [...] of tensors 
-where the first tensor (depth first) is the same as in the previous example,
-then our `nInputDim` is also `1`.
+`nInputDim` 参数推断. 举个例子, 假设我们的输入是一个
+`4 x 3` 的张量 其中 `4` 是样本的数量, 那么 `nInputDim` 应该是 `1`.
+另一个例子, 如果我们的输入时一个张量的表 [...] 的一个表
+其中第一个张量 (深度优先) 与前一个例子相同,
+那么我们的 `nInputDim` 也应该是 `1`.
 
 
-As an example, let's use `Sequencer` and `Recurrence` 
-to build a Simple RNN for language modeling :
+作为一个例子, 使用 `Sequencer` 和 `Recurrence` 
+来为语言模型创建一个简单的 RNN :
 
 ```lua
 rho = 5
@@ -532,44 +532,44 @@ rnn = nn.Sequencer(
 )
 ```
 
-Note : We could very well reimplement the `LSTM` module using the
-newer `Recursor` and `Recurrent` modules, but that would mean 
-breaking backwards compatibility for existing models saved on disk.
+注意 : 我们可以使用新的 `Recursor` 和 `Recurrent` 模块
+来很好地重新实现 `LSTM` 模块, 但是这意味着
+打破与磁盘上现存模型的向后兼容性.
 
 <a name='rnn.AbstractSequencer'></a>
 ## AbstractSequencer ##
-This abastract class implements a light interface shared by 
-subclasses like : `Sequencer`, `Repeater`, `RecurrentAttention`, `BiSequencer` and so on.
+这个抽象类实现一个轻量接口
+被: `Sequencer`, `Repeater`, `RecurrentAttention`, `BiSequencer` 等子类共享.
   
 <a name='rnn.Sequencer'></a>
 ## Sequencer ##
 
-The `nn.Sequencer(module)` constructor takes a single argument, `module`, which is the module 
-to be applied from left to right, on each element of the input sequence.
+`nn.Sequencer(module)` 构造函数获取一个参数, `module`, 是从左
+到右被应用的模块, 对输入序列的每一个元素.
 
 ```lua
 seq = nn.Sequencer(module)
 ```
 
-This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) 
-used to abstract away the intricacies of `AbstractRecurrent` modules. While an `AbstractRecurrent` instance 
-requires that a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
-the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
-It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
+这个模块是一种 [decorator](http://en.wikipedia.org/wiki/Decorator_pattern) 
+用来抽象地隔离错综复杂的 `AbstractRecurrent` 模块. 当一个 `AbstractRecurrent` 实例
+需要一个序列来在每一个时刻产生一个输入, 来调用它自己的 `forward` 调用(和 `backward`调用),
+`Sequencer` 前向传播一个 `input` 序列 (一个表) 产生一个 `output` 序列 (一个相同长度的表).
+它也处理好 `forget`, `backwardOnline` 和其它 AbstractRecurrent-特定 方法的调用.
 
-### Input/Output Format
+### 输入/输出格式
 
-The `Sequencer` requires inputs and outputs to be of shape `seqlen x batchsize x featsize` :
+`Sequencer` 需要输入和输出的形状是 `seqlen x batchsize x featsize` :
 
- * `seqlen` is the number of time-steps that will be fed into the `Sequencer`.
- * `batchsize` is the number of examples in the batch. Each example is its own independent sequence.
- * `featsize` is the size of the remaining non-batch dimensions. So this could be `1` for language models, or `c x h x w` for convolutional models, etc.
+ * `seqlen` 是需要被送入 `Sequencer` 的序列长度.
+ * `batchsize` 是每一批的样例数. 每一个样例有它自己的独立序列.
+ * `featsize` 是剩余非批量维度的尺寸. 所以对语言模型来说这可以是 `1` , 或者对卷积模型来说是 `c x h x w` , 等等.
  
 ![Hello Fuzzy](doc/image/hellofuzzy.png)
 
-Above is an example input sequence for a character level language model.
-It has `seqlen` is 5 which means that it contains sequences of 5 time-steps. 
-The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table.
+上面是一个字节级语言模型输入序列的样例.
+它的`seqlen` 是 5 表明它包含一个序列长度为5的序列. 
+开 `{` 和闭 `}` 表明序列的元素是一个 Lua 表.
 The `batchsize` is 2 as their are two independent sequences : `{ H, E, L, L, O }` and `{ F, U, Z, Z, Y, }`.
 The `featsize` is 1 as their is only one feature dimension per character and each such character is of size 1.
 So the input in this case is a table of `seqlen` time-steps where each time-step is represented by a `batchsize x featsize` Tensor.
