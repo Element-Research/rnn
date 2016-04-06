@@ -369,11 +369,12 @@ References :
 
 This is an implementation of Gated Recurrent Units module. 
 
-The `nn.GRU(inputSize, outputSize [,rho [,p]])` constructor takes 3 arguments likewise `nn.LSTM` or 4 arguments for dropout:
+The `nn.GRU(inputSize, outputSize [,rho [,p [, mono]]])` constructor takes 3 arguments likewise `nn.LSTM` or 4 arguments for dropout:
  * `inputSize` : a number specifying the size of the input;
  * `outputSize` : a number specifying the size of the output;
  * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999;
  * `p` : dropout probability for inner connections of GRUs.
+ * `mono` : Monotonic sample for dropouts inside GRUs. Only needed in a `TrimZero` + `BGRU`(p>0) situation.
 
 ![GRU](http://d3kbpzbmcynnmx.cloudfront.net/wp-content/uploads/2015/10/Screen-Shot-2015-10-23-at-10.36.51-AM.png) 
 
