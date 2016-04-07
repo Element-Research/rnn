@@ -570,25 +570,25 @@ seq = nn.Sequencer(module)
 上面是一个字节级语言模型输入序列的样例.
 它的`seqlen` 是 5 表明它包含一个序列长度为5的序列. 
 开 `{` 和闭 `}` 表明序列的元素是一个 Lua 表.
-The `batchsize` is 2 as their are two independent sequences : `{ H, E, L, L, O }` and `{ F, U, Z, Z, Y, }`.
-The `featsize` is 1 as their is only one feature dimension per character and each such character is of size 1.
-So the input in this case is a table of `seqlen` time-steps where each time-step is represented by a `batchsize x featsize` Tensor.
+`batchsize` 是 2 因为它有两个独立的序列 : `{ H, E, L, L, O }` and `{ F, U, Z, Z, Y, }`.
+`featsize` 是 1 因为它每个字符只有一个特征维度而且字符的尺寸是 1.
+所以这种情况下输入的表的序列长度是 `seqlen` 而序列的每一步都由一个 `batchsize x featsize` 的张量来表示.
 
 ![Sequence](doc/image/sequence.png)
 
-Above is another example of a sequence (input or output). 
-It has a `seqlen` of 4 time-steps. 
-The `batchsize` is again 2 which means there are two sequences.
-The `featsize` is 3 as each time-step of each sequence has 3 variables.
-So each time-step (element of the table) is represented again as a tensor
-of size `batchsize x featsize`. 
-Note that while in both examples the `featsize` encodes one dimension, 
-it could encode more. 
+上面是另一个序列 (输入或输出) 的样本. 
+它有一个 `seqlen` 为 4 的序列长度. 
+`batchsize` 又是 2 表明有两个序列.
+`featsize` 是 3 因为序列长度里的每一个序列有 3 个变量.
+所以每一个时间序列长 (元素组成的表) 再次被表示为一个
+尺寸为 `batchsize x featsize` 的张量. 
+注意在两个样例里 `featsize` 都只编码了一个维度, 
+它可以编码更多. 
 
 
-### Example
+### 例子
 
-For example, `rnn` : an instance of nn.AbstractRecurrent, can forward an `input` sequence one forward at a time:
+举个例子, `rnn` : 一个 nn.AbstractRecurrent 的实例, 可以一次前向传播一个 `input` 序列:
 ```lua
 input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
 rnn:forward(input[1])
@@ -596,52 +596,52 @@ rnn:forward(input[2])
 rnn:forward(input[3])
 ```
 
-Equivalently, we can use a Sequencer to forward the entire `input` sequence at once:
+相等的, 我们可以使用一个 Sequencer 来一次性地前向传播整个 `input` 序列:
 
 ```lua
 seq = nn.Sequencer(rnn)
 seq:forward(input)
 ``` 
 
-### Details
+### 细节
 
-The `Sequencer` can also take non-recurrent Modules (i.e. non-AbstractRecurrent instances) and apply it to each 
-input to produce an output table of the same length. 
-This is especially useful for processing variable length sequences (tables).
+`Sequencer` 也可以封装非循环的模块 (也就是 非-AbstractRecurrent 实例) 并应用它到每一个
+输入来产生一个同样长度的输出表. 
+这对处理一个变长的序列(表)时尤其有用.
 
-Internally, the `Sequencer` expects the decorated `module` to be an 
-`AbstractRecurrent` instance. When this is not the case, the `module` 
-is automatically decorated with a [Recursor](#rnn.Recursor) module, which makes it 
-conform to the `AbstractRecurrent` interface. 
+内部地, `Sequencer` 期望封装的 `module` 是一个
+`AbstractRecurrent` 实例. 当不是这种情况时, `module`
+被自动地和一个[Recursor](#rnn.Recursor)模块封装, 这使它
+符合 `AbstractRecurrent` 接口. 
 
-Note : this is due a recent update (27 Oct 2015), as before this 
-`AbstractRecurrent` and and non-`AbstractRecurrent` instances needed to 
-be decorated by their own `Sequencer`. The recent update, which introduced the 
-`Recursor` decorator, allows a single `Sequencer` to wrap any type of module, 
-`AbstractRecurrent`, non-`AbstractRecurrent` or a composite structure of both types.
-Nevertheless, existing code shouldn't be affected by the change.
+注意 : 这是由于一个近期的更新 (2015年10月27日), 像以前一样
+`AbstractRecurrent` 和 非-`AbstractRecurrent` 实例需要被
+它们自己的 `Sequencer`封装. 最近的更新, 介绍了
+`Recursor` 封装器, 允许一个单独的 `Sequencer` 来包裹任何类型的模块, 
+`AbstractRecurrent`, 非-`AbstractRecurrent` 或者两种类型的混合结构.
+虽然如此, 已经存在的代码应该不会被改变影响.
 
-For a concise example of its use, please consult the [simple-sequencer-network.lua](examples/simple-sequencer-network.lua)
-training script.
+它使用的一个简洁的例子, 请参考 [simple-sequencer-network.lua](examples/simple-sequencer-network.lua)
+训练脚本.
 
 ### remember([mode]) ###
-When `mode='both'` (the default), the Sequencer will not call [forget](#nn.AbstractRecurrent.forget) at the start of 
-each call to `forward`, which is the default behavior of the class. 
-This behavior is only applicable to decorated AbstractRecurrent `modules`.
-Accepted values for argument `mode` are as follows :
+当 `mode='neither'` (类的默认行为), Sequencer将会在每一个`forward`调用之前
+另外调用[forget](#nn.AbstractRecurrent.forget), 这是这个类的默认行为. 
+这种行为只对封装 AbstractRecurrent `modules`适用.
+`mode` 参数可以接受下面的参数 :
 
- * 'eval' only affects evaluation (recommended for RNNs)
- * 'train' only affects training
- * 'neither' affects neither training nor evaluation (default behavior of the class)
- * 'both' affects both training and evaluation (recommended for LSTMs)
+ * 'eval' 只影响评测 (对RNNs推荐)
+ * 'train' 只影响训练
+ * 'neither' 既不影响训练也不影响评测 (这个类的默认行为)
+ * 'both' 同时影响训练和评测 (对LSTMs建议)
 
 ### forget() ###
-Calls the decorated AbstractRecurrent module's `forget` method.
+调用封装的 AbstractRecurrent 模块的 `forget` 方法.
 
 <a name='rnn.BiSequencer'></a>
 ## BiSequencer ##
-Applies encapsulated `fwd` and `bwd` rnns to an input sequence in forward and reverse order.
-It is used for implementing Bidirectional RNNs and LSTMs.
+对一个输入序列以前向和反向应用封装的 `fwd` 和 `bwd` rnns.
+这被用来实现 双向的 RNNs 和 LSTMs.
 
 ```lua
 brnn = nn.BiSequencer(fwd, [bwd, merge])
