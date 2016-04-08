@@ -2,14 +2,11 @@ require 'nngraph'
 require 'rnn'
 local dl = require 'dataload'
 
--- References :
--- A. http://papers.nips.cc/paper/5542-recurrent-models-of-visual-attention.pdf
--- B. http://incompleteideas.net/sutton/williams-92.pdf
 
 --[[command line arguments]]--
 cmd = torch.CmdLine()
 cmd:text()
-cmd:text('Evaluate a Recurrent Model for Visual Attention')
+cmd:text('Evaluate a RNNLM')
 cmd:text('Options:')
 cmd:option('--xplogpath', '', 'path to a previously saved xplog containing model')
 cmd:option('--cuda', false, 'model was saved with cuda')
