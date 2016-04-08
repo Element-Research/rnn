@@ -127,8 +127,6 @@ function Recurrent:_accGradParameters(input, gradOutput, scale)
    else
       error"non-positive time-step"
    end
-   
-   return gradInput
 end
 
 function Recurrent:recycle()

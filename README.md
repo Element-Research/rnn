@@ -47,7 +47,9 @@ The following are example training scripts using this package :
 
 ### External Resources
 
-  * [dpnn](https://github.com/Element-Research/dpnn) : this is a dependency of the __rnn__ package. It contains useful nn extensions, modules and criterions.
+  * [Harvard Jupyter Notebook Tutorial](http://nbviewer.jupyter.org/github/CS287/Lectures/blob/gh-pages/notebooks/ElementRNNTutorial.ipynb) : an in-depth tutorial for how to use the Element-Research rnn package by Harvard University;
+  * [dpnn](https://github.com/Element-Research/dpnn) : this is a dependency of the __rnn__ package. It contains useful nn extensions, modules and criterions;
+  * [dataload](https://github.com/Element-Research/dataload) : a collection of torch dataset loaders;
   * [RNN/LSTM/BRNN/BLSTM training script ](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
   * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7;
   * [ConvLSTM](https://github.com/viorik/ConvLSTM) is a repository for training a [Spatio-temporal video autoencoder with differentiable memory](http://arxiv.org/abs/1511.06309).
@@ -367,11 +369,12 @@ References :
 
 This is an implementation of Gated Recurrent Units module. 
 
-The `nn.GRU(inputSize, outputSize [,rho [,p]])` constructor takes 3 arguments likewise `nn.LSTM` or 4 arguments for dropout:
+The `nn.GRU(inputSize, outputSize [,rho [,p [, mono]]])` constructor takes 3 arguments likewise `nn.LSTM` or 4 arguments for dropout:
  * `inputSize` : a number specifying the size of the input;
  * `outputSize` : a number specifying the size of the output;
  * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999;
  * `p` : dropout probability for inner connections of GRUs.
+ * `mono` : Monotonic sample for dropouts inside GRUs. Only needed in a `TrimZero` + `BGRU`(p>0) situation.
 
 ![GRU](http://d3kbpzbmcynnmx.cloudfront.net/wp-content/uploads/2015/10/Screen-Shot-2015-10-23-at-10.36.51-AM.png) 
 
