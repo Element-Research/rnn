@@ -3995,7 +3995,6 @@ function rnntest.LookupTableMaskZero()
    m2.weight:narrow(1, 2, indexSize):copy(m1.weight)
    local criterion = nn.MSECriterion()
    -- Zero padding will change averaging
-   -- TODO create Criterion supporting padding
    criterion.sizeAverage = false
 
    -- verify that LookupTables have the same results (modulo zero padding)

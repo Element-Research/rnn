@@ -6,11 +6,11 @@ end
 
 function LookupTableMaskZero:updateOutput(input)
 	self.weight[1]:zero()
-	return parent.updateOutput(self, torch.add(input, 1))
+   self.__input = self.__input or input.new()
+   self.__input:resizeAs(input):add(input, 1)
+	return parent.updateOutput(self, self.__input)
 end
 
--- No need to override accGradParameters because input is cached
--- by nn.LookupTable implementation and gradOuput is already as expected
---[[function LookupTable:accGradParameters(input, gradOutput, scale)
-	parent.accGradParameters(self, torch.add(input, 1), gradOutput, scale)
-end--]]
+function LookupTableMaskZero:accGradParameters(input, gradOutput, scale)
+	parent.accGradParameters(self, self.__input, gradOutput, scale)
+end
