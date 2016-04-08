@@ -3717,6 +3717,165 @@ function rnntest.MaskZero()
    end
 end
 
+function rnntest.TrimZero()
+   local recurrents = {['recurrent'] = recurrentModule(), ['lstm'] = lstmModule()}
+   -- Note we use lstmModule input signature and firstElement to prevent duplicate code
+   for name, recurrent in pairs(recurrents) do
+      -- test encapsulated module first
+      -- non batch
+      local i = torch.rand(10)
+      local e = nn.Sigmoid():forward(i)
+      local o = firstElement(recurrent:forward({i, torch.zeros(10), torch.zeros(10)}))
+      mytester:assertlt(torch.norm(o - e), precision, 'mock ' .. name .. ' failed for non batch')
+      -- batch
+      local i = torch.rand(5, 10)
+      local e = nn.Sigmoid():forward(i)
+      local o = firstElement(recurrent:forward({i, torch.zeros(5, 10), torch.zeros(5, 10)}))
+      mytester:assertlt(torch.norm(o - e), precision, 'mock ' .. name .. ' module failed for batch')
+    
+      -- test mask zero module now
+      local module = nn.TrimZero(recurrent, 1)
+      local module2 = nn.MaskZero(recurrent, 1)
+      -- non batch forward
+      local i = torch.rand(10)
+      local e = firstElement(recurrent:forward({i, torch.rand(10), torch.rand(10)}))
+      local o = firstElement(module:forward({i, torch.rand(10), torch.rand(10)}))
+      local o2 = firstElement(module2:forward({i, torch.rand(10), torch.rand(10)}))
+      mytester:assertgt(torch.norm(i - o), precision, 'error on non batch forward for ' .. name)
+      mytester:assertlt(torch.norm(e - o), precision, 'error on non batch forward for ' .. name)
+      mytester:assertlt(torch.norm(o2 - o), precision, 'error on non batch forward for ' .. name)
+      local i = torch.zeros(10)
+      local o = firstElement(module:forward({i, torch.rand(10), torch.rand(10)}))
+      local o2 = firstElement(module2:forward({i, torch.rand(10), torch.rand(10)}))
+      mytester:assertlt(torch.norm(i - o), precision, 'error on non batch forward for ' .. name)
+      mytester:assertlt(torch.norm(o2 - o), precision, 'error on non batch forward for ' .. name)
+      -- batch forward
+      local i = torch.rand(5, 10)
+      local e = firstElement(recurrent:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      local o = firstElement(module:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      local o2 = firstElement(module2:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      mytester:assertgt(torch.norm(i - o), precision, 'error on batch forward for ' .. name)
+      mytester:assertlt(torch.norm(e - o), precision, 'error on batch forward for ' .. name)
+      mytester:assertlt(torch.norm(o2 - o), precision, 'error on batch forward for ' .. name)
+      local i = torch.zeros(5, 10)
+      local o = firstElement(module:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      local o2 = firstElement(module2:forward({i, torch.rand(5, 10), torch.rand(5, 10)}))
+      mytester:assertlt(torch.norm(i - o), precision, 'error on batch forward for ' .. name)
+      mytester:assertlt(torch.norm(o2 - o), precision, 'error on batch forward for ' .. name)
+      local i = torch.Tensor({{0, 0, 0}, {1, 2, 5}})
+      -- clone r because it will be update by module:forward call
+      local r = firstElement(recurrent:forward({i, torch.rand(2, 3), torch.rand(2, 3)})):clone()
+      local o = firstElement(module:forward({i, torch.rand(2, 3), torch.rand(2, 3)}))
+      local o2 = firstElement(module2:forward({i, torch.rand(2, 3), torch.rand(2, 3)}))
+      mytester:assertgt(torch.norm(r - o), precision, 'error on batch forward for ' .. name)
+      r[1]:zero()
+      mytester:assertlt(torch.norm(r - o), precision, 'error on batch forward for ' .. name)
+      mytester:assertlt(torch.norm(o2 - o), precision, 'error on batch forward for ' .. name)
+
+      -- check gradients
+      local jac = nn.Jacobian
+      local sjac = nn.SparseJacobian
+      -- Note: testJacobian doesn't support table inputs or outputs
+      -- Use a SplitTable and SelectTable to adapt module
+      local module = nn.Sequential()
+      module:add(nn.SplitTable(1))
+      module:add(nn.TrimZero(recurrent, 1))
+      if name == 'lstm' then module:add(nn.SelectTable(1)) end
+
+      local input = torch.rand(name == 'lstm' and 3 or 2, 10)
+      local err = jac.testJacobian(module, input)
+      mytester:assertlt(err, precision, 'error on state for ' .. name)
+      -- IO
+      local ferr,berr = jac.testIO(module,input)
+      mytester:asserteq(ferr, 0, torch.typename(module) .. ' - i/o forward err for ' .. name)
+      mytester:asserteq(berr, 0, torch.typename(module) .. ' - i/o backward err for ' .. name)
+      -- batch
+      -- rebuild module to avoid correlated tests
+      local module = nn.Sequential()
+      module:add(nn.SplitTable(1))
+      module:add(nn.TrimZero(recurrent, 1))
+      if name == 'lstm' then module:add(nn.SelectTable(1)) end
+
+      local input = torch.rand(name == 'lstm' and 3 or 2, 5, 10)
+      local err = jac.testJacobian(module,input)
+      mytester:assertlt(err, precision, 'batch error on state for ' .. name)
+
+      -- full test on convolution and linear modules
+      local module = nn.Sequential() :add( nn.ParallelTable() :add(nn.SpatialConvolution(1,2,3,3)) :add(nn.Linear(100,2)) )
+      local batchNum = 5
+      local input = {torch.rand(batchNum,1,10,10), torch.rand(batchNum,100)}
+      local zeroRowNum = 2
+      for i = 1,#input do
+         input[i]:narrow(1,1,zeroRowNum):zero()
+      end
+      local output = module:forward(input)
+      for i = 1,#input do
+         for j = 1,batchNum do
+            local rmi = input[i][j]:view(-1) -- collapse dims
+            local vectorDim = rmi:dim()
+            local rn = rmi.new()
+            rn:norm(rmi, 2, vectorDim)
+            local err = rn[1]
+            if j<=zeroRowNum then
+               -- check zero outputs
+               mytester:assertlt(err, precision, 'batch ' ..i.. ':' ..j.. ' error on state for ' .. name)
+            else
+               -- check non-zero outputs
+               mytester:assertgt(err, precision, 'batch ' ..i.. ':' ..j.. ' error on state for ' .. name)
+            end
+         end
+      end
+   end
+
+   -- check to have the same loss
+   local rnn_size = 8
+   local vocabSize = 7
+   local word_embedding_size = 10
+   local x = torch.Tensor{{{1,2,3},{0,4,5},{0,0,7}},
+                          {{1,2,3},{2,4,5},{0,0,7}},
+                          {{1,2,3},{2,4,5},{3,0,7}}}
+   local t = torch.ceil(torch.rand(x:size(2)))
+   local rnns = {'FastLSTM','GRU'}
+   local methods = {'maskZero', 'trimZero'}
+   local loss = torch.Tensor(#rnns, #methods, 3)
+
+   for ir,arch in pairs(rnns) do
+      local rnn = nn[arch](word_embedding_size, rnn_size)
+      local model = nn.Sequential()
+                  :add(nn.LookupTableMaskZero(vocabSize, word_embedding_size))
+                  :add(nn.SplitTable(2))
+                  :add(nn.Sequencer(rnn))
+                  :add(nn.SelectTable(-1))
+                  :add(nn.Linear(rnn_size, 10))
+      model:getParameters():uniform(-0.1, 0.1)
+      local criterion = nn.CrossEntropyCriterion()
+      local models = {}
+      for j=1,#methods do
+         table.insert(models, model:clone())
+      end
+      for im,method in pairs(methods) do
+         -- print('-- '..arch..' with '..method)
+         model = models[im]
+         local rnn = model:get(3).module
+         rnn[method](rnn, 1)
+         -- sys.tic()
+         for i=1,loss:size(3) do
+            model:zeroGradParameters()
+            local y = model:forward(x[i])
+            loss[ir][im][i] = criterion:forward(y,t)
+            -- print('loss:', loss[ir][im][i])
+            local dy = criterion:backward(y,t)
+            model:backward(x[i], dy)
+            local w,dw = model:parameters()
+            model:updateParameters(.5)
+         end
+         -- elapse = sys.toc()
+         -- print('elapse time:', elapse)   
+      end
+   end
+   mytester:assertTensorEq(loss:select(2,1), loss:select(2,2), 0.0000001, "loss check")
+end
+
 function rnntest.AbstractRecurrent_maskZero()
    local inputs = {}
 
@@ -3767,6 +3926,56 @@ function rnntest.AbstractRecurrent_maskZero()
    mytester:assert(not success, "nn.Recurrent supposed to give error on maskZero()")
 end
 
+function rnntest.AbstractRecurrent_trimZero()
+   local inputs = {}
+
+   local input = torch.zeros(4,4,10)
+   local sequence = torch.randn(4,10)
+   input:select(2,1):select(1,4):copy(sequence[1])
+   input:select(2,2):narrow(1,3,2):copy(sequence:narrow(1,1,2))
+   input:select(2,3):narrow(1,2,3):copy(sequence:narrow(1,1,3))
+   input:select(2,4):copy(sequence)
+
+
+   for i=1,4 do
+      table.insert(inputs, input[i])
+   end
+
+
+   local function testmask(rnn)
+      local seq = nn.Sequencer(rnn:trimZero(1))
+
+      local outputs = seq:forward(inputs)
+
+      mytester:assert(math.abs(outputs[1]:narrow(1,1,3):sum()) < 0.0000001, torch.type(rnn).." mask zero 1 err")
+      mytester:assert(math.abs(outputs[2]:narrow(1,1,2):sum()) < 0.0000001, torch.type(rnn).." mask zero 2 err")
+      mytester:assert(math.abs(outputs[3]:narrow(1,1,1):sum()) < 0.0000001, torch.type(rnn).." mask zero 3 err")
+      
+      mytester:assertTensorEq(outputs[1][4], outputs[2][3], 0.0000001, torch.type(rnn).." mask zero err")
+      mytester:assertTensorEq(outputs[1][4], outputs[3][2], 0.0000001, torch.type(rnn).." mask zero err")
+      mytester:assertTensorEq(outputs[1][4], outputs[4][1], 0.0000001, torch.type(rnn).." mask zero err")
+      
+      mytester:assertTensorEq(outputs[2][4], outputs[3][3], 0.0000001, torch.type(rnn).." mask zero err")
+      mytester:assertTensorEq(outputs[2][4], outputs[4][2], 0.0000001, torch.type(rnn).." mask zero err")
+      
+      mytester:assertTensorEq(outputs[3][4], outputs[4][3], 0.0000001, torch.type(rnn).." mask zero err")
+   end
+   
+   local rm = nn.Sequential()
+      :add(nn.ParallelTable()
+         :add(nn.Linear(10,10))
+         :add(nn.Linear(10,10)))
+      :add(nn.CAddTable())
+      :add(nn.Sigmoid())
+   
+   testmask(nn.Recurrence(rm, 10, 1))
+   testmask(nn.LSTM(10,10))
+   testmask(nn.GRU(10,10))
+   
+   local success, err = pcall(function() nn.Recurrent(10, nn.Linear(10,10), nn.Linear(10,10)):trimZero() end)
+   mytester:assert(not success, "nn.Recurrent supposed to give error on trimZero()")
+end
+
 local function forwardbackward(module, criterion, input, expected)
   local output = module:forward(input)
   criterion:forward(output, expected)
@@ -3786,7 +3995,6 @@ function rnntest.LookupTableMaskZero()
    m2.weight:narrow(1, 2, indexSize):copy(m1.weight)
    local criterion = nn.MSECriterion()
    -- Zero padding will change averaging
-   -- TODO create Criterion supporting padding
    criterion.sizeAverage = false
 
    -- verify that LookupTables have the same results (modulo zero padding)
@@ -4029,6 +4237,52 @@ function rnntest.issue129()
    local output2 = model:forward(input):clone()
 
    mytester:assertTensorEq(output, output2,  0.0002, "issue 129 err")
+end
+
+function rnntest.issue170()
+   torch.manualSeed(123)
+
+   local rnn_size = 8
+   local vocabSize = 7
+   local word_embedding_size = 10
+   local rnn_dropout = .00000001  -- dropout ignores manualSeed()
+   local mono = true
+   local x = torch.Tensor{{1,2,3},{0,4,5},{0,0,7}}
+   local t = torch.ceil(torch.rand(x:size(2)))
+   local rnns = {'GRU'}
+   local methods = {'maskZero', 'trimZero'}
+   local loss = torch.Tensor(#rnns, #methods,1)
+
+   for ir,arch in pairs(rnns) do
+      local rnn = nn[arch](word_embedding_size, rnn_size, nil, rnn_dropout, true)
+      local model = nn.Sequential()
+                  :add(nn.LookupTableMaskZero(vocabSize, word_embedding_size))
+                  :add(nn.SplitTable(2))
+                  :add(nn.Sequencer(rnn))
+                  :add(nn.SelectTable(-1))
+                  :add(nn.Linear(rnn_size, 10))
+      model:getParameters():uniform(-0.1, 0.1)
+      local criterion = nn.CrossEntropyCriterion()
+      local models = {}
+      for j=1,#methods do
+         table.insert(models, model:clone())
+      end
+      for im,method in pairs(methods) do
+         model = models[im]
+         local rnn = model:get(3).module
+         rnn[method](rnn, 1)
+         for i=1,loss:size(3) do
+            model:zeroGradParameters()
+            local y = model:forward(x)
+            loss[ir][im][i] = criterion:forward(y,t)
+            local dy = criterion:backward(y,t)
+            model:backward(x, dy)
+            local w,dw = model:parameters()
+            model:updateParameters(.5)
+         end
+      end
+   end
+   mytester:assertTensorEq(loss:select(2,1), loss:select(2,2), 0.0000001, "loss check")
 end
 
 function rnntest.encoderdecoder()

@@ -1,15 +1,28 @@
 ------------------------------------------------------------------------
 --[[ GRU ]]--
+-- Author: Jin-Hwa Kim
+-- License: LICENSE.2nd.txt
+
 -- Gated Recurrent Units architecture.
 -- http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-gruGRU-rnn-with-python-and-theano/
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
+--
+-- For p > 0, it becomes Bayesian GRUs [Moon et al., 2015; Gal, 2015].
+-- In this case, please do not dropout on input as BGRUs handle the input with 
+-- its own dropouts. First, try 0.25 for p as Gal (2016) suggested, presumably, 
+-- because of summations of two parts in GRUs connections. 
 ------------------------------------------------------------------------
 assert(not nn.GRU, "update nnx package : luarocks install nnx")
 local GRU, parent = torch.class('nn.GRU', 'nn.AbstractRecurrent')
 
-function GRU:__init(inputSize, outputSize, rho)
+function GRU:__init(inputSize, outputSize, rho, p, mono)
    parent.__init(self, rho or 9999)
+   self.p = p or 0
+   if p and p ~= 0 then
+      assert(nn.Dropout(p,false,false,true).lazy, 'only work with Lazy Dropout!')
+   end
+   self.mono = mono or false
    self.inputSize = inputSize
    self.outputSize = outputSize   
    -- build the model
@@ -31,8 +44,27 @@ function GRU:buildModel()
    -- output : {output}
    
    -- Calculate all four gates in one go : input, hidden, forget, output
-   self.i2g = nn.Linear(self.inputSize, 2*self.outputSize)
-   self.o2g = nn.LinearNoBias(self.outputSize, 2*self.outputSize)
+   if self.p ~= 0 then
+      self.i2g = nn.Sequential()
+                     :add(nn.ConcatTable()
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono)))
+                     :add(nn.ParallelTable()
+                        :add(nn.Linear(self.inputSize, self.outputSize))
+                        :add(nn.Linear(self.inputSize, self.outputSize)))
+                     :add(nn.JoinTable(2))
+      self.o2g = nn.Sequential()
+                     :add(nn.ConcatTable()
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono)))
+                     :add(nn.ParallelTable()
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize))
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize)))
+                     :add(nn.JoinTable(2))
+   else
+      self.i2g = nn.Linear(self.inputSize, 2*self.outputSize)
+      self.o2g = nn.LinearNoBias(self.outputSize, 2*self.outputSize)
+   end
 
    local para = nn.ParallelTable():add(self.i2g):add(self.o2g)
    local gates = nn.Sequential()
@@ -47,8 +79,7 @@ function GRU:buildModel()
    transfer:add(nn.Sigmoid()):add(nn.Sigmoid())
    gates:add(transfer)
 
-   local concat = nn.ConcatTable()
-   concat:add(nn.Identity()):add(gates)
+   local concat = nn.ConcatTable():add(nn.Identity()):add(gates)
    local seq = nn.Sequential()
    seq:add(concat)
    seq:add(nn.FlattenTable()) -- x(t), s(t-1), r, z
@@ -62,9 +93,16 @@ function GRU:buildModel()
    local hidden = nn.Sequential()
    local concat = nn.ConcatTable()
    local t1 = nn.Sequential()
-   t1:add(nn.SelectTable(1)):add(nn.Linear(self.inputSize, self.outputSize))
+   t1:add(nn.SelectTable(1))
    local t2 = nn.Sequential()
-   t2:add(nn.NarrowTable(2,2)):add(nn.CMulTable()):add(nn.LinearNoBias(self.outputSize, self.outputSize))
+   t2:add(nn.NarrowTable(2,2)):add(nn.CMulTable())
+   if self.p ~= 0 then
+      t1:add(nn.Dropout(self.p,false,false,true,self.mono))
+      t2:add(nn.Dropout(self.p,false,false,true,self.mono))
+   end
+   t1:add(nn.Linear(self.inputSize, self.outputSize))
+   t2:add(nn.LinearNoBias(self.outputSize, self.outputSize))
+
    concat:add(t1):add(t2)
    hidden:add(concat):add(nn.CAddTable()):add(nn.Tanh())
    
@@ -167,4 +205,25 @@ function GRU:_accGradParameters(input, gradOutput, scale)
    local gradOutput = (step == self.step-1) and gradOutput or self._gradOutputs[step]
    recurrentModule:accGradParameters(inputTable, gradOutput, scale)
    return gradInput
+end
+
+function GRU:__tostring__()
+   return string.format('%s(%d -> %d, %.2f)', torch.type(self), self.inputSize, self.outputSize, self.p)
+end
+
+-- migrate GRUs params to BGRUs params
+function GRU:migrate(params)
+   local _params = self:parameters()
+   assert(self.p ~= 0, 'only support for BGRUs.')
+   assert(#params == 6, '# of source params should be 6.')
+   assert(#_params == 9, '# of destination params should be 9.')
+   _params[1]:copy(params[1]:narrow(1,1,self.outputSize))
+   _params[2]:copy(params[2]:narrow(1,1,self.outputSize))
+   _params[3]:copy(params[1]:narrow(1,self.outputSize+1,self.outputSize))
+   _params[4]:copy(params[2]:narrow(1,self.outputSize+1,self.outputSize))
+   _params[5]:copy(params[3]:narrow(1,1,self.outputSize))
+   _params[6]:copy(params[3]:narrow(1,self.outputSize+1,self.outputSize))
+   _params[7]:copy(params[4])
+   _params[8]:copy(params[5])
+   _params[9]:copy(params[6])
 end

@@ -36,7 +36,7 @@ function MaskZero:recursiveMask(output, input, mask)
    else
       assert(torch.isTensor(input))
       output = torch.isTensor(output) and output or input.new()
-   	
+      
       -- make sure mask has the same dimenion as the input tensor
       local inputSize = input:size():fill(1)
       if input:dim() - 1 == self.nInputDim then

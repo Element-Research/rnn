@@ -127,8 +127,6 @@ function Recurrent:_accGradParameters(input, gradOutput, scale)
    else
       error"non-positive time-step"
    end
-   
-   return gradInput
 end
 
 function Recurrent:recycle()
@@ -180,6 +178,11 @@ end
 
 function Recurrent:maskZero()
    error("Recurrent doesn't support maskZero as it uses a different "..
+      "module for the first time-step. Use nn.Recurrence instead.")
+end
+
+function Recurrent:trimZero()
+   error("Recurrent doesn't support trimZero as it uses a different "..
       "module for the first time-step. Use nn.Recurrence instead.")
 end
 

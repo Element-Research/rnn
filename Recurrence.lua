@@ -70,7 +70,7 @@ function Recurrence:getBatchSize(input, nInputDim)
    else
       assert(torch.isTensor(input))
       if input:dim() == nInputDim then
-         return il
+         return nil
       elseif input:dim() - 1 == nInputDim then 
          return input:size(1)
       else

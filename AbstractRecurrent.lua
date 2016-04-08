@@ -35,6 +35,17 @@ end
 function AbstractRecurrent:maskZero(nInputDim)
    self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim, true)
    self.sharedClones = {self.recurrentModule}
+   self.modules[1] = self.recurrentModule
+   return self
+end
+
+function AbstractRecurrent:trimZero(nInputDim)
+   if torch.typename(self)=='nn.GRU' and self.p ~= 0 then
+      assert(self.mono, "TrimZero for BGRU needs `mono` option.")
+   end
+   self.recurrentModule = nn.TrimZero(self.recurrentModule, nInputDim, true)
+   self.sharedClones = {self.recurrentModule}
+   self.modules[1] = self.recurrentModule
    return self
 end
 

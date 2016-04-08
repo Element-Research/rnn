@@ -11,8 +11,8 @@ version = 1.2 -- refactored numerical gradient test into unit tests. Added train
 local opt = {}
 opt.learningRate = 0.1
 opt.hiddenSize = 6
-opt.vocabSize = 5
-opt.seqLen = 3 -- length of the encoded sequence
+opt.vocabSize = 6
+opt.seqLen = 2 -- length of the encoded sequence
 opt.niter = 1000
 
 --[[ Forward coupling: Copy encoder cell and output to decoder LSTM ]]--
@@ -47,12 +47,17 @@ dec:add(nn.Sequencer(nn.LogSoftMax()))
 local criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
 
 -- Some example data (batchsize = 2)
-local encInSeq = torch.Tensor({{1,2,3},{3,2,1}}) 
-local decInSeq = torch.Tensor({{1,2,3,4},{4,3,2,1}})
-local decOutSeq = torch.Tensor({{2,3,4,1},{1,2,4,3}})
+-- The input sentences to the encoder. 
+local encInSeq = torch.Tensor({{1,2,3},{3,2,1}})
+-- The input sentences to the decoder. Label '5' represents the start of a sentence (GO).
+local decInSeq = torch.Tensor({{5,1,2,3,4},{5,4,3,2,1}})
+-- The expected output from the decoder (it will return one character per time-step).
+-- Label '6' represents the end of sentence (EOS).
+local decOutSeq = torch.Tensor({{1,2,3,4,6},{1,2,4,3,6}})
+-- The decoder predicts one per timestep, so we split accordingly.
 decOutSeq = nn.SplitTable(1, 1):forward(decOutSeq)
 
-for i=1,1000 do
+for i=1,opt.niter do
    enc:zeroGradParameters()
    dec:zeroGradParameters()
 
