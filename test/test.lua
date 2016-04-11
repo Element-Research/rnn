@@ -4557,6 +4557,76 @@ function rnntest.rnnlm()
    end
 end
 
+function rnntest.issue204()
+   if not pcall(function() require 'optim' end) then
+      return
+   end
+
+   -- Hyperparameters
+   local inputSize = 3
+   local hiddenSize = 2
+   local nClasses = 4
+   local nIndex = 10
+   local maxSeqLen = 20
+   local nSamples = 50
+   local nEpochs = 10
+
+   -- Creating dummy dataset
+   local sentences = {}
+   local targets = {}
+   local i = 1
+   for seqLen=4,5 do
+     local seq = torch.Tensor(seqLen, inputSize):uniform(0,1)
+     local target = torch.random(nClasses)
+     sentences[i] = seq
+     targets[i] = target
+     i = i + 1
+   end
+   
+   local sentences2 = {sentences[2]:clone(), sentences[1]:clone()}
+   local targets2 = {targets[2], targets[1]}
+
+   -- Defining model
+   local sequencer = nn.Sequencer(nn.Linear(inputSize, hiddenSize))
+   local rnn = nn.Sequential()
+     :add(nn.SplitTable(1,2))
+     :add(sequencer) --nn.FastLSTM(inputSize, hiddenSize)))
+     :add(nn.SelectTable(-1))
+     :add(nn.Linear(hiddenSize, nClasses))
+     :add(nn.LogSoftMax())  
+   local criterion = nn.ClassNLLCriterion()
+   local params, gradParams = rnn:getParameters()
+   
+   local rnn2 = rnn:clone()
+   local criterion2 = criterion:clone()
+   local params2, gradParams2 = rnn2:getParameters()
+   
+   -- problem occurs when sequence length is increased
+   rnn2:zeroGradParameters()
+   rnn:zeroGradParameters()
+   
+   local outputs, loss, gradOutputs, gradInputs = {}, {}, {}, {}
+   local outputs2, loss2, gradOutputs2, gradInputs2 = {}, {}, {}, {}
+   for i=1,2 do
+      outputs[i] = rnn:forward(sentences[i]):clone()
+      loss[i] = criterion:forward(outputs[i], targets[i])
+      gradOutputs[i] = criterion:backward(outputs[i], targets[i]):clone()
+      gradInputs[i] = rnn:backward(sentences[i], gradOutputs[i]):clone()
+      
+      outputs2[i] = rnn2:forward(sentences2[i]):clone()
+      loss2[i] = criterion2:forward(outputs2[i], targets2[i])
+      gradOutputs2[i] = criterion2:backward(outputs2[i], targets2[i]):clone()
+      gradInputs2[i] = rnn2:backward(sentences2[i], gradOutputs2[i]):clone()
+      
+   end
+   
+   mytester:assertTensorEq(gradParams, gradParams2, 0.000001)
+   mytester:assertTensorEq(outputs[1], outputs2[2], 0.000001)
+   mytester:assertTensorEq(outputs[2], outputs2[1], 0.000001)
+   mytester:assertTensorEq(gradInputs[1], gradInputs2[2], 0.000001)
+   mytester:assertTensorEq(gradInputs[2], gradInputs2[1], 0.000001)
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_
