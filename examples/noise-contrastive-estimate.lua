@@ -83,7 +83,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
       rnn = nn.GRU(inputsize, hiddensize)
    elseif opt.lstm then -- Long Short Term Memory units
       require 'nngraph'
-      nn.FastLSTM.usenngraph = true -- faster
+      --nn.FastLSTM.usenngraph = true -- faster
       rnn = nn.FastLSTM(inputsize, hiddensize)
    else -- simple recurrent neural network
       local rm =  nn.Sequential() -- input is {x[t], h[t-1]}
@@ -94,7 +94,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
          :add(nn.Sigmoid()) -- transfer
       rnn = nn.Recurrence(rm, hiddensize, 1)
    end
-   rnn:maskZero(1)
+   --rnn:maskZero(1)
 
    stepmodule:add(rnn)
    
@@ -126,6 +126,28 @@ lm:add(nn.Sequencer(stepmodule))
 
 -- remember previous state between batches
 lm:remember((opt.lstm or opt.gru) and 'both' or 'eval')
+
+-- TEMP FIX
+-- similar to apply, recursively goes over network and calls
+-- a callback function which returns a new module replacing the old one
+function nn.Module:replace(callback)
+  local out = callback(self)
+  if self.modules then
+    for i, module in ipairs(self.modules) do
+      self.modules[i] = module:replace(callback)
+    end
+   elseif self.recurrentModule then
+    self.recurrentModule = callback(self.recurrentModule)
+  end
+  return out
+end
+
+lm:replace(function(module)
+   if torch.type(module) ~= 'nn.NaN' then
+      module = nn.NaN(module)
+   end
+   return module
+end)
 
 if not opt.silent then
    print"Language Model:"
@@ -183,36 +205,43 @@ xplog.epoch = 0
 local ntrial = 0
 paths.mkdir(opt.savepath)
 
-ltmzfwd = nn.LookupTableMaskZero.updateOutput
+local a_, b_ = torch.randn(3,4):cuda(), torch.CudaTensor():cuda()
 
-nn.LookupTableMaskZero.updateOutput = function(self, input)
-   print"lookup"
-   return ltmzfwd(self, input)
+function nn.NaN.updateOutput(self, input)
+   print(string.format("updateOutput for module :\n%s", self:__tostring__()))
+   a_.THNN.Sigmoid_updateOutput(
+      a_:cdata(),
+      b_:cdata()
+   )
+   print("stop")
+   self.output = self.module:updateOutput(input)
+   if self:recursiveIsNaN(self.output) then
+      if self:recursiveIsNaN(input) then
+         error(string.format("NaN found in input of module :\n%s", self:__tostring__()))
+      elseif self:recursiveIsNaN(self:parameters()) then
+         error(string.format("NaN found in parameters of module :\n%s", self:__tostring__()))
+      end
+      error(string.format("NaN found in output of module :\n%s", self:__tostring__()))
+   end
+   return self.output
 end
 
-stfwd = nn.SplitTable.updateOutput
-
-nn.SplitTable.updateOutput = function(self, input)
-   print("splittable", input:size())
-   return stfwd(self, input)
+function nn.Sigmoid:updateOutput(input)
+   print("Sigmoid in", torch.type(input), torch.type(self.output))
+   print(input:size(), input:sum(), input:isContiguous())
+   self._input = self._input or input.new()
+   if not input:isContiguous() then
+      self._input:resizeAs(input):copy(input)
+      input = self._input
+   end
+   print(input:size(), input:sum(), input:isContiguous(), self.output:isContiguous(), self.output:size())
+   input.THNN.Sigmoid_updateOutput(
+      input:cdata(),
+      self.output:cdata()
+   )
+   print("Sigmoid out")
+   return self.output
 end
-
-lstmfwd = nn.FastLSTM.updateOutput
-
-nn.FastLSTM.updateOutput = function(self, input)
-   print("lstm", input:sum())
-   local rtn = lstmfwd(self, input)
-   print"lstmout"
-   return rtn
-end
-
-ncefwd = nn.NCEModule.updateOutput
-
-nn.NCEModule.updateOutput = function(self, input)
-   print"nce"
-   return ncefwd(self, input)
-end
-
 
 local epoch = 1
 opt.lr = opt.startlr
@@ -230,7 +259,6 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
       print(1)
       local _ = require 'moses'
-      assert(not _.isNaN(inputs:sum()))
       assert(not _.isNaN(targets:sum()))
       targets = targetmodule:forward(targets)
       inputs = {inputs, targets}
@@ -238,10 +266,6 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       -- forward
       local outputs = lm:forward(inputs)
       print(3)
-      assert(not _.isNaN(outputs[1][1]:sum()))
-      assert(not _.isNaN(outputs[1][2]:sum()))
-      assert(not _.isNaN(outputs[1][3]:sum()))
-      assert(not _.isNaN(outputs[1][4]:sum()))
       local err = criterion:forward(outputs, targets)
       assert(not _.isNaN(err))
       sumErr = sumErr + err
