@@ -906,7 +906,7 @@ function rnntest.Recurrent_TestTable()
    end
 end
 
-function rnntest.LSTM()
+function rnntest.LSTM_main()
    local batchSize = math.random(1,2)
    local inputSize = math.random(3,4)
    local outputSize = math.random(5,6)
@@ -4347,7 +4347,7 @@ function rnntest.encoderdecoder()
    local gEdec = criterion:backward(decOut, decOutSeq)
    dec:backward(decInSeq, gEdec)
    backwardConnect(encLSTM, decLSTM)
-   local zeroTensor = torch.Tensor(2):zero()
+   local zeroTensor = torch.zeros(encOut:size())
    enc:backward(encInSeq, zeroTensor)
 
    local function numgradtest()
@@ -4418,7 +4418,7 @@ function rnntest.encoderdecoder()
    local gEdec = criterion:backward(decOut, decOutSeq)
    dec:backward(decInSeq, gEdec)
    backwardConnect(encLSTM, decLSTM)
-   local zeroTensor = torch.Tensor(2):zero()
+   local zeroTensor = torch.zeros(encOut:size())
    enc:backward(encInSeq, zeroTensor)
    
    numgradtest()
