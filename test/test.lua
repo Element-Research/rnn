@@ -4627,6 +4627,10 @@ function rnntest.issue204()
    mytester:assertTensorEq(gradInputs[2], gradInputs2[1], 0.000001)
 end
 
+function rnntest.SeqLSTM()
+
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_

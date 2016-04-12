@@ -36,12 +36,16 @@ torch.include('rnn', 'GRU.lua')
 torch.include('rnn', 'Recursor.lua')
 torch.include('rnn', 'Recurrence.lua')
 
+-- sequencer modules
 torch.include('rnn', 'AbstractSequencer.lua')
 torch.include('rnn', 'Repeater.lua')
 torch.include('rnn', 'Sequencer.lua')
 torch.include('rnn', 'BiSequencer.lua')
 torch.include('rnn', 'BiSequencerLM.lua')
 torch.include('rnn', 'RecurrentAttention.lua')
+
+-- sequencer + recurrent modules
+torch.include('rnn', 'SeqLSTM')
 
 -- recurrent criterions:
 torch.include('rnn', 'SequencerCriterion.lua')
