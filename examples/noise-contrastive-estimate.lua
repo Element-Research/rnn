@@ -51,6 +51,11 @@ if not opt.silent then
 end
 opt.id = opt.id == '' and ('gbw' .. ':' .. dl.uniqueid()) or opt.id
 
+if opt.cuda then -- do this before building model to prevent segfault
+   require 'cunn' 
+   cutorch.setDevice(opt.device)
+end 
+
 --[[ data set ]]--
 
 local trainset, validset, testset = dl.loadGBW({opt.batchsize,1,1}, opt.tiny and 'train_tiny.th7' or nil)
@@ -67,23 +72,21 @@ local lm = nn.Sequential()
 local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.hiddensize[1])
 lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
-lm:add(nn.SplitTable(1)) -- tensor to table of tensors
-
 if opt.dropout > 0 then
-   lm:insert(nn.Dropout(opt.dropout), 1)
+   lm:add(nn.Dropout(opt.dropout))
 end
+lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 
 -- rnn layers
 local stepmodule = nn.Sequential() -- ancelossied at each time-step
 local inputsize = opt.hiddensize[1]
 for i,hiddensize in ipairs(opt.hiddensize) do 
    local rnn
-   
    if opt.gru then -- Gated Recurrent Units
       rnn = nn.GRU(inputsize, hiddensize)
    elseif opt.lstm then -- Long Short Term Memory units
       require 'nngraph'
-      --nn.FastLSTM.usenngraph = true -- faster
+      nn.FastLSTM.usenngraph = true -- faster
       rnn = nn.FastLSTM(inputsize, hiddensize)
    else -- simple recurrent neural network
       local rm =  nn.Sequential() -- input is {x[t], h[t-1]}
@@ -94,7 +97,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
          :add(nn.Sigmoid()) -- transfer
       rnn = nn.Recurrence(rm, hiddensize, 1)
    end
-   --rnn:maskZero(1)
+   rnn:maskZero(1)
 
    stepmodule:add(rnn)
    
@@ -127,6 +130,7 @@ lm:add(nn.Sequencer(stepmodule))
 -- remember previous state between batches
 lm:remember((opt.lstm or opt.gru) and 'both' or 'eval')
 
+
 -- TEMP FIX
 -- similar to apply, recursively goes over network and calls
 -- a callback function which returns a new module replacing the old one
@@ -148,7 +152,7 @@ lm:replace(function(module)
    end
    return module
 end)
-
+--]]
 if not opt.silent then
    print"Language Model:"
    print(lm)
@@ -177,8 +181,6 @@ local criterion = nn.SequencerCriterion(crit)
 --[[ CUDA ]]--
 
 if opt.cuda then
-   require 'cunn'
-   cutorch.setDevice(opt.device)
    lm:cuda()
    criterion:cuda()
    targetmodule:cuda()
@@ -205,44 +207,6 @@ xplog.epoch = 0
 local ntrial = 0
 paths.mkdir(opt.savepath)
 
-local a_, b_ = torch.randn(3,4):cuda(), torch.CudaTensor():cuda()
-
-function nn.NaN.updateOutput(self, input)
-   print(string.format("updateOutput for module :\n%s", self:__tostring__()))
-   a_.THNN.Sigmoid_updateOutput(
-      a_:cdata(),
-      b_:cdata()
-   )
-   print("stop")
-   self.output = self.module:updateOutput(input)
-   if self:recursiveIsNaN(self.output) then
-      if self:recursiveIsNaN(input) then
-         error(string.format("NaN found in input of module :\n%s", self:__tostring__()))
-      elseif self:recursiveIsNaN(self:parameters()) then
-         error(string.format("NaN found in parameters of module :\n%s", self:__tostring__()))
-      end
-      error(string.format("NaN found in output of module :\n%s", self:__tostring__()))
-   end
-   return self.output
-end
-
-function nn.Sigmoid:updateOutput(input)
-   print("Sigmoid in", torch.type(input), torch.type(self.output))
-   print(input:size(), input:sum(), input:isContiguous())
-   self._input = self._input or input.new()
-   if not input:isContiguous() then
-      self._input:resizeAs(input):copy(input)
-      input = self._input
-   end
-   print(input:size(), input:sum(), input:isContiguous(), self.output:isContiguous(), self.output:size())
-   input.THNN.Sigmoid_updateOutput(
-      input:cdata(),
-      self.output:cdata()
-   )
-   print("Sigmoid out")
-   return self.output
-end
-
 local epoch = 1
 opt.lr = opt.startlr
 opt.trainsize = opt.trainsize == -1 and trainset:size() or opt.trainsize
@@ -257,39 +221,31 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    lm:training()
    local sumErr = 0
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
-      print(1)
       local _ = require 'moses'
       assert(not _.isNaN(targets:sum()))
       targets = targetmodule:forward(targets)
       inputs = {inputs, targets}
-      print(2)
       -- forward
       local outputs = lm:forward(inputs)
-      print(3)
       local err = criterion:forward(outputs, targets)
       assert(not _.isNaN(err))
       sumErr = sumErr + err
-      print(4)
       -- backward 
       local gradOutputs = criterion:backward(outputs, targets)
-      print(5)
       assert(not _.isNaN(gradOutputs[1][1]:sum()))
       assert(not _.isNaN(gradOutputs[1][2]:sum()))
+      local a = torch.Timer()
       lm:zeroGradParameters()
       lm:backward(inputs, gradOutputs)
-      print(6)
+      
       -- update
       if opt.cutoff > 0 then
          local norm = lm:gradParamClip(opt.cutoff) -- affects gradParams
          opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
       end
-      print(7)
       lm:updateGradParameters(opt.momentum) -- affects gradParams
-      print(8)
       lm:updateParameters(opt.lr) -- affects params
-      print(9)
       lm:maxParamNorm(opt.maxnormout) -- affects params
-      print(10)
 
       if opt.progress then
          xlua.progress(i, opt.trainsize)
