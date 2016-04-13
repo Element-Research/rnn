@@ -21,7 +21,11 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 --]]
+
 --[[
+Thank you Justin for this awesome super fast code: 
+ * https://github.com/jcjohnson/torch-rnn
+
 If we add up the sizes of all the tensors for output, gradInput, weights,
 gradWeights, and temporary buffers, we get that a SequenceLSTM stores this many
 scalar values:
