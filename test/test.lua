@@ -4628,7 +4628,32 @@ function rnntest.issue204()
 end
 
 function rnntest.SeqLSTM()
-
+   local seqlen = 4
+   local batchsize = 5
+   local inputsize = 2 
+   local outputsize = 3
+   local input = torch.Tensor(batchsize, seqlen, inputsize)
+   local seqlstm = nn.SeqLSTM(inputsize, outputsize)
+   
+   local output = seqlstm:forward(input)
+   
+   local params = seqlstm:parameters()
+   local v, w = params[1]:sub(1,2), params[1]:sub(3,5)
+   
+   local lstm = seqlstm:toFastLSTM()
+   
+   local params2 = lstm:parameters()
+   
+   local seqlstm2 = nn.Sequential()
+      :add(nn.SplitTable(1, 2))
+      :add(nn.Sequencer(lstm))
+      :add(nn.Sequencer(nn.View(batchsize, 1, outputsize)))
+      :add(nn.JoinTable(1,2))
+   
+   local output2 = seqlstm2:forward(input)
+   print(output, output2)
+   mytester:assertTensorEq(output, output2, 0.000001)
+   
 end
 
 function rnn.test(tests, benchmark_)
