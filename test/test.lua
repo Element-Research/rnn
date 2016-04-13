@@ -4635,25 +4635,38 @@ function rnntest.SeqLSTM()
    local input = torch.Tensor(batchsize, seqlen, inputsize)
    local seqlstm = nn.SeqLSTM(inputsize, outputsize)
    
+   seqlstm:reset(1) -- so that errors are more apparent
+   
+   -- forward
    local output = seqlstm:forward(input)
    
-   local params = seqlstm:parameters()
-   local v, w = params[1]:sub(1,2), params[1]:sub(3,5)
-   
-   local lstm = seqlstm:toFastLSTM()
-   
-   local params2 = lstm:parameters()
+   local lstm2 = seqlstm:toFastLSTM()
    
    local seqlstm2 = nn.Sequential()
       :add(nn.SplitTable(1, 2))
-      :add(nn.Sequencer(lstm))
+      :add(nn.Sequencer(lstm2))
       :add(nn.Sequencer(nn.View(batchsize, 1, outputsize)))
       :add(nn.JoinTable(1,2))
    
    local output2 = seqlstm2:forward(input)
-   print(output, output2)
    mytester:assertTensorEq(output, output2, 0.000001)
    
+   -- backward
+   local gradOutput = torch.randn(batchsize, seqlen, outputsize)
+   
+   seqlstm:zeroGradParameters()
+   seqlstm2:zeroGradParameters()
+   local gradInput = seqlstm:backward(input, gradOutput)
+   local gradInput2 = seqlstm2:backward(input, gradOutput)
+   mytester:assertTensorEq(gradInput, gradInput2, 0.000001)
+   
+   local lstm = seqlstm:toFastLSTM()
+   local params, gradParams = lstm:parameters()
+   local params2, gradParams2 = lstm2:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, tostring(gradParams2[i]:size()))
+   end
 end
 
 function rnn.test(tests, benchmark_)

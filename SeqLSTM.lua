@@ -320,11 +320,21 @@ function SeqLSTM:toFastLSTM()
    local Wxo = self.weight[{{1, D},{2 * H + 1, 3 * H}}]
    local Wxg = self.weight[{{1, D},{3 * H + 1, 4 * H}}]
    
+   local gWxi = self.gradWeight[{{1, D},{1, H}}]
+   local gWxf = self.gradWeight[{{1, D},{H + 1, 2 * H}}]
+   local gWxo = self.gradWeight[{{1, D},{2 * H + 1, 3 * H}}]
+   local gWxg = self.gradWeight[{{1, D},{3 * H + 1, 4 * H}}]
+   
    -- hidden : h to ...
    local Whi = self.weight[{{D + 1, D + H},{1, H}}]
    local Whf = self.weight[{{D + 1, D + H},{H + 1, 2 * H}}]
    local Who = self.weight[{{D + 1, D + H},{2 * H + 1, 3 * H}}]
    local Whg = self.weight[{{D + 1, D + H},{3 * H + 1, 4 * H}}]
+   
+   local gWhi = self.gradWeight[{{D + 1, D + H},{1, H}}]
+   local gWhf = self.gradWeight[{{D + 1, D + H},{H + 1, 2 * H}}]
+   local gWho = self.gradWeight[{{D + 1, D + H},{2 * H + 1, 3 * H}}]
+   local gWhg = self.gradWeight[{{D + 1, D + H},{3 * H + 1, 4 * H}}]
    
    -- bias
    local bi = self.bias[{{1, H}}]
@@ -332,24 +342,45 @@ function SeqLSTM:toFastLSTM()
    local bo = self.bias[{{2 * H + 1, 3 * H}}]
    local bg = self.bias[{{3 * H + 1, 4 * H}}]
    
+   local gbi = self.gradBias[{{1, H}}]
+   local gbf = self.gradBias[{{H + 1, 2 * H}}]
+   local gbo = self.gradBias[{{2 * H + 1, 3 * H}}]
+   local gbg = self.gradBias[{{3 * H + 1, 4 * H}}]
+   
    local lstm = nn.FastLSTM(self.inputsize, self.outputsize)
-   local params = lstm:parameters()
+   local params, gradParams = lstm:parameters()
    local Wx, b, Wh = params[1], params[2], params[3]
+   local gWx, gb, gWh = gradParams[1], gradParams[2], gradParams[3]
    
    Wx[{{1, H}}]:t():copy(Wxi)
    Wx[{{H + 1, 2 * H}}]:t():copy(Wxg)
    Wx[{{2 * H + 1, 3 * H}}]:t():copy(Wxf)
    Wx[{{3 * H + 1, 4 * H}}]:t():copy(Wxo)
    
+   gWx[{{1, H}}]:t():copy(gWxi)
+   gWx[{{H + 1, 2 * H}}]:t():copy(gWxg)
+   gWx[{{2 * H + 1, 3 * H}}]:t():copy(gWxf)
+   gWx[{{3 * H + 1, 4 * H}}]:t():copy(gWxo)
+   
    Wh[{{1, H}}]:t():copy(Whi)
    Wh[{{H + 1, 2 * H}}]:t():copy(Whg)
    Wh[{{2 * H + 1, 3 * H}}]:t():copy(Whf)
    Wh[{{3 * H + 1, 4 * H}}]:t():copy(Who)
    
+   gWh[{{1, H}}]:t():copy(gWhi)
+   gWh[{{H + 1, 2 * H}}]:t():copy(gWhg)
+   gWh[{{2 * H + 1, 3 * H}}]:t():copy(gWhf)
+   gWh[{{3 * H + 1, 4 * H}}]:t():copy(gWho)
+   
    b[{{1, H}}]:copy(bi)
    b[{{H + 1, 2 * H}}]:copy(bg)
    b[{{2 * H + 1, 3 * H}}]:copy(bf)
    b[{{3 * H + 1, 4 * H}}]:copy(bo)
+   
+   gb[{{1, H}}]:copy(gbi)
+   gb[{{H + 1, 2 * H}}]:copy(gbg)
+   gb[{{2 * H + 1, 3 * H}}]:copy(gbf)
+   gb[{{3 * H + 1, 4 * H}}]:copy(gbo)
    
    return lstm
 end
