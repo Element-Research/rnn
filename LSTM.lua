@@ -224,7 +224,5 @@ function LSTM:_accGradParameters(input, gradOutput, scale)
    local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
    local gradOutputTable = {gradOutput, gradCell}
    recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
-   
-   return gradInput
 end
 

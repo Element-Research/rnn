@@ -4627,6 +4627,94 @@ function rnntest.issue204()
    mytester:assertTensorEq(gradInputs[2], gradInputs2[1], 0.000001)
 end
 
+function rnntest.FastLSTM_issue203()
+   local nWords = 6
+   local nActions = 3
+   local wordEmbDim = 4
+   local lstmHidDim = 7
+   
+   local input = {torch.randn(2), torch.randn(2)}
+   local target = {torch.IntTensor{1, 3}, torch.IntTensor{2, 3}}
+   
+   local seq = nn.Sequencer(
+       nn.Sequential()
+           :add(nn.Linear(2, wordEmbDim))
+           :add(nn.Copy(nil,nil,true))
+           :add(nn.FastLSTM(wordEmbDim, lstmHidDim))
+           :add(nn.Linear(lstmHidDim, nActions))
+           :add(nn.LogSoftMax())
+   )
+   
+   local seq2 = nn.Sequencer(
+       nn.Sequential()
+           :add(nn.Linear(2, wordEmbDim))
+           :add(nn.FastLSTM(wordEmbDim, lstmHidDim))
+           :add(nn.Linear(lstmHidDim, nActions))
+           :add(nn.LogSoftMax())
+   )
+   
+   local parameters, grads = seq:getParameters()
+   local parameters2, grads2 = seq2:getParameters()
+   
+   parameters:copy(parameters2)
+   
+   local criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+   local criterion2 = nn.SequencerCriterion(nn.ClassNLLCriterion())
+   
+   local output = seq:forward(input)
+   local loss = criterion:forward(output, target)
+   local gradOutput = criterion:backward(output, target)
+   seq:zeroGradParameters()
+   local gradInput = seq:backward(input, gradOutput)
+   
+   local output2 = seq2:forward(input)
+   local loss2 = criterion2:forward(output2, target)
+   local gradOutput2 = criterion2:backward(output2, target)
+   seq2:zeroGradParameters()
+   local gradInput2 = seq2:backward(input, gradOutput2)
+   
+   local t1 = seq.modules[1].sharedClones[2]:get(3).sharedClones[1].gradInput[1]
+   local t2 = seq2.modules[1].sharedClones[1]:get(2).sharedClones[1].gradInput[1]
+   mytester:assertTensorEq(t1, t2, 0.0000001, "LSTM gradInput1")
+   
+   local t1 = seq.modules[1].sharedClones[2]:get(3).sharedClones[2].gradInput[1]
+   local t2 = seq2.modules[1].sharedClones[1]:get(2).sharedClones[2].gradInput[1]
+   mytester:assertTensorEq(t1, t2, 0.0000001, "LSTM gradInput2")
+   
+   for i=1,2 do
+      mytester:assertTensorEq(output2[i], output[i], 0.0000001, "output "..i)
+      mytester:assertTensorEq(gradOutput2[i], gradOutput[i], 0.0000001, "gradOutput "..i)
+      mytester:assertTensorEq(gradInput2[i], gradInput[i], 0.0000001, "gradInput "..i)
+   end
+   
+   local params, gradParams = seq:parameters()
+   local params2, gradParams2 = seq2:parameters()
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, "gradParams "..tostring(gradParams[i]))
+   end
+   
+   if not pcall(function() require 'optim' end) then
+      return
+   end
+   
+   local seq_ = seq2
+   local parameters_ = parameters2
+   local grads_ = grads2
+   local function f(x)
+       parameters_:copy(x)
+       -- seq:forget()
+       seq_:zeroGradParameters()
+       seq_:forward(input)
+       criterion:forward(seq_.output, target)
+       seq_:backward(input, criterion:backward(seq_.output, target))
+       return criterion.output, grads_
+   end
+
+   local err = optim.checkgrad(f, parameters_:clone())
+   mytester:assert(err < 0.000001, "error "..err)
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_
