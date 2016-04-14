@@ -61,7 +61,8 @@ function SeqLSTM:__init(inputsize, outputsize)
 
    self.h0 = torch.Tensor()
    self.c0 = torch.Tensor()
-   self.remember_states = false
+
+   self._remember = 'neither'
 
    self.grad_c0 = torch.Tensor()
    self.grad_h0 = torch.Tensor()
@@ -84,12 +85,10 @@ function SeqLSTM:reset(std)
    return self
 end
 
-
 function SeqLSTM:resetStates()
    self.h0 = self.h0.new()
    self.c0 = self.c0.new()
 end
-
 
 local function check_dims(x, dims)
    assert(x:dim() == #dims)
@@ -134,7 +133,6 @@ function SeqLSTM:_prepare_size(input, gradOutput)
    return c0, h0, x, gradOutput
 end
 
-
 --[[
 Input:
 - c0: Initial cell state, (N, H)
@@ -144,7 +142,6 @@ Input:
 Output:
 - h: Sequence of hidden states, (T, N, H)
 --]]
-
 
 function SeqLSTM:updateOutput(input)
    self.recompute_backward = true
@@ -158,9 +155,9 @@ function SeqLSTM:updateOutput(input)
    self._return_grad_h0 = (h0 ~= nil)
    if not c0 then
       c0 = self.c0
-      if c0:nElement() == 0 or not self.remember_states then
+      if c0:nElement() == 0 or not self.remember_state then
          c0:resize(N, H):zero()
-      elseif self.remember_states then
+      elseif self.remember_state then
          local prev_N, prev_T = self.cell:size(1), self.cell:size(2)
          assert(prev_N == N, 'batch sizes must be constant to remember states')
          c0:copy(self.cell[prev_T])
@@ -168,9 +165,9 @@ function SeqLSTM:updateOutput(input)
    end
    if not h0 then
       h0 = self.h0
-      if h0:nElement() == 0 or not self.remember_states then
+      if h0:nElement() == 0 or not self.remember_state then
          h0:resize(N, H):zero()
-      elseif self.remember_states then
+      elseif self.remember_state then
          local prev_N, prev_T = self._output:size(1), self._output:size(2)
          assert(prev_N == N, 'batch sizes must be the same to remember states')
          h0:copy(self._output[prev_T])
@@ -315,7 +312,6 @@ function SeqLSTM:backward(input, gradOutput, scale)
    return self.gradInput
 end
 
-
 function SeqLSTM:clearState()
    self.cell:set()
    self.gates:set()
@@ -333,7 +329,6 @@ function SeqLSTM:clearState()
    self.gradInput = nil
 end
 
-
 function SeqLSTM:updateGradInput(input, gradOutput)
    if self.recompute_backward then
       self:backward(input, gradOutput, 1.0)
@@ -341,11 +336,35 @@ function SeqLSTM:updateGradInput(input, gradOutput)
    return self.gradInput
 end
 
-
 function SeqLSTM:accGradParameters(input, gradOutput, scale)
    if self.recompute_backward then
       self:backward(input, gradOutput, scale)
    end
+end
+
+-- Toggle to feed long sequences using multiple forwards.
+-- 'eval' only affects evaluation (recommended for RNNs)
+-- 'train' only affects training
+-- 'neither' affects neither training nor evaluation
+-- 'both' affects both training and evaluation (recommended for LSTMs)
+SeqLSTM.remember = nn.Sequencer.remember
+
+function SeqLSTM:training()
+   if self._remember == 'both' or self._remember == 'train' then
+      self.remember_state = true
+   elseif self._remember == 'neither' or self._remember = 'eval' then
+      self.remember_state = false
+   end
+   return parent.training(self)
+end
+
+function SeqLSTM:evaluate()
+   if self._remember == 'both' or self._remember == 'eval' then
+      self.remember_state = true
+   elseif self._remember == 'neither' or self._remember = 'train' then
+      self.remember_state = false
+   end
+   return parent.evaluate(self)
 end
 
 function SeqLSTM:toFastLSTM()   
