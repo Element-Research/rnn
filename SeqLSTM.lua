@@ -27,10 +27,12 @@ Thank you Justin for this awesome super fast code:
  * https://github.com/jcjohnson/torch-rnn
 
 If we add up the sizes of all the tensors for output, gradInput, weights,
-gradWeights, and temporary buffers, we get that a SequenceLSTM stores this many
+gradWeights, and temporary buffers, we get that a SeqLSTM stores this many
 scalar values:
 
 NTD + 6NTH + 8NH + 8H^2 + 8DH + 9H
+
+N : batchsize; T : seqlen; D : inputsize; H : outputsize
 
 For N = 100, D = 512, T = 100, H = 1024 and with 4 bytes per number, this comes
 out to 305MB. Note that this class doesn't own input or gradOutput, so you'll
@@ -50,8 +52,8 @@ function SeqLSTM:__init(inputsize, outputsize)
    self.gradBias = torch.Tensor(4 * H):zero()
    self:reset()
 
-   self.cell = torch.Tensor()      -- This will be (N, T, H)
-   self.gates = torch.Tensor()    -- This will be (N, T, 4H)
+   self.cell = torch.Tensor()      -- This will be  (T, N, H)
+   self.gates = torch.Tensor()    -- This will be (T, N, 4H)
    self.buffer1 = torch.Tensor() -- This will be (N, H)
    self.buffer2 = torch.Tensor() -- This will be (N, H)
    self.buffer3 = torch.Tensor() -- This will be (1, 4H)
@@ -65,6 +67,10 @@ function SeqLSTM:__init(inputsize, outputsize)
    self.grad_h0 = torch.Tensor()
    self.grad_x = torch.Tensor()
    self.gradInput = {self.grad_c0, self.grad_h0, self.grad_x}
+   
+   -- set this to true to forward inputs as batchsize x seqlen x ...
+   -- instead of seqlen x batchsize
+   self.batchfirst = false
 end
 
 
@@ -92,9 +98,10 @@ local function check_dims(x, dims)
    end
 end
 
-
-function SeqLSTM:_unpack_input(input)
-   local c0, h0, x = nil, nil, nil
+-- makes sure x, h0, c0 and gradOutput have correct sizes.
+-- batchfirst = true will transpose the N x T to conform to T x N
+function SeqLSTM:_prepare_size(input, gradOutput)
+   local c0, h0, x
    if torch.type(input) == 'table' and #input == 3 then
       c0, h0, x = unpack(input)
    elseif torch.type(input) == 'table' and #input == 2 then
@@ -104,15 +111,17 @@ function SeqLSTM:_unpack_input(input)
    else
       assert(false, 'invalid input')
    end
-   return c0, h0, x
-end
-
-
-function SeqLSTM:_get_sizes(input, gradOutput)
-   local c0, h0, x = self:_unpack_input(input)
-   local N, T = x:size(1), x:size(2)
+   assert(x:dim() == 3, "Only supports batch mode")
+   
+   if self.batchfirst then
+      x = x:transpose(1,2)
+      gradOutput = gradOutput and gradOutput:transpose(1,2) or nil
+   end
+   
+   local T, N = x:size(1), x:size(2)
    local H, D = self.outputsize, self.inputsize
-   check_dims(x, {N, T, D})
+   
+   check_dims(x, {T, N, D})
    if h0 then
       check_dims(h0, {N, H})
    end
@@ -120,9 +129,9 @@ function SeqLSTM:_get_sizes(input, gradOutput)
       check_dims(c0, {N, H})
    end
    if gradOutput then
-      check_dims(gradOutput, {N, T, H})
+      check_dims(gradOutput, {T, N, H})
    end
-   return N, T, D, H
+   return c0, h0, x, gradOutput
 end
 
 
@@ -130,17 +139,20 @@ end
 Input:
 - c0: Initial cell state, (N, H)
 - h0: Initial hidden state, (N, H)
-- x: Input sequence, (N, T, D)
+- x: Input sequence, (T, N, D)  
 
 Output:
-- h: Sequence of hidden states, (N, T, H)
+- h: Sequence of hidden states, (T, N, H)
 --]]
 
 
 function SeqLSTM:updateOutput(input)
    self.recompute_backward = true
-   local c0, h0, x = self:_unpack_input(input)
-   local N, T, D, H = self:_get_sizes(input)
+   local c0, h0, x = self:_prepare_size(input)
+   local N, T = x:size(2), x:size(1)
+   local D, H = self.inputsize, self.outputsize
+   
+   self._output = self._output or self.weight.new()
 
    self._return_grad_c0 = (c0 ~= nil)
    self._return_grad_h0 = (h0 ~= nil)
@@ -151,7 +163,7 @@ function SeqLSTM:updateOutput(input)
       elseif self.remember_states then
          local prev_N, prev_T = self.cell:size(1), self.cell:size(2)
          assert(prev_N == N, 'batch sizes must be constant to remember states')
-         c0:copy(self.cell[{{}, prev_T}])
+         c0:copy(self.cell[prev_T])
       end
    end
    if not h0 then
@@ -159,9 +171,9 @@ function SeqLSTM:updateOutput(input)
       if h0:nElement() == 0 or not self.remember_states then
          h0:resize(N, H):zero()
       elseif self.remember_states then
-         local prev_N, prev_T = self.output:size(1), self.output:size(2)
+         local prev_N, prev_T = self._output:size(1), self._output:size(2)
          assert(prev_N == N, 'batch sizes must be the same to remember states')
-         h0:copy(self.output[{{}, prev_T}])
+         h0:copy(self._output[prev_T])
       end
    end
 
@@ -169,16 +181,16 @@ function SeqLSTM:updateOutput(input)
    local Wx = self.weight[{{1, D}}]
    local Wh = self.weight[{{D + 1, D + H}}]
 
-   local h, c = self.output, self.cell
-   h:resize(N, T, H):zero()
-   c:resize(N, T, H):zero()
+   local h, c = self._output, self.cell
+   h:resize(T, N, H):zero()
+   c:resize(T, N, H):zero()
    local prev_h, prev_c = h0, c0
-   self.gates:resize(N, T, 4 * H):zero()
+   self.gates:resize(T, N, 4 * H):zero()
    for t = 1, T do
-      local cur_x = x[{{}, t}]
-      local next_h = h[{{}, t}]
-      local next_c = c[{{}, t}]
-      local cur_gates = self.gates[{{}, t}]
+      local cur_x = x[t]
+      local next_h = h[t]
+      local next_c = c[t]
+      local cur_gates = self.gates[t]
       cur_gates:addmm(bias_expand, cur_x, Wx)
       cur_gates:addmm(prev_h, Wh)
       cur_gates[{{}, {1, 3 * H}}]:sigmoid()
@@ -192,6 +204,12 @@ function SeqLSTM:updateOutput(input)
       next_h:tanh(next_c):cmul(o)
       prev_h, prev_c = next_h, next_c
    end
+   
+   if self.batchfirst then
+      self.output = self._output:transpose(1,2) -- T x N -> N X T
+   else
+      self.output = self._output
+   end
 
    return self.output
 end
@@ -200,15 +218,20 @@ function SeqLSTM:backward(input, gradOutput, scale)
    self.recompute_backward = false
    scale = scale or 1.0
    assert(scale == 1.0, 'must have scale=1')
-   local c0, h0, x = self:_unpack_input(input)
+   
+   local c0, h0, x, grad_h = self:_prepare_size(input, gradOutput)
+   assert(grad_h, "Expecting gradOutput")
+   local N, T = x:size(2), x:size(1)
+   local D, H = self.inputsize, self.outputsize
+   
+   self._grad_x = self._grad_x or self.weight.new()
+   
    if not c0 then c0 = self.c0 end
    if not h0 then h0 = self.h0 end
 
-   local grad_c0, grad_h0, grad_x = self.grad_c0, self.grad_h0, self.grad_x
-   local h, c = self.output, self.cell
-   local grad_h = gradOutput
-
-   local N, T, D, H = self:_get_sizes(input, gradOutput)
+   local grad_c0, grad_h0, grad_x = self.grad_c0, self.grad_h0, self._grad_x
+   local h, c = self._output, self.cell
+   
    local Wx = self.weight[{{1, D}}]
    local Wh = self.weight[{{D + 1, D + H}}]
    local grad_Wx = self.gradWeight[{{1, D}}]
@@ -221,19 +244,19 @@ function SeqLSTM:backward(input, gradOutput, scale)
    local grad_next_h = self.buffer1:resizeAs(h0):zero()
    local grad_next_c = self.buffer2:resizeAs(c0):zero()
    for t = T, 1, -1 do
-      local next_h, next_c = h[{{}, t}], c[{{}, t}]
+      local next_h, next_c = h[t], c[t]
       local prev_h, prev_c = nil, nil
       if t == 1 then
          prev_h, prev_c = h0, c0
       else
-         prev_h, prev_c = h[{{}, t - 1}], c[{{}, t - 1}]
+         prev_h, prev_c = h[t - 1], c[t - 1]
       end
-      grad_next_h:add(grad_h[{{}, t}])
+      grad_next_h:add(grad_h[t])
 
-      local i = self.gates[{{}, t, {1, H}}]
-      local f = self.gates[{{}, t, {H + 1, 2 * H}}]
-      local o = self.gates[{{}, t, {2 * H + 1, 3 * H}}]
-      local g = self.gates[{{}, t, {3 * H + 1, 4 * H}}]
+      local i = self.gates[{t, {}, {1, H}}]
+      local f = self.gates[{t, {}, {H + 1, 2 * H}}]
+      local o = self.gates[{t, {}, {2 * H + 1, 3 * H}}]
+      local g = self.gates[{t, {}, {3 * H + 1, 4 * H}}]
       
       local grad_a = self.grad_a_buffer:resize(N, 4 * H):zero()
       local grad_ai = grad_a[{{}, {1, H}}]
@@ -263,8 +286,8 @@ function SeqLSTM:backward(input, gradOutput, scale)
       grad_ai:fill(1):add(-1, i):cmul(i):cmul(g):cmul(grad_next_c)
       grad_af:fill(1):add(-1, f):cmul(f):cmul(prev_c):cmul(grad_next_c)
       
-      grad_x[{{}, t}]:mm(grad_a, Wx:t())
-      grad_Wx:addmm(scale, x[{{}, t}]:t(), grad_a)
+      grad_x[t]:mm(grad_a, Wx:t())
+      grad_Wx:addmm(scale, x[t]:t(), grad_a)
       grad_Wh:addmm(scale, prev_h:t(), grad_a)
       local grad_a_sum = self.buffer3:resize(1, 4 * H):sum(grad_a, 1)
       grad_b:add(scale, grad_a_sum)
@@ -274,6 +297,12 @@ function SeqLSTM:backward(input, gradOutput, scale)
    end
    grad_h0:copy(grad_next_h)
    grad_c0:copy(grad_next_c)
+   
+   if self.batchfirst then
+      self.grad_x = grad_x:transpose(1,2) -- T x N -> N x T
+   else
+      self.grad_x = grad_x
+   end
 
    if self._return_grad_c0 and self._return_grad_h0 then
       self.gradInput = {self.grad_c0, self.grad_h0, self.grad_x}
@@ -298,7 +327,10 @@ function SeqLSTM:clearState()
    self.grad_c0:set()
    self.grad_h0:set()
    self.grad_x:set()
+   self._grad_x:set()
    self.output:set()
+   self._output:set()
+   self.gradInput = nil
 end
 
 

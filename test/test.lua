@@ -4634,6 +4634,7 @@ function rnntest.SeqLSTM()
    local outputsize = 3
    local input = torch.Tensor(batchsize, seqlen, inputsize)
    local seqlstm = nn.SeqLSTM(inputsize, outputsize)
+   seqlstm.batchfirst = true
    
    seqlstm:reset(1) -- so that errors are more apparent
    
