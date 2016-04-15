@@ -2347,6 +2347,12 @@ function rnntest.RecurrentAttention()
       return str
    end
    
+   RecurrentAttention.includingSharedClones = nn.AbstractRecurrent.includingSharedClones
+   RecurrentAttention.type = nn.AbstractRecurrent.type
+   RecurrentAttention.training = nn.AbstractRecurrent.training
+   RecurrentAttention.evaluate = nn.AbstractRecurrent.evaluate
+   RecurrentAttention.reinforce = nn.AbstractRecurrent.reinforce
+   
    makeOldRecurrent()
 
    if not pcall(function() require "image" end) then return end -- needs the image package
