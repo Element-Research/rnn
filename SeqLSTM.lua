@@ -352,7 +352,7 @@ SeqLSTM.remember = nn.Sequencer.remember
 function SeqLSTM:training()
    if self._remember == 'both' or self._remember == 'train' then
       self.remember_state = true
-   elseif self._remember == 'neither' or self._remember = 'eval' then
+   elseif self._remember == 'neither' or self._remember == 'eval' then
       self.remember_state = false
    end
    return parent.training(self)
@@ -361,7 +361,7 @@ end
 function SeqLSTM:evaluate()
    if self._remember == 'both' or self._remember == 'eval' then
       self.remember_state = true
-   elseif self._remember == 'neither' or self._remember = 'train' then
+   elseif self._remember == 'neither' or self._remember == 'train' then
       self.remember_state = false
    end
    return parent.evaluate(self)
