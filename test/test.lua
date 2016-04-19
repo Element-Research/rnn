@@ -4670,6 +4670,75 @@ function rnntest.SeqLSTM()
    end
 end
 
+function rnntest.SeqBRNNTest()
+   local brnn = nn.SeqBRNN(5, 5)
+
+   local input = torch.rand(5, 1, 5)
+   local output = brnn:forward(input)
+   local concatTable = brnn.modules[1]:get(1)
+   local fwd = concatTable:get(1) -- get SeqLSTM fwd.
+   local bwd = concatTable:get(2):get(2) -- get SeqLSTM bwd.
+   fwd:clearState()
+   bwd:clearState()
+
+   local fwdOutput = fwd:forward(input)
+
+   local reverseSequence = nn.SeqReverseSequence(1)
+
+   local reversedInput = reverseSequence:forward(input)
+   local bwdOutput = bwd:forward(reversedInput)
+   local bwdOutput = reverseSequence:forward(bwdOutput)
+
+   local expectedOutput = torch.add(fwdOutput, bwdOutput)
+   mytester:assertTensorEq(expectedOutput, output, 0)
+end
+
+function rnntest.SeqBRNNJoinTest()
+   local brnn = nn.SeqBRNN(5, 5, false , nn.JoinTable(3))
+
+   local input = torch.rand(5, 1, 5)
+   local output = brnn:forward(input)
+   local concatTable = brnn.modules[1]:get(1)
+   local fwd = concatTable:get(1) -- get SeqLSTM fwd.
+   local bwd = concatTable:get(2):get(2) -- get SeqLSTM bwd.
+   fwd:clearState()
+   bwd:clearState()
+
+   local fwdOutput = fwd:forward(input)
+
+   local reverseSequence = nn.SeqReverseSequence(1)
+
+   local reversedInput = reverseSequence:forward(input)
+   local bwdOutput = bwd:forward(reversedInput)
+   local bwdOutput = reverseSequence:forward(bwdOutput)
+
+   local expectedOutput = nn.JoinTable(3):forward({fwdOutput, bwdOutput})
+   mytester:assertTensorEq(expectedOutput, output, 0)
+end
+
+function rnntest.BRNNBatchFirstTest()
+   local brnn = nn.SeqBRNN(5, 5, true , nn.JoinTable(3))
+
+   local input = torch.rand(1, 5, 5)
+   local output = brnn:forward(input)
+   local concatTable = brnn.modules[1]:get(1)
+   local fwd = concatTable:get(1) -- get SeqLSTM fwd.
+   local bwd = concatTable:get(2):get(2) -- get SeqLSTM bwd.
+   fwd:clearState()
+   bwd:clearState()
+
+   local fwdOutput = fwd:forward(input)
+
+   local reverseSequence = nn.SeqReverseSequence(1)
+
+   local reversedInput = reverseSequence:forward(input)
+   local bwdOutput = bwd:forward(reversedInput)
+   local bwdOutput = reverseSequence:forward(bwdOutput)
+
+   local expectedOutput = nn.JoinTable(3):forward({fwdOutput, bwdOutput})
+   mytester:assertTensorEq(expectedOutput, output, 0)
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_

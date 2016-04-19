@@ -46,6 +46,8 @@ torch.include('rnn', 'RecurrentAttention.lua')
 
 -- sequencer + recurrent modules
 torch.include('rnn', 'SeqLSTM.lua')
+torch.include('rnn', 'SeqReverseSequence.lua')
+torch.include('rnn', 'SeqBRNN.lua')
 
 -- recurrent criterions:
 torch.include('rnn', 'SequencerCriterion.lua')
