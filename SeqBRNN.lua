@@ -18,13 +18,7 @@ function SeqBRNN:__init(inputDim, hiddenDim, batchFirst, merge)
     if not self.merge then
         self.merge = nn.CAddTable()
     end
-    if batchFirst then
-        self.forwardModule.batchFirst = true
-        self.backwardModule.batchFirst = true
-        self.dim = 2 -- default to second dimension to reverse (expecting batch x time x inputdim).
-    else
-        self.dim = 1 -- first dim to reverse (expecting time x batch x inputdim).
-    end
+    self.dim = 1
     local backward = nn.Sequential()
     backward:add(nn.SeqReverseSequence(self.dim)) -- reverse
     backward:add(self.backwardModule)
@@ -36,6 +30,11 @@ function SeqBRNN:__init(inputDim, hiddenDim, batchFirst, merge)
     local brnn = nn.Sequential()
     brnn:add(concat)
     brnn:add(self.merge)
+    if(batchFirst) then
+        -- Insert transposes before and after the brnn.
+        brnn:insert(nn.Transpose({1, 2}), 1)
+        brnn:insert(nn.Transpose({1, 2}))
+    end
 
     parent.__init(self)
 
