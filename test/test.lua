@@ -4721,12 +4721,13 @@ function rnntest.BRNNBatchFirstTest()
 
    local input = torch.rand(1, 5, 5)
    local output = brnn:forward(input)
-   local concatTable = brnn.modules[1]:get(1)
+   local concatTable = brnn.modules[1]:get(2)
    local fwd = concatTable:get(1) -- get SeqLSTM fwd.
    local bwd = concatTable:get(2):get(2) -- get SeqLSTM bwd.
    fwd:clearState()
    bwd:clearState()
 
+   input = input:transpose(1,2) -- Manually transpose the input.
    local fwdOutput = fwd:forward(input)
 
    local reverseSequence = nn.SeqReverseSequence(1)
@@ -4736,6 +4737,7 @@ function rnntest.BRNNBatchFirstTest()
    local bwdOutput = reverseSequence:forward(bwdOutput)
 
    local expectedOutput = nn.JoinTable(3):forward({fwdOutput, bwdOutput})
+   local expectedOutput = expectedOutput:transpose(1,2) -- Undo transpose to input.
    mytester:assertTensorEq(expectedOutput, output, 0)
 end
 
