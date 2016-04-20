@@ -4628,46 +4628,96 @@ function rnntest.issue204()
 end
 
 function rnntest.SeqLSTM()
-   local seqlen = 4
-   local batchsize = 5
    local inputsize = 2 
    local outputsize = 3
-   local input = torch.Tensor(batchsize, seqlen, inputsize)
+   
+   -- compare SeqLSTM to FastLSTM (forward, backward, update)
+   local function testmodule(seqlstm, batchfirst, seqlen, batchsize)
+      local lstm2 = seqlstm:toFastLSTM()
+      
+      local input, gradOutput, seqlstm2
+      if batchfirst then
+         input = torch.Tensor(batchsize, seqlen, inputsize)
+         gradOutput = torch.randn(batchsize, seqlen, outputsize)
+         seqlstm2 = nn.Sequential()
+            :add(nn.SplitTable(1, 2))
+            :add(nn.Sequencer(lstm2))
+            :add(nn.Sequencer(nn.View(batchsize, 1, outputsize)))
+            :add(nn.JoinTable(1,2))
+      else
+         input = torch.Tensor(seqlen, batchsize, inputsize)
+         gradOutput = torch.randn(seqlen, batchsize, outputsize)
+         seqlstm2 = nn.Sequential()
+            :add(nn.SplitTable(1))
+            :add(nn.Sequencer(lstm2))
+            :add(nn.Sequencer(nn.View(1, batchsize, outputsize)))
+            :add(nn.JoinTable(1))
+      end
+         
+      -- forward
+      
+      local output = seqlstm:forward(input)
+      
+      local output2 = seqlstm2:forward(input)
+      mytester:assertTensorEq(output, output2, 0.000001)
+      mytester:assertTableEq(output:size():totable(), gradOutput:size():totable(), 0.000001)
+      
+      -- backward
+      
+      seqlstm:zeroGradParameters()
+      seqlstm2:zeroGradParameters()
+      local gradInput = seqlstm:backward(input, gradOutput)
+      local gradInput2 = seqlstm2:backward(input, gradOutput)
+      mytester:assertTensorEq(gradInput, gradInput2, 0.000001)
+      
+      local lstm = seqlstm:toFastLSTM()
+      local params, gradParams = lstm:parameters()
+      local params2, gradParams2 = lstm2:parameters()
+      
+      for i=1,#params do
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, tostring(gradParams2[i]:size()))
+      end
+   end
+   
+
+   -- test batchfirst
+   local seqlen = 4
+   local batchsize = 5
+   
    local seqlstm = nn.SeqLSTM(inputsize, outputsize)
    seqlstm.batchfirst = true
-   
    seqlstm:reset(1) -- so that errors are more apparent
    
-   -- forward
-   local output = seqlstm:forward(input)
-   
-   local lstm2 = seqlstm:toFastLSTM()
-   
-   local seqlstm2 = nn.Sequential()
+   local encapsulate = function(lstm2, batchsize)
+      return nn.Sequential()
       :add(nn.SplitTable(1, 2))
       :add(nn.Sequencer(lstm2))
       :add(nn.Sequencer(nn.View(batchsize, 1, outputsize)))
       :add(nn.JoinTable(1,2))
-   
-   local output2 = seqlstm2:forward(input)
-   mytester:assertTensorEq(output, output2, 0.000001)
-   
-   -- backward
-   local gradOutput = torch.randn(batchsize, seqlen, outputsize)
-   
-   seqlstm:zeroGradParameters()
-   seqlstm2:zeroGradParameters()
-   local gradInput = seqlstm:backward(input, gradOutput)
-   local gradInput2 = seqlstm2:backward(input, gradOutput)
-   mytester:assertTensorEq(gradInput, gradInput2, 0.000001)
-   
-   local lstm = seqlstm:toFastLSTM()
-   local params, gradParams = lstm:parameters()
-   local params2, gradParams2 = lstm2:parameters()
-   
-   for i=1,#params do
-      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, tostring(gradParams2[i]:size()))
    end
+   
+   testmodule(seqlstm, true, seqlen, batchsize)
+   
+   -- test variable input size :
+   
+   local seqlen = 5
+   local batchsize = 6
+   
+   testmodule(seqlstm, true, seqlen, batchsize)
+   
+   -- test batchfirst == false (the default)
+   
+   local seqlstm = nn.SeqLSTM(inputsize, outputsize)
+   seqlstm:reset(1)
+   
+   testmodule(seqlstm, false, seqlen, batchsize)
+   
+   -- test variable input size :
+   
+   local seqlen = 4
+   local batchsize = 5
+   
+   testmodule(seqlstm, false, seqlen, batchsize)
 end
 
 function rnn.test(tests, benchmark_)
