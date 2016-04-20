@@ -158,7 +158,7 @@ function SeqLSTM:updateOutput(input)
       if c0:nElement() == 0 or not self.remember_state then
          c0:resize(N, H):zero()
       elseif self.remember_state then
-         local prev_N, prev_T = self.cell:size(1), self.cell:size(2)
+         local prev_T, prev_N = self.cell:size(1), self.cell:size(2)
          assert(prev_N == N, 'batch sizes must be constant to remember states')
          c0:copy(self.cell[prev_T])
       end
@@ -168,7 +168,7 @@ function SeqLSTM:updateOutput(input)
       if h0:nElement() == 0 or not self.remember_state then
          h0:resize(N, H):zero()
       elseif self.remember_state then
-         local prev_N, prev_T = self._output:size(1), self._output:size(2)
+         local prev_T, prev_N = self._output:size(1), self._output:size(2)
          assert(prev_N == N, 'batch sizes must be the same to remember states')
          h0:copy(self._output[prev_T])
       end
@@ -347,7 +347,14 @@ end
 -- 'train' only affects training
 -- 'neither' affects neither training nor evaluation
 -- 'both' affects both training and evaluation (recommended for LSTMs)
-SeqLSTM.remember = nn.Sequencer.remember
+function SeqLSTM:remember(mode)
+   nn.Sequencer.remember(self, mode)
+   if self.train ~= false then
+      self:training()
+   else
+      self:evaluate()
+   end
+end
 
 function SeqLSTM:training()
    if self._remember == 'both' or self._remember == 'train' then

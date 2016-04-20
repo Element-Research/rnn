@@ -4638,10 +4638,11 @@ function rnntest.SeqLSTM()
    local outputsize = 3
    
    -- compare SeqLSTM to FastLSTM (forward, backward, update)
-   local function testmodule(seqlstm, batchfirst, seqlen, batchsize)
-      local lstm2 = seqlstm:toFastLSTM()
+   local function testmodule(seqlstm, batchfirst, seqlen, batchsize, lstm2, remember)
+      lstm2 = lstm2 or seqlstm:toFastLSTM()
+      remember = remember or 'neither'
       
-      local input, gradOutput, seqlstm2
+      local input, gradOutput
       if batchfirst then
          input = torch.Tensor(batchsize, seqlen, inputsize)
          gradOutput = torch.randn(batchsize, seqlen, outputsize)
@@ -4659,6 +4660,9 @@ function rnntest.SeqLSTM()
             :add(nn.Sequencer(nn.View(1, batchsize, outputsize)))
             :add(nn.JoinTable(1))
       end
+      
+      seqlstm2:remember(remember)
+      seqlstm:remember(remember)
          
       -- forward
       
@@ -4683,6 +4687,8 @@ function rnntest.SeqLSTM()
       for i=1,#params do
          mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, tostring(gradParams2[i]:size()))
       end
+      
+      return lstm2
    end
    
 
@@ -4702,7 +4708,17 @@ function rnntest.SeqLSTM()
       :add(nn.JoinTable(1,2))
    end
    
-   testmodule(seqlstm, true, seqlen, batchsize)
+   local lstm2 = testmodule(seqlstm, true, seqlen, batchsize)
+   
+   -- test forget
+   
+   testmodule(seqlstm, true, seqlen, batchsize, lstm2)
+   
+   -- test remember
+   
+   testmodule(seqlstm, true, seqlen, batchsize, lstm2, 'both')
+   mytester:assert(seqlstm._remember == 'both')
+   mytester:assert(seqlstm.remember_state == true)
    
    -- test variable input size :
    
@@ -4716,7 +4732,17 @@ function rnntest.SeqLSTM()
    local seqlstm = nn.SeqLSTM(inputsize, outputsize)
    seqlstm:reset(1)
    
-   testmodule(seqlstm, false, seqlen, batchsize)
+   local lstm2 = testmodule(seqlstm, false, seqlen, batchsize)
+   
+   -- test forget
+   
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2) --
+   
+   -- test remember
+   
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, 'both')
+   mytester:assert(seqlstm._remember == 'both')
+   mytester:assert(seqlstm.remember_state == true)
    
    -- test variable input size :
    
@@ -4724,6 +4750,7 @@ function rnntest.SeqLSTM()
    local batchsize = 5
    
    testmodule(seqlstm, false, seqlen, batchsize)
+   
 end
 
 function rnntest.FastLSTM_issue203()
