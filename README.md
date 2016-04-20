@@ -16,6 +16,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
+ * [SeqLSTM](#rnn.SeqLSTM) : a very fast version of `nn.Sequencer(nn.FastLSTM)` where the `input` and `output` are tensors;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
@@ -642,6 +643,7 @@ Nevertheless, existing code shouldn't be affected by the change.
 For a concise example of its use, please consult the [simple-sequencer-network.lua](examples/simple-sequencer-network.lua)
 training script.
 
+<a name='rnn.Sequencer.remember'></a>
 ### remember([mode]) ###
 When `mode='neither'` (the default behavior of the class), the Sequencer will additionally call [forget](#nn.AbstractRecurrent.forget) before each call to `forward`. 
 When `mode='both'` (the default when calling this function), the Sequencer will never call [forget](#nn.AbstractRecurrent.forget).
@@ -656,6 +658,41 @@ Accepted values for argument `mode` are as follows :
 
 ### forget() ###
 Calls the decorated AbstractRecurrent module's `forget` method.
+
+<a name='rnn.SeqLSTM'></a>
+## SeqLSTM ##
+
+This module is a faster version of `nn.Sequencer(nn.FastLSTM(inputsize, outputsize))` :
+
+```lua
+seqlstm = nn.SeqLSTM(inputsize, outputsize)
+``` 
+
+A notable difference is that this module expects the `input` and `gradOutput` to 
+be tensors instead of tables. The default shape is `seqlen x batchsize x inputsize` for
+the `input` and `seqlen x batchsize x outputsize` for the `output` :
+
+```lua
+input = torch.randn(seqlen, batchsize, inputsize)
+gradOutput = torch.randn(seqlen, batchsize, outputsize)
+
+output = seqlstm:forward(input)
+gradInput = seqlstm:backward(input, gradOutput)
+``` 
+
+Note that if you prefer to transpose the first two dimension (i.e. `batchsize x seqlen` instead of the default `seqlen x batchsize`)
+you can set `seqlstm.batchfirst = true` following initialization.
+
+The `seqlstm:toFastLSTM()` method generates a [FastLSTM](#rnn.FastLSTM) instance initialized with the parameters 
+of the `seqlstm` instance. Note however that the resulting parameters will not be shared (nor can they ever be).
+
+Like the `FastLSTM`, the `SeqLSTM` does not use peephole connections between cell and gates (see [FastLSTM](#rnn.FastLSTM) for details).
+
+Like the `Sequencer`, the `SeqLSTM` provides a [remember](rnn.Sequencer.remember) method.
+
+Note that a `SeqLSTM` cannot replace `FastLSTM` in code that decorates it with a
+`AbstractSequencer` or `Recursor` as this would be equivalent to `Sequencer(Sequencer(FastLSTM))`.
+You have been warned.
 
 <a name='rnn.BiSequencer'></a>
 ## BiSequencer ##
