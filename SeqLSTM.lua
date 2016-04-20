@@ -150,14 +150,30 @@ function SeqLSTM:updateOutput(input)
    local D, H = self.inputsize, self.outputsize
    
    self._output = self._output or self.weight.new()
+   
+   -- remember previous state?
+   local remember
+   if self.train ~= false then
+      if self._remember == 'both' or self._remember == 'train' then
+         remember = true
+      elseif self._remember == 'neither' or self._remember == 'eval' then
+         remember = false
+      end
+   else
+      if self._remember == 'both' or self._remember == 'eval' then
+         remember = true
+      elseif self._remember == 'neither' or self._remember == 'train' then
+         remember = false
+      end
+   end
 
    self._return_grad_c0 = (c0 ~= nil)
    self._return_grad_h0 = (h0 ~= nil)
    if not c0 then
       c0 = self.c0
-      if c0:nElement() == 0 or not self.remember_state then
+      if c0:nElement() == 0 or not remember then
          c0:resize(N, H):zero()
-      elseif self.remember_state then
+      elseif remember then
          local prev_T, prev_N = self.cell:size(1), self.cell:size(2)
          assert(prev_N == N, 'batch sizes must be constant to remember states')
          c0:copy(self.cell[prev_T])
@@ -165,9 +181,9 @@ function SeqLSTM:updateOutput(input)
    end
    if not h0 then
       h0 = self.h0
-      if h0:nElement() == 0 or not self.remember_state then
+      if h0:nElement() == 0 or not remember then
          h0:resize(N, H):zero()
-      elseif self.remember_state then
+      elseif remember then
          local prev_T, prev_N = self._output:size(1), self._output:size(2)
          assert(prev_N == N, 'batch sizes must be the same to remember states')
          h0:copy(self._output[prev_T])
@@ -323,9 +339,9 @@ function SeqLSTM:clearState()
    self.grad_c0:set()
    self.grad_h0:set()
    self.grad_x:set()
-   self._grad_x:set()
+   self._grad_x = nil
    self.output:set()
-   self._output:set()
+   self._output = nil
    self.gradInput = nil
 end
 
@@ -342,36 +358,33 @@ function SeqLSTM:accGradParameters(input, gradOutput, scale)
    end
 end
 
+function SeqLSTM:forget()
+   self.c0:zero()
+   self.h0:zero()
+end
+
 -- Toggle to feed long sequences using multiple forwards.
 -- 'eval' only affects evaluation (recommended for RNNs)
 -- 'train' only affects training
 -- 'neither' affects neither training nor evaluation
 -- 'both' affects both training and evaluation (recommended for LSTMs)
-function SeqLSTM:remember(mode)
-   nn.Sequencer.remember(self, mode)
-   if self.train ~= false then
-      self:training()
-   else
-      self:evaluate()
-   end
-end
+SeqLSTM.remember = nn.Sequencer.remember
 
 function SeqLSTM:training()
-   if self._remember == 'both' or self._remember == 'train' then
-      self.remember_state = true
-   elseif self._remember == 'neither' or self._remember == 'eval' then
-      self.remember_state = false
+   if self.train == false then
+      -- forget at the start of each training
+      self:forget()
    end
-   return parent.training(self)
+   parent.training(self)
 end
 
 function SeqLSTM:evaluate()
-   if self._remember == 'both' or self._remember == 'eval' then
-      self.remember_state = true
-   elseif self._remember == 'neither' or self._remember == 'train' then
-      self.remember_state = false
+   if self.train ~= false then
+      -- forget at the start of each evaluation
+      self:forget()
    end
-   return parent.evaluate(self)
+   parent.evaluate(self)
+   assert(self.train == false)
 end
 
 function SeqLSTM:toFastLSTM()   
