@@ -11,6 +11,7 @@ function AbstractRecurrent:__init(rho)
    self.rho = rho or 99999 --the maximum number of time steps to BPTT
    
    self.outputs = {}
+   self.gradInputs = {}
    self._gradOutputs = {}
 
    self.step = 1
@@ -54,9 +55,10 @@ function AbstractRecurrent:updateGradInput(input, gradOutput)
    self.updateGradInputStep = self.updateGradInputStep or self.step
    
    -- BPTT for one time-step
-   self.gradInput = self:_updateGradInput(input, gradOutput, self.updateGradInputStep)
+   self.gradInput = self:_updateGradInput(input, gradOutput)
    
    self.updateGradInputStep = self.updateGradInputStep - 1
+   self.gradInputs[self.updateGradInputStep] = self.gradInput
    return self.gradInput
 end
 
@@ -66,7 +68,6 @@ function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
    self.accGradParametersStep = self.accGradParametersStep or self.step
    
    -- BPTT for one time-step 
-   local step = self.accGradParametersStep - 1
    self:_accGradParameters(input, gradOutput, scale)
    
    self.accGradParametersStep = self.accGradParametersStep - 1
@@ -90,6 +91,7 @@ function AbstractRecurrent:recycle(offset)
    end
    
    self.outputs[self.step-rho-1] = nil
+   self.gradInputs[self.step-rho-1] = nil
    
    return self
 end
@@ -103,6 +105,7 @@ function AbstractRecurrent:forget()
     -- bring all states back to the start of the sequence buffers
    if self.train ~= false then
       self.outputs = {}
+      self.gradInputs = {}
       self.sharedClones = _.compact(self.sharedClones)
       self._gradOutputs = _.compact(self._gradOutputs)
    end
@@ -192,6 +195,7 @@ end
 function AbstractRecurrent:setOutputStep(step)
    self.output = self.outputs[step] --or self:getStepModule(step).output
    assert(self.output, "no output for step "..step)
+   self.gradInput = self.gradInputs[step]
 end
 
 function AbstractRecurrent:maxBPTTstep(rho)
