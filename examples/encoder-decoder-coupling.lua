@@ -12,7 +12,7 @@ local opt = {}
 opt.learningRate = 0.1
 opt.hiddenSize = 6
 opt.vocabSize = 6
-opt.seqLen = 2 -- length of the encoded sequence
+opt.seqLen = 3 -- length of the encoded sequence
 opt.niter = 1000
 
 --[[ Forward coupling: Copy encoder cell and output to decoder LSTM ]]--
@@ -73,7 +73,7 @@ for i=1,opt.niter do
    local gradOutput = criterion:backward(decOut, decOutSeq)
    dec:backward(decInSeq, gradOutput)
    backwardConnect(encLSTM, decLSTM)
-   local zeroTensor = torch.Tensor(2):zero()
+   local zeroTensor = torch.Tensor(encOut):zero()
    enc:backward(encInSeq, zeroTensor)
 
    dec:updateParameters(opt.learningRate)
