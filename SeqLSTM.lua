@@ -153,13 +153,13 @@ function SeqLSTM:updateOutput(input)
    
    -- remember previous state?
    local remember
-   if self.train ~= false then
+   if self.train ~= false then -- training
       if self._remember == 'both' or self._remember == 'train' then
          remember = true
       elseif self._remember == 'neither' or self._remember == 'eval' then
          remember = false
       end
-   else
+   else -- evaluate
       if self._remember == 'both' or self._remember == 'eval' then
          remember = true
       elseif self._remember == 'neither' or self._remember == 'train' then

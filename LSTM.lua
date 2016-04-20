@@ -152,7 +152,7 @@ function LSTM:updateOutput(input)
       prevOutput = self.outputs[self.step-1]
       prevCell = self.cells[self.step-1]
    end
-      
+   
    -- output(t), cell(t) = lstm{input(t), output(t-1), cell(t-1)}
    local output, cell
    if self.train ~= false then

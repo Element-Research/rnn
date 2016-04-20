@@ -4640,24 +4640,24 @@ function rnntest.SeqLSTM()
    assert(not nn.FastLSTM.usenngraph)
    
    -- compare SeqLSTM to FastLSTM (forward, backward, update)
-   local function testmodule(seqlstm, batchfirst, seqlen, batchsize, lstm2, remember, eval)
-   
+   local function testmodule(seqlstm, batchfirst, seqlen, batchsize, lstm2, remember, eval, seqlstm2)
+      
       lstm2 = lstm2 or seqlstm:toFastLSTM()
       remember = remember or 'neither'
       
       local input, gradOutput
       if batchfirst then
-         input = torch.Tensor(batchsize, seqlen, inputsize)
+         input = torch.randn(batchsize, seqlen, inputsize)
          gradOutput = torch.randn(batchsize, seqlen, outputsize)
-         seqlstm2 = nn.Sequential()
+         seqlstm2 = seqlstm2 or nn.Sequential()
             :add(nn.SplitTable(1, 2))
             :add(nn.Sequencer(lstm2))
             :add(nn.Sequencer(nn.View(batchsize, 1, outputsize)))
             :add(nn.JoinTable(1,2))
       else
-         input = torch.Tensor(seqlen, batchsize, inputsize)
+         input = torch.randn(seqlen, batchsize, inputsize)
          gradOutput = torch.randn(seqlen, batchsize, outputsize)
-         seqlstm2 = nn.Sequential()
+         seqlstm2 = seqlstm2 or nn.Sequential()
             :add(nn.SplitTable(1))
             :add(nn.Sequencer(lstm2))
             :add(nn.Sequencer(nn.View(1, batchsize, outputsize)))
@@ -4665,14 +4665,21 @@ function rnntest.SeqLSTM()
       end
       
       seqlstm2:remember(remember)
+      mytester:assert(seqlstm2:get(2)._remember == remember, tostring(seqlstm2:get(2)._remember) ..'~='.. tostring(remember))
       seqlstm:remember(remember)
+      
+      if eval then
+         seqlstm:evaluate()
+         seqlstm2:evaluate()
+      end
          
       -- forward
       
       local output = seqlstm:forward(input)
       
       local output2 = seqlstm2:forward(input)
-      mytester:assertTensorEq(output, output2, 0.000001) --, tostring(output)..tostring(output2))
+      mytester:assertTensorEq(output, output2, 0.000001)
+      
       mytester:assertTableEq(output:size():totable(), gradOutput:size():totable(), 0.000001)
       
       if not eval then
@@ -4693,7 +4700,7 @@ function rnntest.SeqLSTM()
          end
       end
       
-      return lstm2
+      return lstm2, seqlstm2
    end
    
 
@@ -4704,26 +4711,19 @@ function rnntest.SeqLSTM()
    
    local seqlstm = nn.SeqLSTM(inputsize, outputsize)
    seqlstm.batchfirst = true
-   seqlstm:reset(1) -- so that errors are more apparent
-   
-   local encapsulate = function(lstm2, batchsize)
-      return nn.Sequential()
-      :add(nn.SplitTable(1, 2))
-      :add(nn.Sequencer(lstm2))
-      :add(nn.Sequencer(nn.View(batchsize, 1, outputsize)))
-      :add(nn.JoinTable(1,2))
-   end
+   seqlstm:reset(0.1) -- so that errors are more apparent
    
    seqlstm:clearState() -- test clearState
+   seqlstm:forget() -- test forget
    local lstm2 = testmodule(seqlstm, true, seqlen, batchsize)
    
    -- test forget
    
-   testmodule(seqlstm, true, seqlen, batchsize, lstm2)
+   local lstm2, seqlstm2 = testmodule(seqlstm, true, seqlen, batchsize, lstm2)
    
    -- test remember
    
-   testmodule(seqlstm, true, seqlen, batchsize, lstm2, 'both')
+   testmodule(seqlstm, true, seqlen, batchsize, lstm2, 'both', false, seqlstm2)
    mytester:assert(seqlstm._remember == 'both')
    
    -- test variable input size :
@@ -4741,17 +4741,12 @@ function rnntest.SeqLSTM()
    -- test forget (eval)
    
    local eval = true
-   if eval then
-      seqlstm:evaluate()
-      lstm2:evaluate()
-   end
-      
-   testmodule(seqlstm, true, seqlen, batchsize, lstm2, nil, eval) --
+   local lstm2, seqlstm2 = testmodule(seqlstm, true, seqlen, batchsize, lstm2, nil, eval)
    mytester:assert(seqlstm._remember == 'neither')
    
    -- test remember (eval)
    
-   testmodule(seqlstm, true, seqlen, batchsize, lstm2, 'both', eval)
+   testmodule(seqlstm, true, seqlen, batchsize, lstm2, 'both', eval, seqlstm2)
    mytester:assert(seqlstm._remember == 'both')
    
    -- test variable input size (eval) :
@@ -4761,20 +4756,23 @@ function rnntest.SeqLSTM()
    
    testmodule(seqlstm, true, seqlen, batchsize, lstm2, nil, eval)
    
+   
+   
    --[[ test batchfirst == false (the default) ]]--
+
    
    local seqlstm = nn.SeqLSTM(inputsize, outputsize)
-   seqlstm:reset(1)
+   seqlstm:reset(0.1)
    
    local lstm2 = testmodule(seqlstm, false, seqlen, batchsize)
    
    -- test forget
    
-   testmodule(seqlstm, false, seqlen, batchsize, lstm2) --
+   local lstm2, seqlstm2 = testmodule(seqlstm, false, seqlen, batchsize, lstm2) --
    
    -- test remember
    
-   testmodule(seqlstm, false, seqlen, batchsize, lstm2, 'both')
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, 'both', false, seqlstm2)
    mytester:assert(seqlstm._remember == 'both')
    
    -- test variable input size :
@@ -4787,15 +4785,11 @@ function rnntest.SeqLSTM()
    -- test forget (eval)
    
    local eval = true
-   if eval then
-      seqlstm:evaluate()
-      lstm2:evaluate()
-   end
    
    local p1 = seqlstm:toFastLSTM():getParameters()
    local p2 = lstm2:getParameters()
    mytester:assertTensorEq(p1, p2, 0.0000001)
-   testmodule(seqlstm, false, seqlen, batchsize, lstm2, nil, eval) --
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, nil, eval, seqlstm2) --
    mytester:assert(seqlstm._remember == 'neither')
    
    -- test remember (eval)
@@ -4803,7 +4797,7 @@ function rnntest.SeqLSTM()
    local p1 = seqlstm:toFastLSTM():getParameters()
    local p2 = lstm2:getParameters()
    mytester:assertTensorEq(p1, p2, 0.0000001)
-   testmodule(seqlstm, false, seqlen, batchsize, lstm2, 'both', eval)
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, 'both', eval, seqlstm2)
    mytester:assert(seqlstm.train == false)
    mytester:assert(lstm2.train == false)
    mytester:assert(seqlstm._remember == 'both')
@@ -4813,7 +4807,7 @@ function rnntest.SeqLSTM()
    local seqlen = 4
    local batchsize = 5
    
-   testmodule(seqlstm, false, seqlen, batchsize, lstm2, nil, eval)
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, nil, eval) -- 
 end
 
 function rnntest.FastLSTM_issue203()
