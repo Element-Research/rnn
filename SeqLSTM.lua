@@ -359,8 +359,8 @@ function SeqLSTM:accGradParameters(input, gradOutput, scale)
 end
 
 function SeqLSTM:forget()
-   self.c0:zero()
-   self.h0:zero()
+   self.c0:resize(0)
+   self.h0:resize(0)
 end
 
 -- Toggle to feed long sequences using multiple forwards.

@@ -4898,6 +4898,17 @@ function rnntest.FastLSTM_issue203()
    mytester:assert(err < 0.000001, "error "..err)
 end
 
+function rnntest.SeqLSTM_issue207()
+   local lstm = nn.SeqLSTM(10, 10)
+   lstm.batchfirst = true
+   lstm:remember('both')
+   lstm:training()
+   lstm:forward(torch.Tensor(32, 20, 10))
+   lstm:evaluate()
+   lstm:forget()
+   lstm:forward(torch.Tensor(1, 20, 10))
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_
