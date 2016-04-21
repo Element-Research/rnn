@@ -98,7 +98,6 @@ end
 
 -- this method brings all the memory back to the start
 function AbstractRecurrent:forget()
-   
    -- the recurrentModule may contain an AbstractRecurrent instance (issue 107)
    parent.forget(self) 
    
