@@ -16,7 +16,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
- * [SeqRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
+ * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
