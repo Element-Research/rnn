@@ -1,8 +1,8 @@
 ------------------------------------------------------------------------
---[[ BRNN ]] --
+--[[ SeqBRNN ]] --
 -- Bi-directional RNN using two SeqLSTM modules.
--- Input is a tensor e.g batch x time x inputdim.
--- Output is a tensor of the same length e.g batch x time x outputdim.
+-- Input is a tensor e.g time x batch x inputdim.
+-- Output is a tensor of the same length e.g time x batch x outputdim.
 -- Applies a forward rnn to input tensor in forward order
 -- and applies a backward rnn in reverse order.
 -- Reversal of the sequence happens on the time dimension.
