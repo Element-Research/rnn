@@ -16,6 +16,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
+ * [SeqRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
@@ -26,7 +27,7 @@ Miscellaneous modules and criterions :
  * [TrimZero](#rnn.TrimZero) : is more computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward.
  * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
  * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros
-
+ * [SeqReverseSequence](#rnn.SeqReverseSequence) : reverses an input sequence on a specific dimension;
 Criterions used for handling sequential inputs and targets :
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
@@ -657,6 +658,25 @@ Accepted values for argument `mode` are as follows :
 ### forget() ###
 Calls the decorated AbstractRecurrent module's `forget` method.
 
+<a name='rnn.SeqBRNN'></a>
+## SeqBRNN ##
+
+```lua
+brnn = nn.SeqBRNN(inputSize, outputSize, [batchFirst], [merge])
+```
+
+A bi-directional RNN that uses SeqLSTM. Internally contains a 'fwd' and 'bwd' module of SeqLSTM. Expects an input shape of ```seqlen x batchsize x inputsize```.
+By setting [batchFirst] to true, the input shape can be ```batchsize x seqLen x inputsize```. Merge module defaults to CAddTable(), summing the outputs from each
+output layer.
+
+Example:
+```
+input = torch.rand(1, 1, 5)
+brnn = nn.SeqBRNN(5, 5)
+print(brnn:forward(input))
+```
+Prints an output of a 1x1x5 tensor.
+
 <a name='rnn.BiSequencer'></a>
 ## BiSequencer ##
 Applies encapsulated `fwd` and `bwd` rnns to an input sequence in forward and reverse order.
@@ -862,6 +882,24 @@ in the first Tensor of the `input`. In the case of an `input` table,
 the first Tensor is the first one encountered when doing a depth-first search.
 
 This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
+
+<a name='rnn.SeqReverseSequence'></a>
+## SeqReverseSequence ##
+
+```lua
+reverseSeq = nn.SeqReverseSequence(dim)
+```
+
+Reverses an input tensor on a specified dimension. The reversal dimension can be no larger than three.
+
+Example:
+```
+input = torch.Tensor({{1,2,3,4,5}, {6,7,8,9,10}})
+reverseSeq = nn.SeqReverseSequence(1)
+print(reverseSeq:forward(input))
+
+Gives us an output of torch.Tensor({{6,7,8,9,10},{1,2,3,4,5}})
+```
 
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##
