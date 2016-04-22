@@ -23,11 +23,12 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
  * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
 
 Miscellaneous modules and criterions :
- * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
- * [TrimZero](#rnn.TrimZero) : is more computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward.
- * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
- * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros.
- * [SeqReverseSequence](#rnn.SeqReverseSequence) : reverses an input sequence on a specific dimension.
+ * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros;
+ * [TrimZero](#rnn.TrimZero) : is more computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward;
+ * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros;
+ * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros;
+ * [SeqReverseSequence](#rnn.SeqReverseSequence) : reverses an input sequence on a specific dimension;
+
 Criterions used for handling sequential inputs and targets :
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets.
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence.
