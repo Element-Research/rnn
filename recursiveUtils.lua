@@ -53,7 +53,7 @@ function rnn.recursiveAdd(t1, t2)
       for key,_ in pairs(t2) do
          t1[key], t2[key] = rnn.recursiveAdd(t1[key], t2[key])
       end
-   elseif torch.isTensor(t2) and torch.isTensor(t2) then
+   elseif torch.isTensor(t1) and torch.isTensor(t2) then
       t1:add(t2)
    else
       error("expecting nested tensors or tables. Got "..
@@ -72,7 +72,7 @@ function rnn.recursiveTensorEq(t1, t2)
           isEqual = isEqual and rnn.recursiveTensorEq(t1[key], t2[key])
       end
       return isEqual
-   elseif torch.isTensor(t2) and torch.isTensor(t2) then
+   elseif torch.isTensor(t1) and torch.isTensor(t2) then
       local diff = t1-t2
       local err = diff:abs():max()
       return err < 0.00001
