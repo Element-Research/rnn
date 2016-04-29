@@ -4909,6 +4909,36 @@ function rnntest.SeqLSTM_issue207()
    lstm:forward(torch.Tensor(1, 20, 10))
 end
 
+function rnntest.clearState()
+  seq = nn.Sequential()
+  seqLSTM = nn.LSTM(200, 4)
+  seq:add(nn.Sequencer(seqLSTM))
+
+  for i=1,10 do
+  	seq:forward({torch.Tensor(200), torch.Tensor(200), torch.Tensor(200)})
+  end
+  local criterion = nn.SequencerCriterion(nn.MSECriterion())
+  for i=1,10 do
+  	local input = {torch.Tensor(200), torch.Tensor(200), torch.Tensor(200)}
+  	local t = {torch.Tensor(4), torch.Tensor(4), torch.Tensor(4)}
+  	local output = seq:forward(input)
+  end
+  seq:clearState()
+
+  -- Test if shared clones are deleted
+  mytester:assert(#seqLSTM.sharedClones == 0, 'sharedClones should be empty after clear')
+  mytester:assert(#seqLSTM.cells == 0, 'cells should be empty after clear')
+  mytester:assert(#seqLSTM.gradCells == 0, 'gradCells should be empty after clear')
+  mytester:assert(seqLSTM.nSharedClone == 0, 'nSharedClone should reflect count')
+
+  -- Make sure it still works after clearing
+  for i=1,10 do
+  	local input = {torch.Tensor(200), torch.Tensor(200), torch.Tensor(200)}
+  	local t = {torch.Tensor(4), torch.Tensor(4), torch.Tensor(4)}
+  	local output = seq:forward(input)
+  end
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_

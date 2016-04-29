@@ -96,6 +96,12 @@ function AbstractRecurrent:recycle(offset)
    return self
 end
 
+function nn.AbstractRecurrent:clearState()
+   nn.utils.clear(self, '_input', '_gradOutput', '_gradOutputs', 'sharedClones', 'gradPrevOutput', 'cell', 'cells', 'gradCells')
+   self.nSharedClone = 0
+   return parent.clearState(self)
+end
+
 -- this method brings all the memory back to the start
 function AbstractRecurrent:forget()
    -- the recurrentModule may contain an AbstractRecurrent instance (issue 107)
