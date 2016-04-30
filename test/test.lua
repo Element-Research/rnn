@@ -4811,6 +4811,7 @@ function rnntest.SeqLSTM()
 end
 
 function rnntest.FastLSTM_issue203()
+   torch.manualSeed(123)
    local nWords = 6
    local nActions = 3
    local wordEmbDim = 4
