@@ -155,10 +155,9 @@ function AbstractRecurrent:includingSharedClones(f)
 end
 
 function AbstractRecurrent:type(type, tensorcache)
-   self:includingSharedClones(function()
+   return self:includingSharedClones(function()
       return parent.type(self, type, tensorcache)
    end)
-   return self
 end
 
 function AbstractRecurrent:training()
