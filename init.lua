@@ -55,7 +55,6 @@ torch.include('rnn', 'SeqBRNN.lua')
 torch.include('rnn', 'SequencerCriterion.lua')
 torch.include('rnn', 'RepeaterCriterion.lua')
 torch.include('rnn', 'MaskZeroCriterion.lua')
-torch.include('rnn', 'SequencerCriterionReg.lua')
 
 -- prevent likely name conflicts
 nn.rnn = rnn
