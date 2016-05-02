@@ -5008,6 +5008,236 @@ function rnntest.clearState()
       local input = {torch.Tensor(200), torch.Tensor(200), torch.Tensor(200)}
       local t = {torch.Tensor(4), torch.Tensor(4), torch.Tensor(4)}
       local output = seq:forward(input)
+
+function checkgrad(opfunc, x, eps)
+   -- Function taken from 'optim' package to avoid introducing dependency
+   -- https://github.com/torch/optim/blob/master/checkgrad.lua
+   -- first, compute true gradient:
+   local _,dC = opfunc(x)
+   dC:resize(x:size())
+   
+   -- compute numeric approximations to gradient:
+   local eps = eps or 1e-7
+   local dC_est = torch.Tensor():typeAs(dC):resizeAs(dC)
+   for i = 1,dC:size(1) do
+     x[i] = x[i] + eps
+     local C1 = opfunc(x)
+     x[i] = x[i] - 2 * eps
+     local C2 = opfunc(x)
+     x[i] = x[i] + eps
+     dC_est[i] = (C1 - C2) / (2 * eps)
+   end
+
+   -- estimate error of gradient:
+   local diff = torch.norm(dC - dC_est) / torch.norm(dC + dC_est)
+   return diff,dC,dC_est
+end
+
+function rnntest.NormStabilizer()
+   local SequencerCriterion, parent = torch.class('nn.SequencerCriterionNormStab', 'nn.SequencerCriterion')
+   
+   function SequencerCriterion:__init(criterion, beta)
+      parent.__init(self)
+      self.criterion = criterion
+      if torch.isTypeOf(criterion, 'nn.ModuleCriterion') then
+         error("SequencerCriterion shouldn't decorate a ModuleCriterion. "..
+            "Instead, try the other way around : "..
+            "ModuleCriterion decorates a SequencerCriterion. "..
+            "Its modules can also be similarly decorated with a Sequencer.")
+      end
+      self.clones = {}
+      self.gradInput = {}
+      self.beta = beta
+   end
+   
+   function SequencerCriterion:updateOutput(inputTable, targetTable)
+      self.output = 0
+      for i,input in ipairs(inputTable) do
+         local criterion = self:getStepCriterion(i)
+         self.output = self.output + criterion:forward(input, targetTable[i])
+         if i > 1 then
+            local reg = 0
+            for j=1,input:size(1) do
+               reg = reg + ((input[j]:norm() - inputTable[i-1][j]:norm())^2)
+            end
+            self.output = self.output + 5.0 * reg / input:size(1)
+         end
+      end
+   
+      return self.output
+   end
+
+   -- Make a simple RNN and training set to test gradients 
+   -- hyper-parameters
+   batchSize = 3
+   rho = 2
+   hiddenSize = 3
+   inputSize = 4
+   lr = 0.1
+   beta = 50.0
+   
+   -- build simple recurrent neural network
+   local r = nn.Recurrent(
+      hiddenSize, nn.Linear(inputSize, hiddenSize),
+      nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(),
+      rho
+   )
+   local rnn = nn.Sequential()
+      :add(r)
+      :add(nn.NormStabilizer(beta))
+   
+   rnn = nn.Sequencer(rnn)
+   criterion = nn.SequencerCriterionReg(nn.MSECriterion(), beta)
+   
+   local iteration = 1
+
+   params, gradParams = rnn:getParameters()
+   
+   while iteration < 100 do
+      -- generate a random data point
+      local inputs, targets = {}, {}
+      for step=1,rho do
+         inputs[step] = torch.randn(batchSize, inputSize)
+         targets[step] = torch.randn(batchSize, hiddenSize)
+      end
+   
+      -- set up closure
+      function feval(params_new)
+         if params ~= params_new then
+            params:copy(params_new)
+         end
+   
+         rnn:zeroGradParameters()
+         local outputs = rnn:forward(inputs)
+         local err = criterion:forward(outputs, targets)
+         local gradOutputs = criterion:backward(outputs, targets)
+         local gradInputs = rnn:backward(inputs, gradOutputs)
+         return err, gradParams
+      end
+   
+      -- compare numerical to analytic gradient
+      local diff, dC, dC_est = checkgrad(feval, params, 1e-10)
+      mytester:assert(diff < 1e-3, "Numerical gradient and analytic gradient do not match.")
+
+      rnn:updateParameters(lr)
+
+      iteration = iteration + 1
+   end
+end
+
+function checkgrad(opfunc, x, eps)
+   -- Function taken from 'optim' package to avoid introducing dependency
+   -- https://github.com/torch/optim/blob/master/checkgrad.lua
+   -- first, compute true gradient:
+   local _,dC = opfunc(x)
+   dC:resize(x:size())
+   
+   -- compute numeric approximations to gradient:
+   local eps = eps or 1e-7
+   local dC_est = torch.Tensor():typeAs(dC):resizeAs(dC)
+   for i = 1,dC:size(1) do
+     x[i] = x[i] + eps
+     local C1 = opfunc(x)
+     x[i] = x[i] - 2 * eps
+     local C2 = opfunc(x)
+     x[i] = x[i] + eps
+     dC_est[i] = (C1 - C2) / (2 * eps)
+   end
+
+   -- estimate error of gradient:
+   local diff = torch.norm(dC - dC_est) / torch.norm(dC + dC_est)
+   return diff,dC,dC_est
+end
+
+function rnntest.NormStabilizer()
+   local SequencerCriterion, parent = torch.class('nn.SequencerCriterionNormStab', 'nn.SequencerCriterion')
+   
+   function SequencerCriterion:__init(criterion, beta)
+      parent.__init(self)
+      self.criterion = criterion
+      if torch.isTypeOf(criterion, 'nn.ModuleCriterion') then
+         error("SequencerCriterion shouldn't decorate a ModuleCriterion. "..
+            "Instead, try the other way around : "..
+            "ModuleCriterion decorates a SequencerCriterion. "..
+            "Its modules can also be similarly decorated with a Sequencer.")
+      end
+      self.clones = {}
+      self.gradInput = {}
+      self.beta = beta
+   end
+   
+   function SequencerCriterion:updateOutput(inputTable, targetTable)
+      self.output = 0
+      for i,input in ipairs(inputTable) do
+         local criterion = self:getStepCriterion(i)
+         self.output = self.output + criterion:forward(input, targetTable[i])
+         if i > 1 then
+            local reg = 0
+            for j=1,input:size(1) do
+               reg = reg + ((input[j]:norm() - inputTable[i-1][j]:norm())^2)
+            end
+            self.output = self.output + self.beta * reg / input:size(1)
+         end
+      end
+   
+      return self.output
+   end
+
+   -- Make a simple RNN and training set to test gradients 
+   -- hyper-parameters
+   batchSize = 3
+   rho = 2
+   hiddenSize = 3
+   inputSize = 4
+   lr = 0.1
+   beta = 50.0
+   
+   -- build simple recurrent neural network
+   local r = nn.Recurrent(
+      hiddenSize, nn.Linear(inputSize, hiddenSize),
+      nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(),
+      rho
+   )
+   local rnn = nn.Sequential()
+      :add(r)
+      :add(nn.NormStabilizer(beta))
+   
+   rnn = nn.Sequencer(rnn)
+   criterion = nn.SequencerCriterionNormStab(nn.MSECriterion(), beta)
+   
+   local iteration = 1
+
+   params, gradParams = rnn:getParameters()
+   
+   while iteration < 100 do
+      -- generate a random data point
+      local inputs, targets = {}, {}
+      for step=1,rho do
+         inputs[step] = torch.randn(batchSize, inputSize)
+         targets[step] = torch.randn(batchSize, hiddenSize)
+      end
+   
+      -- set up closure
+      function feval(params_new)
+         if params ~= params_new then
+            params:copy(params_new)
+         end
+   
+         rnn:zeroGradParameters()
+         local outputs = rnn:forward(inputs)
+         local err = criterion:forward(outputs, targets)
+         local gradOutputs = criterion:backward(outputs, targets)
+         local gradInputs = rnn:backward(inputs, gradOutputs)
+         return err, gradParams
+      end
+   
+      -- compare numerical to analytic gradient
+      local diff, dC, dC_est = checkgrad(feval, params, 1e-10)
+      mytester:assert(diff < 1e-3, "Numerical gradient and analytic gradient do not match.")
+
+      rnn:updateParameters(lr)
+
+      iteration = iteration + 1
    end
 end
 
