@@ -4537,7 +4537,7 @@ function rnntest.rnnlm()
          local gradInputs2 = lm2:backward(inputs2, gradOutputs)
          lm2:updateParameters(0.1)
          
-         mytester:assertTensorEq(gradInputs, gradInputs2, 0.0000001, "gradInputs err")
+         mytester:assertTensorEq(gradInputs, gradInputs2:transpose(1,2), 0.0000001, "gradInputs err")
          for k=1,#outputs2 do
             mytester:assertTensorEq(outputs2[k], outputs[k], 0.0000001, "outputs err "..k)
          end
