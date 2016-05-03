@@ -171,7 +171,11 @@ function SeqLSTM:updateOutput(input)
    self._return_grad_h0 = (h0 ~= nil)
    if not c0 then
       c0 = self.c0
-      if c0:nElement() == 0 or not remember then
+      if self.userPrevCell then
+         local prev_N = self.userPrevCell:size(1)
+         assert(prev_N == N, 'batch sizes must be consistent with userPrevCell')
+         c0:resizeAs(self.userPrevCell):copy(self.userPrevCell)
+      elseif c0:nElement() == 0 or not remember then
          c0:resize(N, H):zero()
       elseif remember then
          local prev_T, prev_N = self.cell:size(1), self.cell:size(2)
@@ -181,7 +185,11 @@ function SeqLSTM:updateOutput(input)
    end
    if not h0 then
       h0 = self.h0
-      if h0:nElement() == 0 or not remember then
+      if self.userPrevOutput then
+         local prev_N = self.userPrevOutput:size(1)
+         assert(prev_N == N, 'batch sizes must be consistent with userPrevOutput')
+         h0:resizeAs(self.userPrevOutput):copy(self.userPrevOutput)
+      elseif h0:nElement() == 0 or not remember then
          h0:resize(N, H):zero()
       elseif remember then
          local prev_T, prev_N = self._output:size(1), self._output:size(2)
@@ -217,6 +225,8 @@ function SeqLSTM:updateOutput(input)
       next_h:tanh(next_c):cmul(o)
       prev_h, prev_c = next_h, next_c
    end
+   self.userPrevOutput = nil
+   self.userPrevCell = nil
    
    if self.batchfirst then
       self.output = self._output:transpose(1,2) -- T x N -> N X T
@@ -254,8 +264,11 @@ function SeqLSTM:backward(input, gradOutput, scale)
    grad_h0:resizeAs(h0):zero()
    grad_c0:resizeAs(c0):zero()
    grad_x:resizeAs(x):zero()
-   local grad_next_h = self.buffer1:resizeAs(h0):zero()
-   local grad_next_c = self.buffer2:resizeAs(c0):zero()
+   self.buffer1:resizeAs(h0)
+   self.buffer2:resizeAs(c0)
+   local grad_next_h = self.gradPrevOutput and self.buffer1:copy(self.gradPrevOutput) or self.buffer1:zero()
+   local grad_next_c = self.userNextGradCell and self.buffer2:copy(self.userNextGradCell) or self.buffer2:zero()
+   
    for t = T, 1, -1 do
       local next_h, next_c = h[t], c[t]
       local prev_h, prev_c = nil, nil
@@ -316,7 +329,11 @@ function SeqLSTM:backward(input, gradOutput, scale)
    else
       self.grad_x = grad_x
    end
-
+   self.gradPrevOutput = nil
+   self.userNextGradCell = nil
+   self.userGradPrevCell = self.grad_c0
+   self.userGradPrevOutput = self.grad_h0
+   
    if self._return_grad_c0 and self._return_grad_h0 then
       self.gradInput = {self.grad_c0, self.grad_h0, self.grad_x}
    elseif self._return_grad_h0 then
