@@ -12,6 +12,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [GRU](#rnn.GRU) : Gated Recurrent Units module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
  * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
+ * [NormStabilizer](#rnn.NormStabilizer) : implements [norm-stabilization](http://arxiv.org/abs/1511.08400) criterion (add this module between RNNs);
 
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
@@ -557,9 +558,43 @@ Note : We could very well reimplement the `LSTM` module using the
 newer `Recursor` and `Recurrent` modules, but that would mean 
 breaking backwards compatibility for existing models saved on disk.
 
+<a name='rnn.NormStabilizer'></a>
+## NormStabilizer ##
+
+Ref. A : [Regularizing RNNs by Stabilizing Activations](http://arxiv.org/abs/1511.08400)
+
+This module implements [norm-stabilization](http://arxiv.org/abs/1511.08400) criterion :
+
+```lua
+ns = nn.NormStabilizer(beta)
+``` 
+
+The sole argument `beta` is defined in ref. A. 
+This module should be added between RNNs (or LSTMs or GRUs) to provide better regularization of the hidden states. 
+For example :
+```lua
+local beta = 50
+local stepmodule = nn.Sequential()
+   :add(nn.FastLSTM(10,10))
+   :add(nn.NormStabilizer(beta))
+   :add(nn.FastLSTM(10,10))
+   :add(nn.NormStabilizer(beta))
+local rnn = nn.Sequencer(stepmodule)
+``` 
+
+To use it with `SeqLSTM` you can do something like this :
+```lua
+local beta = 50
+local rnn = nn.Sequential()
+   :add(nn.SeqLSTM(10,10))
+   :add(nn.Sequencer(nn.NormStabilizer(beta)))
+   :add(nn.SeqLSTM(10,10))
+   :add(nn.Sequencer(nn.NormStabilizer(beta)))
+``` 
+
 <a name='rnn.AbstractSequencer'></a>
 ## AbstractSequencer ##
-This abastract class implements a light interface shared by 
+This abstract class implements a light interface shared by 
 subclasses like : `Sequencer`, `Repeater`, `RecurrentAttention`, `BiSequencer` and so on.
   
 <a name='rnn.Sequencer'></a>
