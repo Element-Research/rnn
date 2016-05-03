@@ -5011,31 +5011,10 @@ function rnntest.clearState()
    end
 end
 
-function checkgrad(opfunc, x, eps)
-   -- Function taken from 'optim' package to avoid introducing dependency
-   -- https://github.com/torch/optim/blob/master/checkgrad.lua
-   -- first, compute true gradient:
-   local _,dC = opfunc(x)
-   dC:resize(x:size())
-   
-   -- compute numeric approximations to gradient:
-   local eps = eps or 1e-7
-   local dC_est = torch.Tensor():typeAs(dC):resizeAs(dC)
-   for i = 1,dC:size(1) do
-     x[i] = x[i] + eps
-     local C1 = opfunc(x)
-     x[i] = x[i] - 2 * eps
-     local C2 = opfunc(x)
-     x[i] = x[i] + eps
-     dC_est[i] = (C1 - C2) / (2 * eps)
-   end
-
-   -- estimate error of gradient:
-   local diff = torch.norm(dC - dC_est) / torch.norm(dC + dC_est)
-   return diff,dC,dC_est
-end
-
 function rnntest.NormStabilizer()
+   if not pcall(function() require "optim" end) then
+      return 
+   end
    local SequencerCriterion, parent = torch.class('nn.SequencerCriterionNormStab', 'nn.SequencerCriterion')
 
    function SequencerCriterion:__init(criterion, beta)
@@ -5070,30 +5049,31 @@ function rnntest.NormStabilizer()
 
    -- Make a simple RNN and training set to test gradients 
    -- hyper-parameters
-   batchSize = 3
-   rho = 2
-   hiddenSize = 3
-   inputSize = 4
-   lr = 0.1
-   beta = 50.0
-
-   -- build simple recurrent neural network
+   local batchSize = 3
+   local rho = 2
+   local hiddenSize = 3
+   local inputSize = 4
+   local lr = 0.1
+   local beta = 50.0
+   
    local r = nn.Recurrent(
       hiddenSize, nn.Linear(inputSize, hiddenSize),
       nn.Linear(hiddenSize, hiddenSize), nn.Sigmoid(),
       rho
    )
+   
+   -- build simple recurrent neural network
    local rnn = nn.Sequential()
       :add(r)
       :add(nn.NormStabilizer(beta))
    
    rnn = nn.Sequencer(rnn)
-   criterion = nn.SequencerCriterionNormStab(nn.MSECriterion(), beta)
+   local criterion = nn.SequencerCriterionNormStab(nn.MSECriterion(), beta)
 
    local iteration = 1
-   params, gradParams = rnn:getParameters()
+   local params, gradParams = rnn:getParameters()
 
-   while iteration < 100 do
+   while iteration < 5 do
       -- generate a random data point
       local inputs, targets = {}, {}
       for step=1,rho do
@@ -5102,7 +5082,7 @@ function rnntest.NormStabilizer()
       end
 
       -- set up closure
-      function feval(params_new)
+      local function feval(params_new)
          if params ~= params_new then
             params:copy(params_new)
          end
@@ -5116,13 +5096,104 @@ function rnntest.NormStabilizer()
       end
 
       -- compare numerical to analytic gradient
-      local diff, dC, dC_est = checkgrad(feval, params, 1e-10)
+      local diff, dC, dC_est = optim.checkgrad(feval, params, 1e-10)
       mytester:assert(diff < 1e-3, "Numerical gradient and analytic gradient do not match.")
 
       rnn:updateParameters(lr)
 
       iteration = iteration + 1
    end
+   
+   -- compare to other implementation :
+   local NS, parent = torch.class("nn.NormStabilizerTest", "nn.AbstractRecurrent")
+
+   function NS:__init(beta, rho)
+      parent.__init(self, rho or 9999)
+      self.recurrentModule = nn.CopyGrad()
+      self.beta = beta
+   end
+
+   function NS:_accGradParameters(input, gradOutput, scale)
+      -- No parameters to update
+   end
+
+   function NS:updateOutput(input)
+      local output
+      if self.train ~= false then
+         self:recycle()
+         local recurrentModule = self:getStepModule(self.step)
+         output = recurrentModule:updateOutput(input)
+      else
+         output = self.recurrentModule:updateOutput(input)
+      end
+
+      self.outputs[self.step] = output
+
+      self.output = output
+      self.step = self.step + 1
+      self.gradPrevOutput = nil
+      self.updateGradInputStep = nil
+      self.accGradParametersStep = nil
+
+      return self.output
+   end
+
+   function NS:_updateGradInput(input, gradOutput)    
+      -- First grab h[t] and h[t+1] :
+      -- backward propagate through this step
+      local curStep = self.updateGradInputStep-1
+      local hiddenModule = self:getStepModule(curStep)
+      hiddenModule:updateGradInput(input, gradOutput)
+      local hiddenState = hiddenModule.output
+
+      if curStep < self.step then
+         local batchSize = hiddenState:size(1)
+         if curStep > 1 then
+            local prevHiddenModule = self:getStepModule(curStep - 1)
+            local prevHiddenState = prevHiddenModule.output
+            -- Add norm stabilizer cost function directly to respective CopyGrad.gradInput tensors
+            for i=1,batchSize do
+               local dRegdNorm =  self.beta * 2 * (hiddenState[i]:norm()-prevHiddenState[i]:norm()) / batchSize
+               local dNormdHid = torch.div(hiddenState[i], hiddenState[i]:norm())
+               hiddenModule.gradInput[i]:add(torch.mul(dNormdHid, dRegdNorm))
+            end
+         end
+         if curStep < self.step-1 then
+            local nextHiddenModule = self:getStepModule(curStep + 1)
+            local nextHiddenState = nextHiddenModule.output
+            for i=1,batchSize do
+               local dRegdNorm = self.beta * -2 * (nextHiddenState[i]:norm() - hiddenState[i]:norm()) / batchSize
+               local dNormdHid = torch.div(hiddenState[i], hiddenState[i]:norm()) 
+               hiddenModule.gradInput[i]:add(torch.mul(dNormdHid, dRegdNorm))
+            end
+         end
+      end
+      return hiddenModule.gradInput
+   end
+   
+   local ns = nn.NormStabilizer(beta)
+   local ns2 = nn.NormStabilizerTest(beta)
+   
+   local seq = nn.Sequencer(ns)
+   local seq2 = nn.Sequencer(ns2)
+    
+   local inputs, gradOutputs = {}, {}
+   for step=1,rho do
+      inputs[step] = torch.randn(batchSize, inputSize)
+      gradOutputs[step] = torch.randn(batchSize, inputSize)
+   end
+   
+   local outputs = seq:forward(inputs)
+   local outputs2 = seq2:forward(inputs)
+   local gradInputs = seq:backward(inputs, gradOutputs)
+   local gradInputs2 = seq2:backward(inputs, gradOutputs)
+   
+   for step=1,rho do
+      mytester:assertTensorEq(outputs[step], outputs2[step], 0.0000001)
+      mytester:assertTensorEq(gradInputs[step], gradInputs2[step], 0.0000001)
+   end
+   
+   ns:updateLoss()
 end
 
 function rnn.test(tests, benchmark_)
