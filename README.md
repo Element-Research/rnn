@@ -572,7 +572,7 @@ ns = nn.NormStabilizer([beta])
 This module regularizes the hidden states of RNNs by minimizing the difference between the
 L2-norms of consecutive steps. The cost function is defined as :
 ```
-loss = beta * 1/T sum_t( ||h[t]||-||h[t-1] )^2
+loss = beta * 1/T sum_t( ||h[t]|| - ||h[t-1]|| )^2
 ``` 
 where `T` is the number of time-steps. Note that we do not divide the gradient by `T`
 such that the chosen `beta` can scale to different sequence sizes without being changed.
