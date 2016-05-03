@@ -563,33 +563,41 @@ breaking backwards compatibility for existing models saved on disk.
 
 Ref. A : [Regularizing RNNs by Stabilizing Activations](http://arxiv.org/abs/1511.08400)
 
-This module implements [norm-stabilization](http://arxiv.org/abs/1511.08400) criterion :
+This module implements the [norm-stabilization](http://arxiv.org/abs/1511.08400) criterion:
 
 ```lua
-ns = nn.NormStabilizer(beta)
+ns = nn.NormStabilizer([beta])
 ``` 
 
-The sole argument `beta` is defined in ref. A. 
+This module regularizes the hidden states of RNNs by minimizing the difference between the
+L2-norms of consecutive steps. The cost function is defined as :
+```
+loss = beta * 1/T sum_t( ||h[t]||-||h[t-1] )^2
+``` 
+where `T` is the number of time-steps. Note that we do not divide the gradient by `T`
+such that the chosen `beta` can scale to different sequence sizes without being changed.
+
+The sole argument `beta` is defined in ref. A. Since we don't divide the gradients by
+the number of time-steps, the default value of `beta=1` should be valid for most cases. 
+
 This module should be added between RNNs (or LSTMs or GRUs) to provide better regularization of the hidden states. 
 For example :
 ```lua
-local beta = 50
 local stepmodule = nn.Sequential()
    :add(nn.FastLSTM(10,10))
-   :add(nn.NormStabilizer(beta))
+   :add(nn.NormStabilizer())
    :add(nn.FastLSTM(10,10))
-   :add(nn.NormStabilizer(beta))
+   :add(nn.NormStabilizer())
 local rnn = nn.Sequencer(stepmodule)
 ``` 
 
 To use it with `SeqLSTM` you can do something like this :
 ```lua
-local beta = 50
 local rnn = nn.Sequential()
    :add(nn.SeqLSTM(10,10))
-   :add(nn.Sequencer(nn.NormStabilizer(beta)))
+   :add(nn.Sequencer(nn.NormStabilizer()))
    :add(nn.SeqLSTM(10,10))
-   :add(nn.Sequencer(nn.NormStabilizer(beta)))
+   :add(nn.Sequencer(nn.NormStabilizer()))
 ``` 
 
 <a name='rnn.AbstractSequencer'></a>

@@ -7,10 +7,10 @@
 
 local NS, parent = torch.class("nn.NormStabilizer", "nn.AbstractRecurrent")
 
-function NS:__init(beta, rho)
-   parent.__init(self, rho or 9999)
+function NS:__init(beta)
+   parent.__init(self, 99999)
 
-   self.beta = beta
+   self.beta = beta or 1
    self.recurrentModule = nn.CopyGrad()
    
    -- make it work with nn.Container
@@ -61,6 +61,7 @@ function NS:updateLoss()
       self.loss = self.loss +  steploss
    end
    
+   -- the loss is divided by the number of time-steps (but not the gradients)
    self.loss = self.beta * self.loss / (self.step-1)
    return self.loss
 end
