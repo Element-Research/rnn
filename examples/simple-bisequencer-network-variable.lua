@@ -1,4 +1,4 @@
-require 'dp'
+-- Example BLSTM for variable-length sequences
 require 'rnn'
 
 torch.manualSeed(0)
