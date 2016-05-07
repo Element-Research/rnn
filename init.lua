@@ -24,6 +24,7 @@ torch.include('rnn', 'test.lua')
 torch.include('rnn', 'ZeroGrad.lua')
 torch.include('rnn', 'LinearNoBias.lua')
 torch.include('rnn', 'SAdd.lua')
+torch.include('rnn', 'CopyGrad.lua')
 
 -- recurrent modules
 torch.include('rnn', 'LookupTableMaskZero.lua')
@@ -36,13 +37,20 @@ torch.include('rnn', 'FastLSTM.lua')
 torch.include('rnn', 'GRU.lua')
 torch.include('rnn', 'Recursor.lua')
 torch.include('rnn', 'Recurrence.lua')
+torch.include('rnn', 'NormStabilizer.lua')
 
+-- sequencer modules
 torch.include('rnn', 'AbstractSequencer.lua')
 torch.include('rnn', 'Repeater.lua')
 torch.include('rnn', 'Sequencer.lua')
 torch.include('rnn', 'BiSequencer.lua')
 torch.include('rnn', 'BiSequencerLM.lua')
 torch.include('rnn', 'RecurrentAttention.lua')
+
+-- sequencer + recurrent modules
+torch.include('rnn', 'SeqLSTM.lua')
+torch.include('rnn', 'SeqReverseSequence.lua')
+torch.include('rnn', 'SeqBRNN.lua')
 
 -- recurrent criterions:
 torch.include('rnn', 'SequencerCriterion.lua')
