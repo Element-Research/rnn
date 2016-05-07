@@ -728,6 +728,16 @@ gradInput = seqlstm:backward(input, gradOutput)
 Note that if you prefer to transpose the first two dimension (i.e. `batchsize x seqlen` instead of the default `seqlen x batchsize`)
 you can set `seqlstm.batchfirst = true` following initialization.
 
+For variable length sequences, set `seqlstm.maskzero = true`. 
+This is equivalent to calling `maskZero(1)` on a `FastLSTM` wrapped by a `Sequencer`:
+```lua
+fastlstm = nn.FastLSTM(inputsize, outputsize)
+fastlstm:maskZero(1)
+seqfastlstm = nn.Sequencer(fastlstm)
+``` 
+
+For `maskzero = true`, input sequences are expected to be seperated by tensor of zeros for a time step.
+
 The `seqlstm:toFastLSTM()` method generates a [FastLSTM](#rnn.FastLSTM) instance initialized with the parameters 
 of the `seqlstm` instance. Note however that the resulting parameters will not be shared (nor can they ever be).
 
