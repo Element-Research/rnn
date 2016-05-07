@@ -85,7 +85,6 @@ function AbstractRecurrent:recycle(offset)
    if self.sharedClones[self.step] == nil then
       self.sharedClones[self.step] = self.sharedClones[self.step-rho]
       self.sharedClones[self.step-rho] = nil
-      assert(self._gradOutputs[self.step] == nil)
       self._gradOutputs[self.step] = self._gradOutputs[self.step-rho]
       self._gradOutputs[self.step-rho] = nil
    end

@@ -4640,7 +4640,7 @@ function rnntest.SeqLSTM()
    assert(not nn.FastLSTM.usenngraph)
    
    -- compare SeqLSTM to FastLSTM (forward, backward, update)
-   local function testmodule(seqlstm, batchfirst, seqlen, batchsize, lstm2, remember, eval, seqlstm2)
+   local function testmodule(seqlstm, batchfirst, seqlen, batchsize, lstm2, remember, eval, seqlstm2, maskzero)
       
       lstm2 = lstm2 or seqlstm:toFastLSTM()
       remember = remember or 'neither'
@@ -4648,6 +4648,15 @@ function rnntest.SeqLSTM()
       local input, gradOutput
       if batchfirst then
          input = torch.randn(batchsize, seqlen, inputsize)
+         if maskzero then
+            for i=1,seqlen do
+               for j=1,batchsize do
+                  if math.random() < 0.2 then
+                     input[{j,i,{}}]:zero()
+                  end
+               end
+            end
+         end
          gradOutput = torch.randn(batchsize, seqlen, outputsize)
          seqlstm2 = seqlstm2 or nn.Sequential()
             :add(nn.SplitTable(1, 2))
@@ -4656,6 +4665,15 @@ function rnntest.SeqLSTM()
             :add(nn.JoinTable(1,2))
       else
          input = torch.randn(seqlen, batchsize, inputsize)
+         if maskzero then
+            for i=1,seqlen do
+               for j=1,batchsize do
+                  if math.random() < 0.2 then
+                     input[{i,j,{}}]:zero()
+                  end
+               end
+            end
+         end
          gradOutput = torch.randn(seqlen, batchsize, outputsize)
          seqlstm2 = seqlstm2 or nn.Sequential()
             :add(nn.SplitTable(1))
@@ -4671,6 +4689,9 @@ function rnntest.SeqLSTM()
       if eval then
          seqlstm:evaluate()
          seqlstm2:evaluate()
+      else
+         seqlstm:training()
+         seqlstm2:training()
       end
          
       -- forward
@@ -4756,12 +4777,16 @@ function rnntest.SeqLSTM()
    
    testmodule(seqlstm, true, seqlen, batchsize, lstm2, nil, eval)
    
+   seqlstm.maskzero = true
+   lstm2:maskZero(1)
    
+   testmodule(seqlstm, true, seqlen, batchsize, lstm2, nil, false, nil, true)
    
    --[[ test batchfirst == false (the default) ]]--
 
    
    local seqlstm = nn.SeqLSTM(inputsize, outputsize)
+   seqlstm.maskzero = true
    seqlstm:reset(0.1)
    
    local lstm2 = testmodule(seqlstm, false, seqlen, batchsize)
@@ -4807,12 +4832,49 @@ function rnntest.SeqLSTM()
    local seqlen = 4
    local batchsize = 5
    
-   testmodule(seqlstm, false, seqlen, batchsize, lstm2, nil, eval) -- 
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, nil, eval) 
+   
+   -- test variable length sequences
+   
+   seqlstm.maskzero = true
+   lstm2:maskZero(1)
+   
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, nil, false, nil, true)
+end
+
+function rnntest.SeqLSTM_maskzero()
+   -- tests that it works with non-masked inputs regardless of maskzero's value.
+   -- the actual maskzero = true tests with masked inputs are in SeqLSTM unit test.
+   local T, N, D, H = 3, 2, 4, 5
+   local seqlstm = nn.SeqLSTM(D,H)
+   seqlstm.maskzero = false
+   local seqlstm2 = seqlstm:clone()
+   seqlstm2.maskzero = true
+   
+   
+   local input = torch.randn(T, N, D)
+   local gradOutput = torch.randn(T, N, H)
+   
+   local output = seqlstm:forward(input)
+   local output2 = seqlstm2:forward(input)
+   
+   mytester:assertTensorEq(output, output2, 0.000001)
+   
+   seqlstm:zeroGradParameters()
+   local gradInput = seqlstm:backward(input, gradOutput)
+   seqlstm2:zeroGradParameters()
+   local gradInput2 = seqlstm2:backward(input, gradOutput)
+   
+   mytester:assertTensorEq(gradInput, gradInput2, 0.000001)
+   
+   local params, gradParams = seqlstm:getParameters()
+   local params2, gradParams2 = seqlstm2:getParameters()
+   
+   mytester:assertTensorEq(gradParams, gradParams2, 0.000001)
 end
 
 function rnntest.FastLSTM_issue203()
    torch.manualSeed(123)
-   local nWords = 6
    local nActions = 3
    local wordEmbDim = 4
    local lstmHidDim = 7
