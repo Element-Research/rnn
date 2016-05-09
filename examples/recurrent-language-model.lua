@@ -51,6 +51,11 @@ if not opt.silent then
 end
 opt.id = opt.id == '' and ('ptb' .. ':' .. dl.uniqueid()) or opt.id
 
+if opt.cuda then
+   require 'cunn'
+   cutorch.setDevice(opt.device)
+end
+
 --[[ data set ]]--
 
 local trainset, validset, testset = dl.loadPTB({opt.batchsize,1,1})
@@ -141,8 +146,6 @@ local criterion = nn.SequencerCriterion(crit)
 --[[ CUDA ]]--
 
 if opt.cuda then
-   require 'cunn'
-   cutorch.setDevice(opt.device)
    lm:cuda()
    criterion:cuda()
    targetmodule:cuda()
