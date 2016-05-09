@@ -5740,6 +5740,103 @@ function rnntest.NormStabilizer()
    ns:updateLoss()
 end
 
+function rnntest.NCE()
+   local opt = {
+      hiddensize = 10,
+      vocabsize = 1000,
+      dropout = 0,
+      k = 25
+   }
+   
+   local lm = nn.Sequential()
+
+   -- input layer (i.e. word embedding space)
+   local lookup = nn.LookupTableMaskZero(opt.vocabsize, opt.hiddensize[1])
+   lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+   lm:add(lookup) -- input is seqlen x batchsize
+   if opt.dropout > 0 then
+      lm:add(nn.Dropout(opt.dropout))
+   end
+
+   -- rnn layers
+   local inputsize = opt.hiddensize[1]
+   for i,hiddensize in ipairs(opt.hiddensize) do
+      -- this is a faster version of nnSequencer(nn.FastLSTM(inpusize, hiddensize))
+      local rnn = nn.SeqLSTM(inputsize, hiddensize)
+      rnn.maskzero = true
+      lm:add(rnn)
+      if opt.dropout > 0 then
+         lm:add(nn.Dropout(opt.dropout))
+      end
+      inputsize = hiddensize
+   end
+
+   -- output layer
+   local unigram = torch.Float():range(1,opt.vocabsize)
+   unigram:apply(function(x)
+      return math.exp(x)
+   end)
+   local ncemodule = nn.NCEModule(inputsize, opt.vocabsize, opt.k, unigram)
+   ncemodule:fastNoise()
+
+   -- NCE requires {input, target} as inputs
+   lm = nn.Sequential()
+      :add(nn.ParallelTable()
+         :add(lm):add(nn.Identity()))
+      :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
+
+   -- encapsulate stepmodule into a Sequencer
+   lm:add(nn.Sequencer(ncemodule))
+
+   -- remember previous state between batches
+   lm:remember()
+
+
+   --[[ TEMP FIX
+   -- similar to apply, recursively goes over network and calls
+   -- a callback function which returns a new module replacing the old one
+   function nn.Module:replace(callback)
+     local out = callback(self)
+     if self.modules then
+       for i, module in ipairs(self.modules) do
+         self.modules[i] = module:replace(callback)
+       end
+      elseif self.recurrentModule then
+       self.recurrentModule = callback(self.recurrentModule)
+     end
+     return out
+   end
+
+   lm:replace(function(module)
+      if torch.type(module) ~= 'nn.NaN' then
+         module = nn.NaN(module)
+      end
+      return module
+   end)
+   --]]
+   if not opt.silent then
+      print"Language Model:"
+      print(lm)
+   end--]]
+
+   if opt.uniform > 0 then
+      for k,param in ipairs(lm:parameters()) do
+         param:uniform(-opt.uniform, opt.uniform)
+      end
+   end
+
+   --[[ loss function ]]--
+
+   local crit = nn.MaskZeroCriterion(nn.NCECriterion(), 0)
+
+   -- target is also seqlen x batchsize.
+   local targetmodule = nn.SplitTable(1)
+    
+   local criterion = nn.SequencerCriterion(crit)
+   
+   
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_

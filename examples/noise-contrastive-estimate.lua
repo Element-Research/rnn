@@ -7,7 +7,7 @@ version = 2
 --[[ command line arguments ]]--
 cmd = torch.CmdLine()
 cmd:text()
-cmd:text('Train a Language Model on Google Billion Words dataset using RNN or LSTM or GRU')
+cmd:text('Train a Language Model using stacked LSTM on Google Billion Words dataset')
 cmd:text('Example:')
 cmd:text('th recurrent-language-model.lua --cuda --device 2 --progress --cutoff 4 --seqlen 10')
 cmd:text("th recurrent-language-model.lua --progress --cuda --lstm --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --cutoff 5 --maxepoch 13 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
@@ -29,8 +29,6 @@ cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
 cmd:option('--k', 25, 'how many noise samples to use for NCE')
 -- rnn layer 
-cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
-cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
 cmd:option('--dropout', 0, 'ancelossy dropout with this probability after each rnn layer. dropout <= 0 disables it.')
@@ -75,36 +73,17 @@ lm:add(lookup) -- input is seqlen x batchsize
 if opt.dropout > 0 then
    lm:add(nn.Dropout(opt.dropout))
 end
-lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 
 -- rnn layers
-local stepmodule = nn.Sequential() -- ancelossied at each time-step
 local inputsize = opt.hiddensize[1]
-for i,hiddensize in ipairs(opt.hiddensize) do 
-   local rnn
-   if opt.gru then -- Gated Recurrent Units
-      rnn = nn.GRU(inputsize, hiddensize)
-   elseif opt.lstm then -- Long Short Term Memory units
-      require 'nngraph'
-      nn.FastLSTM.usenngraph = true -- faster
-      rnn = nn.FastLSTM(inputsize, hiddensize)
-   else -- simple recurrent neural network
-      local rm =  nn.Sequential() -- input is {x[t], h[t-1]}
-         :add(nn.ParallelTable()
-            :add(i==1 and nn.Identity() or nn.Linear(inputsize, hiddensize)) -- input layer
-            :add(nn.Linear(hiddensize, hiddensize))) -- recurrent layer
-         :add(nn.CAddTable()) -- merge
-         :add(nn.Sigmoid()) -- transfer
-      rnn = nn.Recurrence(rm, hiddensize, 1)
-   end
-   rnn:maskZero(1)
-
-   stepmodule:add(rnn)
-   
+for i,hiddensize in ipairs(opt.hiddensize) do
+   -- this is a faster version of nnSequencer(nn.FastLSTM(inpusize, hiddensize))
+   local rnn = nn.SeqLSTM(inputsize, hiddensize)
+   rnn.maskzero = true
+   lm:add(rnn)
    if opt.dropout > 0 then
-      stepmodule:add(nn.Dropout(opt.dropout))
+      lm:add(nn.Sequencer(nn.Dropout(opt.dropout)))
    end
-   
    inputsize = hiddensize
 end
 
@@ -114,21 +93,16 @@ local ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram)
 ncemodule:fastNoise()
 
 -- NCE requires {input, target} as inputs
-stepmodule = nn.Sequential()
-   :add(nn.ParallelTable()
-      :add(stepmodule):add(nn.Identity())) -- {input, target}
-   :add(ncemodule)
-
 lm = nn.Sequential()
    :add(nn.ParallelTable()
       :add(lm):add(nn.Identity()))
-   :add(nn.ZipTable()) -- {input, target} -> {{x1,t1},{x2,t2},...}
+   :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
 -- encapsulate stepmodule into a Sequencer
-lm:add(nn.Sequencer(stepmodule))
+lm:add(nn.Sequencer(ncemodule))
 
 -- remember previous state between batches
-lm:remember((opt.lstm or opt.gru) and 'both' or 'eval')
+lm:remember()
 
 
 -- TEMP FIX
