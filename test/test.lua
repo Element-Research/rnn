@@ -2309,6 +2309,62 @@ function rnntest.Sequencer_tensor()
    end
 end
 
+function rnntest.Sequencer_tensoreval()
+   -- test that it behave the same in evaluation
+   local seqlen, batchsize, fsize = 5, 3, 4
+   local input = torch.randn(seqlen, batchsize, fsize)
+   local lstm = nn.FastLSTM(fsize, fsize)
+   local lstm2 = lstm:clone()
+   local seq = nn.Sequencer(lstm)
+   local seq2 = nn.Sequential()
+            :add(nn.SplitTable(1))
+            :add(nn.Sequencer(lstm2))
+   seq:evaluate()
+   seq2:evaluate()
+   local output = seq:forward(input)
+   local output2 = seq2:forward(input)
+   for i=1,seqlen do
+      mytester:assertTensorEq(output[i], output2[i], 0.000001)
+   end
+   seq:forget()
+   seq2:forget()
+   -- test eval after forget
+   local input = torch.randn(seqlen, batchsize, fsize)
+   local output = seq:forward(input)
+   local output2 = seq2:forward(input)
+   for i=1,seqlen do
+      mytester:assertTensorEq(output[i], output2[i], 0.000001)
+   end
+   -- test eval after forget + variable size
+   for i=1,3 do
+      seqlen, batchsize = math.random(2,7), math.random(2,7)
+      local input = torch.randn(seqlen, batchsize, fsize)
+      local output = seq:forward(input)
+      local output2 = seq2:forward(input)
+      for i=1,seqlen do
+         mytester:assertTensorEq(output[i], output2[i], 0.000001)
+      end
+   end
+   -- test again with remember
+   seq:remember()
+   seq2:remember()
+   local input = torch.randn(seqlen, batchsize, fsize)
+   local outputs = seq:forward(input)
+   local outputs2 = seq2:forward(input)
+   for i=1,seqlen do
+      mytester:assertTensorEq(output[i], output2[i], 0.000001)
+   end
+   for i=1,3 do
+      local seqlen = math.random(2,7)
+      local input = torch.randn(seqlen, batchsize, fsize)
+      local outputs = seq:forward(input)
+      local outputs2 = seq2:forward(input)
+      for i=1,seqlen do
+         mytester:assertTensorEq(output[i], output2[i], 0.000001)
+      end
+   end
+end
+
 function rnntest.BiSequencer()
    local hiddenSize = 8
    local batchSize = 4
