@@ -75,8 +75,6 @@ function SeqLSTM:__init(inputsize, outputsize)
    -- set this to true for variable length sequences that seperate
    -- independent sequences with a step of zeros (a tensor of size D)
    self.maskzero = false
-   -- required by TrimZero
-   self.batchmode = true
 end
 
 function SeqLSTM:reset(std)
@@ -94,9 +92,24 @@ function SeqLSTM:resetStates()
    self.c0 = self.c0.new()
 end
 
-SeqLSTM.nInputDim = 1
-SeqLSTM.recursiveMask = nn.TrimZero.recursiveMask
-SeqLSTM.recursiveUnMask = nn.TrimZero.recursiveUnMask
+-- unlike MaskZero, the mask is applied in-place
+function SeqLSTM:recursiveMask(output, mask)
+   if torch.type(output) == 'table' then
+      for k,v in ipairs(output) do
+         self:recursiveMask(output[k], mask)
+      end
+   else
+      assert(torch.isTensor(output))
+      
+      -- make sure mask has the same dimension as the output tensor
+      local outputSize = output:size():fill(1)
+      outputSize[1] = output:size(1)
+      mask:resize(outputSize)
+      -- build mask
+      local zeroMask = mask:expandAs(output)
+      output:maskedFill(zeroMask, 0)
+   end
+end
 
 local function check_dims(x, dims)
    assert(x:dim() == #dims)
@@ -221,33 +234,6 @@ function SeqLSTM:updateOutput(input)
       local next_c = c[t]
       local cur_gates = self.gates[t]
       
-      if self.maskzero then
-         -- TODO : 
-         -- do not do anything for time-step batches that have no masks.
-         
-         -- build mask
-         local vectorDim = cur_x:dim() 
-         self._zeroMask = self._zeroMask or cur_x.new()
-         self._zeroMask:norm(cur_x, 2, vectorDim)
-         self.zeroMask = self.zeroMask or ((torch.type(cur_x) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
-         self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)         
-         -- uses torch.index to consolidate the non-zeromask rows
-         self.maskedinput = self:recursiveMask(self.maskedinput, {cur_x, prev_h, prev_c}, self.zeroMask)
-         
-         -- uses buffers for the intermediate and output states
-         cur_x, prev_h, prev_c = unpack(self.maskedinput)
-         self._next_h = self._next_h or next_h.new()
-         self._next_h:resizeAs(prev_h):zero()
-         self._next_c = self._next_c or next_c.new()
-         self._next_c:resizeAs(prev_c):zero()
-         self._cur_gates = self._cur_gates or cur_gates.new()
-         local n = cur_x:size(1) -- number of non-zero rows
-         self._cur_gates:resize(n, 4*H):zero()
-         
-         next_h, next_c, cur_gates = self._next_h, self._next_c, self._cur_gates
-         bias_expand = self.bias:view(1, 4 * H):expand(n, 4 * H)
-      end
-      
       cur_gates:addmm(bias_expand, cur_x, Wx)
       cur_gates:addmm(prev_h, Wh)
       cur_gates[{{}, {1, 3 * H}}]:sigmoid()
@@ -261,7 +247,14 @@ function SeqLSTM:updateOutput(input)
       next_h:tanh(next_c):cmul(o)
       
       if self.maskzero then
-         next_h, next_c = unpack(self:recursiveUnMask({h[t], c[t], self.gates[t]}, {next_h, next_c, cur_gates}, self.zeroMask, true))
+         -- build mask from input
+         local vectorDim = cur_x:dim() 
+         self._zeroMask = self._zeroMask or cur_x.new()
+         self._zeroMask:norm(cur_x, 2, vectorDim)
+         self.zeroMask = self.zeroMask or ((torch.type(cur_x) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
+         self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)     
+         -- zero masked output
+         self:recursiveMask({next_h, next_c, cur_gates}, self.zeroMask)
       end
       
       prev_h, prev_c = next_h, next_c

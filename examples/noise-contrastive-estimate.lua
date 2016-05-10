@@ -2,7 +2,7 @@ require 'paths'
 require 'rnn'
 local dl = require 'dataload'
 
-version = 2
+version = 3
 
 --[[ command line arguments ]]--
 cmd = torch.CmdLine()
@@ -10,7 +10,7 @@ cmd:text()
 cmd:text('Train a Language Model using stacked LSTM on Google Billion Words dataset')
 cmd:text('Example:')
 cmd:text('th recurrent-language-model.lua --cuda --device 2 --progress --cutoff 4 --seqlen 10')
-cmd:text("th noise-contrastive-estimate.lua --progress --earlystop 50 --cuda --device 2 --lstm --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --uniform 0.1 --cutoff 5 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
+cmd:text("th noise-contrastive-estimate.lua --progress --earlystop 50 --cuda --device 2 --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --uniform 0.1 --cutoff 5 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
 cmd:text("th scripts/evaluate-rnnlm.lua --xplogpath /data/save/rnnlm/ptb:atlas:1458081269:1.t7 --cuda")
 cmd:text('Options:')
 -- training
@@ -23,6 +23,7 @@ cmd:option('--maxnormout', -1, 'max l2-norm of each layer\'s output neuron weigh
 cmd:option('--cutoff', -1, 'max l2-norm of concatenation of all gradParam tensors')
 cmd:option('--cuda', false, 'use CUDA')
 cmd:option('--device', 1, 'sets the device (GPU) to use')
+cmd:option('--profile', false, 'profile updateOutput,updateGradInput and accGradParameters in Sequential')
 cmd:option('--maxepoch', 1000, 'maximum number of epochs to run')
 cmd:option('--earlystop', 50, 'maximum number of epochs to wait to find a better local minima for early-stopping')
 cmd:option('--progress', false, 'print progress bar')
@@ -57,7 +58,7 @@ end
 
 --[[ data set ]]--
 
-local trainset, validset, testset = dl.loadGBW({opt.batchsize,1,1}, opt.tiny and 'train_tiny.th7' or nil)
+local trainset, validset, testset = dl.loadGBW({opt.batchsize,opt.batchsize,opt.batchsize}, opt.tiny and 'train_tiny.th7' or nil)
 if not opt.silent then 
    print("Vocabulary size : "..#trainset.ivocab) 
    print("Train set split into "..opt.batchsize.." sequences of length "..trainset:size())
@@ -83,10 +84,12 @@ for i,hiddensize in ipairs(opt.hiddensize) do
    rnn.maskzero = true
    lm:add(rnn)
    if opt.dropout > 0 then
-      lm:add(nn.Sequencer(nn.Dropout(opt.dropout)))
+      lm:add(nn.Dropout(opt.dropout))
    end
    inputsize = hiddensize
 end
+
+lm:add(nn.SplitTable(1))
 
 -- output layer
 local unigram = trainset.wordfreq:float()
@@ -100,34 +103,15 @@ lm = nn.Sequential()
    :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
 -- encapsulate stepmodule into a Sequencer
-lm:add(nn.Sequencer(ncemodule))
+lm:add(nn.Sequencer(nn.TrimZero(ncemodule, 1)))
 
 -- remember previous state between batches
 lm:remember()
 
-
--- TEMP FIX
--- similar to apply, recursively goes over network and calls
--- a callback function which returns a new module replacing the old one
-function nn.Module:replace(callback)
-  local out = callback(self)
-  if self.modules then
-    for i, module in ipairs(self.modules) do
-      self.modules[i] = module:replace(callback)
-    end
-   elseif self.recurrentModule then
-    self.recurrentModule = callback(self.recurrentModule)
-  end
-  return out
+if opt.profile then
+   lm:profile()
 end
 
-lm:replace(function(module)
-   if torch.type(module) ~= 'nn.NaN' then
-      module = nn.NaN(module)
-   end
-   return module
-end)
---]]
 if not opt.silent then
    print"Language Model:"
    print(lm)
@@ -198,6 +182,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
       local _ = require 'moses'
       assert(not _.isNaN(targets:sum()))
+      assert(not _.isNaN(inputs:sum()))
       targets = targetmodule:forward(targets)
       inputs = {inputs, targets}
       -- forward
@@ -248,8 +233,8 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    end
 
    if cutorch then cutorch.synchronize() end
-   local speed = a:time().real/opt.trainsize
-   print(string.format("Speed : %f sec/batch ", speed))
+   local speed = opt.trainsize*opt.batchsize/a:time().real
+   print(string.format("Speed : %f words/second; %f ms/word", speed, 1000/speed))
 
    local nceloss = sumErr/opt.trainsize
    print("Training error : "..nceloss)

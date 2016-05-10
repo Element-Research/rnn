@@ -5392,13 +5392,12 @@ end
 
 function rnntest.SeqLSTM_maskzero()
    -- tests that it works with non-masked inputs regardless of maskzero's value.
-   -- the actual maskzero = true tests with masked inputs are in SeqLSTM unit test.
+   -- Note that more maskzero = true tests with masked inputs are in SeqLSTM unit test.
    local T, N, D, H = 3, 2, 4, 5
    local seqlstm = nn.SeqLSTM(D,H)
    seqlstm.maskzero = false
    local seqlstm2 = seqlstm:clone()
    seqlstm2.maskzero = true
-   
    
    local input = torch.randn(T, N, D)
    local gradOutput = torch.randn(T, N, H)
@@ -5419,6 +5418,57 @@ function rnntest.SeqLSTM_maskzero()
    local params2, gradParams2 = seqlstm2:getParameters()
    
    mytester:assertTensorEq(gradParams, gradParams2, 0.000001)
+   if benchmark then
+      local T, N, D, H = 20, 20, 50, 50
+      if pcall(function() require 'cunn' end) then
+         T, N, D, H = 100, 128, 250, 250
+      end
+      
+      local seqlstm = nn.SeqLSTM(D,H)
+      local input = torch.randn(T, N, D)
+      local gradOutput = torch.randn(T, N, H)
+      
+      if cunn then
+         input = input:cuda()
+         gradOutput = gradOutput:cuda()
+         seqlstm:cuda()
+      end
+      
+      seqlstm.maskzero = false
+      seqlstm:forward(input)
+      seqlstm:backward(input, gradOutput)
+      
+      if cunn then cutorch.synchronize() end
+      local a = torch.Timer()
+      for i=1,5 do
+         seqlstm:forward(input)
+         seqlstm:backward(input, gradOutput)
+      end
+      if cunn then cutorch.synchronize() end
+      local nonmasktime = a:time().real
+      
+      for t=1,T do
+         for n=1,N do
+            if math.random() <= 1/20 then
+               input[{t,n,{}}] = 0
+            end
+         end
+      end
+      
+      seqlstm.maskzero = true
+      seqlstm:forward(input)
+      seqlstm:backward(input, gradOutput)
+      
+      if cunn then cutorch.synchronize() end
+      local a = torch.Timer()
+      for i=1,5 do
+         seqlstm:forward(input)
+         seqlstm:backward(input, gradOutput)
+      end
+      if cunn then cutorch.synchronize() end
+      local masktime = a:time().real
+      print("mask vs nonmask SeqLSTM", masktime, nonmasktime)
+   end
 end
 
 function rnntest.FastLSTM_issue203()
@@ -5856,8 +5906,6 @@ function rnntest.NCE_MaskZero()
       :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
    -- encapsulate stepmodule into a Sequencer
-   local id = nn.Identity()
-   lm:add(id)
    lm:add(nn.Sequencer(nn.TrimZero(ncemodule, 1)))
 
    -- remember previous state between batches

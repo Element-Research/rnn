@@ -39,7 +39,7 @@ function MaskZero:recursiveMask(output, input, mask)
       
       -- make sure mask has the same dimension as the input tensor
       local inputSize = input:size():fill(1)
-      if input:dim() - 1 == self.nInputDim then
+      if self.batchmode then
          inputSize[1] = input:size(1)
       end
       mask:resize(inputSize)
@@ -55,8 +55,10 @@ function MaskZero:updateOutput(input)
    -- recurrent module input is always the first one
    local rmi = self:recursiveGetFirst(input):contiguous()
    if rmi:dim() == self.nInputDim then
+      self.batchmode = false
       rmi = rmi:view(-1) -- collapse dims
    elseif rmi:dim() - 1 == self.nInputDim then
+      self.batchmode = true
       rmi = rmi:view(rmi:size(1), -1) -- collapse non-batch dims
    else
       error("nInputDim error: "..rmi:dim()..", "..self.nInputDim)
