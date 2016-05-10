@@ -199,6 +199,7 @@ function Sequencer:clearState()
    self._output = {}
    self.tableoutput = {}
    self.tablegradinput = {}
+   self.module:clearState()
 end
 
 Sequencer.__tostring__ = nn.Decorator.__tostring__

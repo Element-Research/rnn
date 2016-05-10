@@ -5125,7 +5125,7 @@ function rnntest.issue204()
    mytester:assertTensorEq(gradInputs[2], gradInputs2[1], 0.000001)
 end
 
-function rnntest.SeqLSTM()
+function rnntest.SeqLSTM_main()
    local inputsize = 2 
    local outputsize = 3
    
@@ -5750,10 +5750,14 @@ function rnntest.NormStabilizer()
    ns:updateLoss()
 end
 
-function rnntest.NCE()
+function rnntest.NCE_MaskZero()
    local opt = {
-      hiddensize = 10,
-      vocabsize = 1000,
+      datasize = 20,
+      batchsize = 4,
+      seqlen = 5,
+      uniform = 0.1,
+      hiddensize = {10},
+      vocabsize = 100,
       dropout = 0,
       k = 25
    }
@@ -5781,11 +5785,11 @@ function rnntest.NCE()
       inputsize = hiddensize
    end
 
+   lm:add(nn.SplitTable(1))
+   
    -- output layer
-   local unigram = torch.Float():range(1,opt.vocabsize)
-   unigram:apply(function(x)
-      return math.exp(x)
-   end)
+   local unigram = torch.FloatTensor():range(1,opt.vocabsize)
+   unigram:pow(2)
    local ncemodule = nn.NCEModule(inputsize, opt.vocabsize, opt.k, unigram)
    ncemodule:fastNoise()
 
@@ -5796,38 +5800,12 @@ function rnntest.NCE()
       :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
    -- encapsulate stepmodule into a Sequencer
-   lm:add(nn.Sequencer(ncemodule))
+   local id = nn.Identity()
+   lm:add(id)
+   lm:add(nn.Sequencer(nn.TrimZero(ncemodule, 1)))
 
    -- remember previous state between batches
    lm:remember()
-
-
-   --[[ TEMP FIX
-   -- similar to apply, recursively goes over network and calls
-   -- a callback function which returns a new module replacing the old one
-   function nn.Module:replace(callback)
-     local out = callback(self)
-     if self.modules then
-       for i, module in ipairs(self.modules) do
-         self.modules[i] = module:replace(callback)
-       end
-      elseif self.recurrentModule then
-       self.recurrentModule = callback(self.recurrentModule)
-     end
-     return out
-   end
-
-   lm:replace(function(module)
-      if torch.type(module) ~= 'nn.NaN' then
-         module = nn.NaN(module)
-      end
-      return module
-   end)
-   --]]
-   if not opt.silent then
-      print"Language Model:"
-      print(lm)
-   end--]]
 
    if opt.uniform > 0 then
       for k,param in ipairs(lm:parameters()) do
@@ -5838,13 +5816,48 @@ function rnntest.NCE()
    --[[ loss function ]]--
 
    local crit = nn.MaskZeroCriterion(nn.NCECriterion(), 0)
-
-   -- target is also seqlen x batchsize.
-   local targetmodule = nn.SplitTable(1)
     
+   local targetmodule =  nn.SplitTable(1)
    local criterion = nn.SequencerCriterion(crit)
    
+   local data = {
+      inputs = torch.LongTensor(opt.datasize, opt.seqlen, opt.batchsize):random(0,opt.vocabsize),
+      targets = torch.LongTensor(opt.datasize, opt.seqlen, opt.batchsize):random(1,opt.vocabsize)
+   }
    
+   local starterr
+   local err
+   local found = false
+   for epoch=1,5 do
+      err = 0
+      for i=1,opt.datasize do
+         local input, target = data.inputs[i], data.targets[i]
+         local target = targetmodule:forward(target)
+         local output = lm:forward({input, target})
+         err = err + criterion:forward(output, target)
+         local gradOutput = criterion:backward(output, target)
+         if not found then
+            for i=1,input:size(1) do
+               for j=1,input:size(2) do
+                  if input[{i,j}] == 0 then
+                     found = true
+                     -- test that it works with mask zero
+                     mytester:assert(output[i][1][j] == 0)
+                     mytester:assert(gradOutput[i][1][j] == 0)
+                  end
+               end
+            end
+         end
+         lm:zeroGradParameters()
+         local gradInput = lm:backward({input, target}, gradOutput)
+         lm:updateParameters(0.05)
+      end
+      if epoch == 1 then
+         starterr = err
+      end
+   end
+   mytester:assert(found)
+   mytester:assert(err < starterr)
 end
 
 function rnn.test(tests, benchmark_)

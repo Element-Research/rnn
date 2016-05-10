@@ -91,7 +91,7 @@ function MaskZeroCriterion:recursiveMaskGradInput(dst, mask, src, input)
       dst = (torch.type(dst) == 'table') and dst or {dst}
       src = (torch.type(src) == 'table') and src or {src}
       for key,_ in pairs(input) do
-         dst[key], src[key] = self:recursiveMaskGradInput(dst[key], mask, src[key], input[key])
+         dst[key] = self:recursiveMaskGradInput(dst[key], mask, src[key], input[key])
       end
       for i=#input+1,#dst do
          dst[i] = nil
@@ -116,7 +116,6 @@ function MaskZeroCriterion:updateGradInput(input, target)
       self._gradInput = self.criterion:updateGradInput(self.input, self.target)
    end
    self.gradInput = self:recursiveMaskGradInput(self.gradInput, self.zeroMask, self._gradInput, input)
-   
    return self.gradInput
 end
 

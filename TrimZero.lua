@@ -43,14 +43,14 @@ function TrimZero:recursiveMask(output, input, mask)
       if torch.type(mask) ~= 'torch.LongTensor' then
          local inputSize = input:size():fill(1)
          assert(self.nInputDim)
-         if input:dim() - 1 == self.nInputDim then
+         if self.batchmode then
             inputSize[1] = input:size(1)
          end
          mask:resize(inputSize)
       end
       
       -- build mask
-      if input:dim() - 1 == self.nInputDim then
+      if self.batchmode then
          assert(torch.find, 'install torchx package : luarocks install torchx')
          -- use torch.find to convert mask from onehot to indices
          if torch.type(mask) ~= 'torch.LongTensor' then
@@ -68,7 +68,6 @@ function TrimZero:recursiveMask(output, input, mask)
             output:index(input, 1, torch.LongTensor{1}):zero()
          end
       else 
-         assert(input:dim() == self.nInputDim, "Input should have nInputDim or nInputDim + 1 dimensions")
          if mask:dim() == 0 or mask:view(-1)[1] == 1 then 
             output:resize(input:size()):zero() 
          else 
@@ -91,13 +90,13 @@ function TrimZero:recursiveUnMask(output, input, mask)
       
       -- make sure output has the same dimension as the mask
       local inputSize = input:size()
-      if input:dim() - 1 == self.nInputDim then
+      if self.batchmode then
          inputSize[1] = mask:size(1)
       end
       output:resize(inputSize):zero()
       
       -- build mask
-      if input:dim() - 1 == self.nInputDim then
+      if self.batchmode then
          assert(self._maskindices)
          mask = self._maskindices
          if mask:dim() > 0 then
@@ -116,8 +115,10 @@ function TrimZero:updateOutput(input)
    -- recurrent module input is always the first one
    local rmi = self:recursiveGetFirst(input):contiguous()
    if rmi:dim() == self.nInputDim then
+      self.batchmode = false
       rmi = rmi:view(-1) -- collapse dims
    elseif rmi:dim() - 1 == self.nInputDim then
+      self.batchmode = true
       rmi = rmi:view(rmi:size(1), -1) -- collapse non-batch dims
    else
       error("nInputDim error: "..rmi:dim()..", "..self.nInputDim)

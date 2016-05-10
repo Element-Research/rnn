@@ -75,6 +75,8 @@ function SeqLSTM:__init(inputsize, outputsize)
    -- set this to true for variable length sequences that seperate
    -- independent sequences with a step of zeros (a tensor of size D)
    self.maskzero = false
+   -- required by TrimZero
+   self.batchmode = true
 end
 
 function SeqLSTM:reset(std)
