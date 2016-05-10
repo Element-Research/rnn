@@ -5370,7 +5370,7 @@ function rnntest.SeqLSTM_main()
    local p1 = seqlstm:toFastLSTM():getParameters()
    local p2 = lstm2:getParameters()
    mytester:assertTensorEq(p1, p2, 0.0000001)
-   testmodule(seqlstm, false, seqlen, batchsize, lstm2, 'both', eval, seqlstm2)
+   testmodule(seqlstm, false, seqlen, batchsize, lstm2, 'both', eval, seqlstm2) --
    mytester:assert(seqlstm.train == false)
    mytester:assert(lstm2.train == false)
    mytester:assert(seqlstm._remember == 'both')

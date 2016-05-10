@@ -175,6 +175,8 @@ function Sequencer:training()
       self:forget()
       -- empty temporary output table
       self._output = {}
+      -- empty output table (tensor mem was managed by seq)
+      self.tableoutput = nil
    end
    parent.training(self)
 end
@@ -183,6 +185,8 @@ function Sequencer:evaluate()
    if self.train ~= false then
       -- forget at the start of each evaluation
       self:forget()
+      -- empty output table (tensor mem was managed by rnn)
+      self.tableoutput = {}
    end
    parent.evaluate(self)
    assert(self.train == false)
