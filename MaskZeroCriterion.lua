@@ -86,13 +86,36 @@ function MaskZeroCriterion:updateOutput(input, target)
    return self.output
 end
 
-function MaskZeroCriterion:updateGradInput(input, target)
-   self.gradInput:resizeAs(input):zero()
-   
-   if self.zeroMask:nElement() > 0 then
-      self._gradInput = self.criterion:updateGradInput(self.input, self.target)
-      self.gradInput:indexCopy(1, self.zeroMask, self._gradInput)
+function MaskZeroCriterion:recursiveMaskGradInput(dst, mask, src, input)
+   if torch.type(input) == 'table' then
+      dst = (torch.type(dst) == 'table') and dst or {dst}
+      src = (torch.type(src) == 'table') and src or {src}
+      for key,_ in pairs(input) do
+         dst[key], src[key] = self:recursiveMaskGradInput(dst[key], mask, src[key], input[key])
+      end
+      for i=#input+1,#dst do
+         dst[i] = nil
+      end
+   elseif torch.isTensor(input) then
+      dst = torch.isTensor(dst) and dst or input.new()
+      dst:resizeAs(input):zero()
+      if mask:nElement() > 0 then
+         assert(src)
+         dst:indexCopy(1, mask, src)
+      end
+   else
+      error("expecting nested tensors or tables. Got "..
+            torch.type(dst).." and "..torch.type(input).." instead")
    end
+   return dst
+end
+
+function MaskZeroCriterion:updateGradInput(input, target)
+   if self.zeroMask:nElement() > 0 then
+      assert(self.input and self.target)
+      self._gradInput = self.criterion:updateGradInput(self.input, self.target)
+   end
+   self.gradInput = self:recursiveMaskGradInput(self.gradInput, self.zeroMask, self._gradInput, input)
    
    return self.gradInput
 end

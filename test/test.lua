@@ -4571,6 +4571,16 @@ function rnntest.MaskZeroCriterion()
    
    local gradInput = crit:backward(input, target)
    mytester:assert(gradInput:sum() == 0, "MaskZeroCriterion all zeros bwd err")
+   
+   -- test table input
+   local inputSize = 5
+   local input = {torch.randn(batchSize, inputSize), torch.randn(batchSize, inputSize)}
+   local target = torch.randn(batchSize):fill(1)
+   input[1][2]:zero()
+   local criterion = nn.MaskZeroCriterion(nn.CosineEmbeddingCriterion(), 1)
+   local loss = criterion:forward(input, target)
+   local gradInput = criterion:backward(input, target)
+   mytester:assert(gradInput[1][2]:sum() + gradInput[2][2]:sum() == 0)
 end
 
 function rnntest.MaskZero_where()
