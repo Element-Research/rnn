@@ -16,7 +16,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
 
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
- * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
+ * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence  (Tensor or Table);
  * [SeqLSTM](#rnn.SeqLSTM) : a very fast version of `nn.Sequencer(nn.FastLSTM)` where the `input` and `output` are tensors;
  * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
@@ -620,7 +620,7 @@ This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_patt
 used to abstract away the intricacies of `AbstractRecurrent` modules. While an `AbstractRecurrent` instance 
 requires that a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
 the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
-It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
+It also takes care of calling `forget` on AbstractRecurrent instances.
 
 ### Input/Output Format
 
@@ -634,7 +634,8 @@ The `Sequencer` requires inputs and outputs to be of shape `seqlen x batchsize x
 
 Above is an example input sequence for a character level language model.
 It has `seqlen` is 5 which means that it contains sequences of 5 time-steps. 
-The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table.
+The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table, although 
+it also accepts full Tensors of shape `seqlen x batchsize x featsize`. 
 The `batchsize` is 2 as their are two independent sequences : `{ H, E, L, L, O }` and `{ F, U, Z, Z, Y, }`.
 The `featsize` is 1 as their is only one feature dimension per character and each such character is of size 1.
 So the input in this case is a table of `seqlen` time-steps where each time-step is represented by a `batchsize x featsize` Tensor.
@@ -659,12 +660,20 @@ input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
 rnn:forward(input[1])
 rnn:forward(input[2])
 rnn:forward(input[3])
-```
+``` 
 
 Equivalently, we can use a Sequencer to forward the entire `input` sequence at once:
 
 ```lua
 seq = nn.Sequencer(rnn)
+seq:forward(input)
+``` 
+
+We can also forward Tensors instead of Tables :
+
+```lua
+-- seqlen x batchsize x featsize
+input = torch.randn(3,3,4)
 seq:forward(input)
 ``` 
 
