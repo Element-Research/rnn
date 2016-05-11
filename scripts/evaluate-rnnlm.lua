@@ -30,9 +30,26 @@ local targetmodule = xplog.targetmodule
 print("Hyper-parameters (xplog.opt):")
 print(xplog.opt)
 
-local trainset, validset, testset = dl.loadPTB({50, 1, 1})
+local trainset, validset, testset
+if xplog.dataset == 'PennTreeBank' then
+   trainset, validset, testset = dl.loadPTB({50, 1, 1})
+   assert(trainset.vocab['the'] == xplog.vocab['the'])
+elseif xplog.dataset == 'GoogleBillionWords' then
+   trainset, validset, testset = dl.loadGBW({50,1,1}, 'train_tiny.th7')
+else
+   error"Unrecognized dataset"
+end
 
-assert(trainset.vocab['the'] == xplog.vocab['the'])
+
+for i,nce in ipairs(lm:findModules('nn.NCEModule')) do
+   nce.normalized = true
+   nce.logsoftmax = true
+   if not opt.nce then
+      criterion = nn.SequencerCriterion(nn.MaskZeroCriterion(nn.ClassNLLCriterion(), 1))
+      if opt.cuda then criterion:cuda() end
+      opt.nce = true
+   end
+end
 
 print(lm)
 
@@ -62,6 +79,7 @@ else
    
    for i, inputs, targets in testset:subiter(100) do
       local targets = targetmodule:forward(targets)
+      local inputs = opt.nce and {inputs, targets} or inputs
       local outputs = lm:forward(inputs)
       local err = criterion:forward(outputs, targets)
       sumErr = sumErr + err

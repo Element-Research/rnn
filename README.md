@@ -16,7 +16,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
 
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
- * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
+ * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence  (Tensor or Table);
  * [SeqLSTM](#rnn.SeqLSTM) : a very fast version of `nn.Sequencer(nn.FastLSTM)` where the `input` and `output` are tensors;
  * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
@@ -42,6 +42,7 @@ Criterions used for handling sequential inputs and targets :
 The following are example training scripts using this package :
 
   * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
+  * [Noise Contrastive Estimate](examples/noise-contrastive-estimate.lua) for training multi-layer [SeqLSTM](#rnn.SeqLSTM) language models on the [Google Billion Words dataset](https://github.com/Element-Research/dataload#dl.loadGBW). The example uses [MaskZero](#rnn.MaskZero) to train independent variable length sequences using the [NCEModule](https://github.com/Element-Research/dpnn#nn.NCEModule) and [NCECriterion](https://github.com/Element-Research/dpnn#nn.NCECriterion). This script is our fastest yet boasting speeds of 14,000 words/second with a 2-layer LSTM having 250 hidden units, a batchsize of 128 and sequence length of a 100. Note that you will need to have [Torch installed with Lua instead of LuaJIT](http://torch.ch/docs/getting-started.html#_);
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) shows you how to couple encoder and decoder `LSTMs` for sequence-to-sequence networks;
   * [Simple Recurrent Network](examples/simple-recurrent-network.lua) shows a simple example for building and training a simple recurrent neural network;
@@ -619,7 +620,7 @@ This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_patt
 used to abstract away the intricacies of `AbstractRecurrent` modules. While an `AbstractRecurrent` instance 
 requires that a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
 the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
-It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
+It also takes care of calling `forget` on AbstractRecurrent instances.
 
 ### Input/Output Format
 
@@ -633,7 +634,8 @@ The `Sequencer` requires inputs and outputs to be of shape `seqlen x batchsize x
 
 Above is an example input sequence for a character level language model.
 It has `seqlen` is 5 which means that it contains sequences of 5 time-steps. 
-The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table.
+The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table, although 
+it also accepts full Tensors of shape `seqlen x batchsize x featsize`. 
 The `batchsize` is 2 as their are two independent sequences : `{ H, E, L, L, O }` and `{ F, U, Z, Z, Y, }`.
 The `featsize` is 1 as their is only one feature dimension per character and each such character is of size 1.
 So the input in this case is a table of `seqlen` time-steps where each time-step is represented by a `batchsize x featsize` Tensor.
@@ -658,12 +660,20 @@ input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
 rnn:forward(input[1])
 rnn:forward(input[2])
 rnn:forward(input[3])
-```
+``` 
 
 Equivalently, we can use a Sequencer to forward the entire `input` sequence at once:
 
 ```lua
 seq = nn.Sequencer(rnn)
+seq:forward(input)
+``` 
+
+We can also forward Tensors instead of Tables :
+
+```lua
+-- seqlen x batchsize x featsize
+input = torch.randn(3,3,4)
 seq:forward(input)
 ``` 
 
