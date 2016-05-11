@@ -1,6 +1,7 @@
 require 'paths'
 require 'rnn'
 local dl = require 'dataload'
+assert(nn.NCEModule, "please update dpnn")
 
 version = 3
 

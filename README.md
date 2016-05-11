@@ -42,6 +42,7 @@ Criterions used for handling sequential inputs and targets :
 The following are example training scripts using this package :
 
   * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
+  * [Noise Contrastive Estimate](examples/noise-contrastive-estimate.lua) for training multi-layer [SeqLSTM](#rnn.SeqLSTM) language models on the [Google Billion Words dataset](https://github.com/Element-Research/dataload#dl.loadGBW). The example uses [MaskZero](#rnn.MaskZero) to train independent variable length sequences using the [NCEModule](https://github.com/Element-Research/dpnn#nn.NCEModule) and [NCECriterion](https://github.com/Element-Research/dpnn#nn.NCECriterion). This script is our fastest yet boasting speeds of 14,000 words/second with a 2-layer LSTM having 250 hidden units, a batchsize of 128 and sequence length of a 100. Note that you will need to have [Torch installed with Lua instead of LuaJIT](http://torch.ch/docs/getting-started.html#_);
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) shows you how to couple encoder and decoder `LSTMs` for sequence-to-sequence networks;
   * [Simple Recurrent Network](examples/simple-recurrent-network.lua) shows a simple example for building and training a simple recurrent neural network;
