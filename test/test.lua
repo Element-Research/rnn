@@ -5897,7 +5897,6 @@ function rnntest.NCE_MaskZero()
    local unigram = torch.FloatTensor():range(1,opt.vocabsize)
    unigram:pow(2)
    local ncemodule = nn.NCEModule(inputsize, opt.vocabsize, opt.k, unigram)
-   ncemodule:fastNoise()
 
    -- NCE requires {input, target} as inputs
    lm = nn.Sequential()
@@ -5906,7 +5905,7 @@ function rnntest.NCE_MaskZero()
       :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
    -- encapsulate stepmodule into a Sequencer
-   lm:add(nn.Sequencer(nn.TrimZero(ncemodule, 1)))
+   lm:add(nn.Sequencer(nn.MaskZero(ncemodule, 1)))
 
    -- remember previous state between batches
    lm:remember()

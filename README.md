@@ -26,7 +26,7 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
 
 Miscellaneous modules and criterions :
  * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros;
- * [TrimZero](#rnn.TrimZero) : is more computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward;
+ * [TrimZero](#rnn.TrimZero) : same behavior as `MaskZero`, but more efficient when `input` contains lots zero-masked rows;
  * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros;
  * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros;
  * [SeqReverseSequence](#rnn.SeqReverseSequence) : reverses an input sequence on a specific dimension;
@@ -941,13 +941,18 @@ This decorator makes it possible to pad sequences with different lengths in the 
 
 <a name='rnn.TrimZero'></a>
 ## TrimZero ##
+
+WARNING : only use this module if your input contains lots of zeros. 
+In almost all cases, [`MaskZero`](#rnn.MaskZero) will be faster, especially with CUDA.
+
 The usage is the same with `MaskZero`.
 
 ```lua
 mz = nn.TrimZero(module, nInputDim)
 ```
 
-The only difference from `MaskZero` is that it reduces computational costs by varying a batch size, if any, for the case that varying lengths are provided in the input. Notice that when the lengths are consistent, `MaskZero` will be faster, because `TrimZero` has an operational cost. 
+The only difference from `MaskZero` is that it reduces computational costs by varying a batch size, if any, for the case that varying lengths are provided in the input. 
+Notice that when the lengths are consistent, `MaskZero` will be faster, because `TrimZero` has an operational cost. 
 
 In short, the result is the same with `MaskZero`'s, however, `TrimZero` is faster than `MaskZero` only when sentence lengths is costly vary.
 
