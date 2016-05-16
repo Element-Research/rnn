@@ -958,6 +958,8 @@ This decorator makes it possible to pad sequences with different lengths in the 
 WARNING : only use this module if your input contains lots of zeros. 
 In almost all cases, [`MaskZero`](#rnn.MaskZero) will be faster, especially with CUDA.
 
+Ref. A : [TrimZero: A Torch Recurrent Module for Efficient Natural Language Processing](https://bi.snu.ac.kr/Publications/Conferences/Domestic/KIIS2016S_JHKim.pdf)
+
 The usage is the same with `MaskZero`.
 
 ```lua
