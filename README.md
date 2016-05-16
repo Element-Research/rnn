@@ -18,6 +18,7 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence  (Tensor or Table);
  * [SeqLSTM](#rnn.SeqLSTM) : a very fast version of `nn.Sequencer(nn.FastLSTM)` where the `input` and `output` are tensors;
+ * [SeqGRU](#rnn.SeqGRU) : a very fast version of `nn.Sequencer(nn.GRU)` where the `input` and `output` are tensors;
  * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
@@ -758,6 +759,17 @@ Like the `Sequencer`, the `SeqLSTM` provides a [remember](rnn.Sequencer.remember
 Note that a `SeqLSTM` cannot replace `FastLSTM` in code that decorates it with a
 `AbstractSequencer` or `Recursor` as this would be equivalent to `Sequencer(Sequencer(FastLSTM))`.
 You have been warned.
+
+<a name='rnn.SeqGRU'></a>
+## SeqGRU ##
+
+This module is a faster version of `nn.Sequencer(nn.GRU(inputsize, outputsize))` :
+
+```lua
+seqGRU = nn.SeqGRU(inputsize, outputsize)
+``` 
+
+Usage of SeqGRU differs from GRU in the same manner as SeqLSTM differs from LSTM. Therefore see [SeqLSTM](#rnn.SeqLSTM) for more details.
 
 <a name='rnn.SeqBRNN'></a>
 ## SeqBRNN ##
