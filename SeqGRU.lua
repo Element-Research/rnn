@@ -283,6 +283,18 @@ function SeqGRU:backward(input, gradOutput, scale)
       prev_h = h[t - 1]
     end
     grad_next_h:add(grad_h[t])
+    
+    if self.maskzero then    
+      -- build mask from input
+      local cur_x = x[t]
+      local vectorDim = cur_x:dim()
+      self._zeroMask = self._zeroMask or cur_x.new()
+      self._zeroMask:norm(cur_x, 2, vectorDim)
+      self.zeroMask = self.zeroMask or ((torch.type(cur_x) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
+      self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)
+      -- zero masked gradOutput
+      self:recursiveMask(grad_next_h, self.zeroMask)
+    end
 
     local r = self.gates[{t, {}, {1, H}}]
     local u = self.gates[{t, {}, {H + 1, 2 * H}}]
@@ -292,6 +304,8 @@ function SeqGRU:backward(input, gradOutput, scale)
     local grad_ar = grad_a[{{}, {1, H}}]
     local grad_au = grad_a[{{}, {H + 1, 2 * H}}]
     local grad_ahc = grad_a[{{}, {2 * H + 1, 3 * H}}]
+    
+    
 
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.

@@ -6214,7 +6214,7 @@ function rnntest.SeqGRU_main()
    seqGRU.maskzero = true
    gru2:maskZero(1)
    
-   testmodule(seqGRU, true, seqlen, batchsize, gru2, nil, false, nil, true)
+   testmodule(seqGRU, true, seqlen, batchsize, gru2, nil, false, nil, true) 
    
    --[[ test batchfirst == false (the default) ]]--
 
@@ -6227,7 +6227,7 @@ function rnntest.SeqGRU_main()
    
    -- test forget
    
-   local gru2, seqGRU2 = testmodule(seqGRU, false, seqlen, batchsize, gru2) --
+   local gru2, seqGRU2 = testmodule(seqGRU, false, seqlen, batchsize, gru2) 
    
    -- test remember
    
@@ -6248,7 +6248,7 @@ function rnntest.SeqGRU_main()
    local p1 = seqGRU:toGRU():getParameters()
    local p2 = gru2:getParameters()
    mytester:assertTensorEq(p1, p2, 0.0000001)
-   testmodule(seqGRU, false, seqlen, batchsize, gru2, nil, eval, seqGRU2) --
+   testmodule(seqGRU, false, seqlen, batchsize, gru2, nil, eval, seqGRU2) 
    mytester:assert(seqGRU._remember == 'neither')
    
    -- test remember (eval)
@@ -6256,7 +6256,7 @@ function rnntest.SeqGRU_main()
    local p1 = seqGRU:toGRU():getParameters()
    local p2 = gru2:getParameters()
    mytester:assertTensorEq(p1, p2, 0.0000001)
-   testmodule(seqGRU, false, seqlen, batchsize, gru2, 'both', eval, seqGRU2) --
+   testmodule(seqGRU, false, seqlen, batchsize, gru2, 'both', eval, seqGRU2)
    mytester:assert(seqGRU.train == false)
    mytester:assert(gru2.train == false)
    mytester:assert(seqGRU._remember == 'both')
@@ -6273,7 +6273,7 @@ function rnntest.SeqGRU_main()
    seqGRU.maskzero = true
    gru2:maskZero(1)
    
-   testmodule(seqGRU, false, seqlen, batchsize, gru2, nil, false, nil, true)
+   testmodule(seqGRU, false, seqlen, batchsize, gru2, nil, false, nil, true) 
 end
 
 function rnntest.SeqGRU_maskzero()
