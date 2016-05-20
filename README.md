@@ -58,6 +58,7 @@ The following are example training scripts using this package :
   * [dataload](https://github.com/Element-Research/dataload) : a collection of torch dataset loaders;
   * [RNN/LSTM/BRNN/BLSTM training script ](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
   * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7;
+  * [Sequence to Sequence mapping using encoder-decoder RNNs](https://github.com/rahul-iisc/seq2seq-mapping) : a complete training example using synthetic data.
   * [ConvLSTM](https://github.com/viorik/ConvLSTM) is a repository for training a [Spatio-temporal video autoencoder with differentiable memory](http://arxiv.org/abs/1511.06309).
   * An [time series example](https://github.com/rracinskij/rnntest01/blob/master/rnntest01.lua) for univariate timeseries prediction.
   
@@ -956,6 +957,8 @@ This decorator makes it possible to pad sequences with different lengths in the 
 
 WARNING : only use this module if your input contains lots of zeros. 
 In almost all cases, [`MaskZero`](#rnn.MaskZero) will be faster, especially with CUDA.
+
+Ref. A : [TrimZero: A Torch Recurrent Module for Efficient Natural Language Processing](https://bi.snu.ac.kr/Publications/Conferences/Domestic/KIIS2016S_JHKim.pdf)
 
 The usage is the same with `MaskZero`.
 
