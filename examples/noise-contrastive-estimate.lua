@@ -2,7 +2,7 @@ require 'paths'
 require 'rnn'
 require 'nngraph'
 local dl = require 'dataload'
-assert(nn.NCEModule and nn.NCEModule.version and nn.NCEModule.version > 3, "update dpnn : luarocks install dpnn")
+assert(nn.NCEModule and nn.NCEModule.version and nn.NCEModule.version >= 3, "update dpnn : luarocks install dpnn")
 
 --[[ command line arguments ]]--
 cmd = torch.CmdLine()
@@ -71,20 +71,6 @@ if opt.continue ~= '' then
    -- prevent re-casting bug
    for i,lookup in ipairs(lm:findModules('nn.LookupTableMaskZero')) do
       lookup.__input = nil
-   end
-   -- backwards compatibility with old NCEModule
-   if not opt.version then
-      print"converting old NCEModule"
-      local nce
-      for i,ncem in ipairs(lm:findModules('nn.NCEModule')) do
-         ncem:fastNoise()
-         ncem.Z = torch.Tensor{-1}
-         ncem.noiseSample = nn.NCEModule.noiseSample
-         nce = ncem
-      end
-      nce:clearState()
-      lm.modules[#lm.modules] = nn.Sequencer(nn.MaskZero(nce, 1))
-      print"done"
    end
    criterion = xplog.criterion
    targetmodule = xplog.targetmodule
