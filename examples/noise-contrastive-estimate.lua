@@ -33,8 +33,9 @@ cmd:option('--k', 25, 'how many noise samples to use for NCE')
 cmd:option('--continue', '', 'path to model for which training should be continued. Note that current options (except for device, cuda and tiny) will be ignored.')
 cmd:option('--Z', -1, 'normalization constant for NCE module (-1 approximates it from first batch).')
 -- rnn layer 
-cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
-cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
+cmd:option('--seqlen', 50, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
+cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
+cmd:option('--hiddensize', '{200,200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
 cmd:option('--dropout', 0, 'ancelossy dropout with this probability after each rnn layer. dropout <= 0 disables it.')
 -- data
 cmd:option('--batchsize', 32, 'number of examples per batch')
@@ -44,11 +45,13 @@ cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'rnnlm'), 'path to directory
 cmd:option('--id', '', 'id string of this experiment (used to name output file) (defaults to a unique id)')
 cmd:option('--tiny', false, 'use train_tiny.th7 training file')
 cmd:option('--dontsave', false, 'dont save the model')
+cmd:option('--cpulookup', false, 'keep lookuptable on CPU')
 
 cmd:text()
 local opt = cmd:parse(arg or {})
 opt.hiddensize = loadstring(" return "..opt.hiddensize)()
 opt.schedule = loadstring(" return "..opt.schedule)()
+opt.inputsize = opt.inputsize == -1 and opt.hiddensize[1] or opt.inputsize
 if not opt.silent then
    table.print(opt)
 end
@@ -91,15 +94,18 @@ if not lm then
    lm = nn.Sequential()
 
    -- input layer (i.e. word embedding space)
-   local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.hiddensize[1])
+   local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.inputsize)
    lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+   if opt.cpulookup then
+      lookup = nn.DontCast(lookup:float(), false, true)
+   end
    lm:add(lookup) -- input is seqlen x batchsize
    if opt.dropout > 0 then
       lm:add(nn.Dropout(opt.dropout))
    end
 
    -- rnn layers
-   local inputsize = opt.hiddensize[1]
+   local inputsize = opt.inputsize
    for i,hiddensize in ipairs(opt.hiddensize) do
       -- this is a faster version of nnSequencer(nn.FastLSTM(inpusize, hiddensize))
       local rnn = nn.SeqLSTM(inputsize, hiddensize)

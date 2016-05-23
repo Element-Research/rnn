@@ -30,8 +30,10 @@ local xplog = torch.load(opt.xplogpath)
 local lm = xplog.model
 local criterion = xplog.criterion
 local targetmodule = xplog.targetmodule
+
 print("Hyper-parameters (xplog.opt):")
 print(xplog.opt)
+print("Epoch " .. xplog.epoch)
 print("Training Error")
 print(unpack(xplog.trainnceloss or xplog.trainppl))
 print("Valid Error")
@@ -68,7 +70,7 @@ lm:evaluate()
 
 if opt.nsample > 0 then
    if xplog.dataset == 'GoogleBillionWords' then
-      local sampletext = {}
+      local sampletext = {'<S>'}
       local prevword = trainset.vocab['<S>']
       assert(prevword)
       local inputs = torch.LongTensor(1,1) -- seqlen x batchsize
@@ -83,7 +85,17 @@ if opt.nsample > 0 then
          local sample = torch.multinomial(buffer, 1, true)
          local currentword = trainset.ivocab[sample[1]]
          table.insert(sampletext, currentword)
-         prevword = sample[1]
+         if currentword == '</S>' then
+            -- sentences were trained independently, so we explicitly tell it to start a new sentence
+            inputs:fill(trainset.vocab['<S>'])
+            for i=1,2 do -- forward the start sentence tag 3 times to somewhat forget the last sentence.
+               lm:forward({inputs,{targets}})
+            end
+            prevword = trainset.vocab['<S>']
+            table.insert(sampletext, '\n<S>')
+         else
+            prevword = sample[1]
+         end
       end
       print(table.concat(sampletext, ' '))
    else

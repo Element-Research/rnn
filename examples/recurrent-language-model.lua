@@ -33,6 +33,7 @@ cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution b
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
+cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
 cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
 cmd:option('--dropout', 0, 'apply dropout with this probability after each rnn layer. dropout <= 0 disables it.')
 -- data
@@ -46,6 +47,7 @@ cmd:text()
 local opt = cmd:parse(arg or {})
 opt.hiddensize = loadstring(" return "..opt.hiddensize)()
 opt.schedule = loadstring(" return "..opt.schedule)()
+opt.inputsize = opt.inputsize == -1 and opt.hiddensize[1] or opt.inputsize
 if not opt.silent then
    table.print(opt)
 end
@@ -69,7 +71,7 @@ end
 local lm = nn.Sequential()
 
 -- input layer (i.e. word embedding space)
-local lookup = nn.LookupTable(#trainset.ivocab, opt.hiddensize[1])
+local lookup = nn.LookupTable(#trainset.ivocab, opt.inputsize)
 lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
 if opt.dropout > 0 and not opt.gru then  -- gru has a dropout option
@@ -79,7 +81,7 @@ lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 
 -- rnn layers
 local stepmodule = nn.Sequential() -- applied at each time-step
-local inputsize = opt.hiddensize[1]
+local inputsize = opt.inputsize
 for i,hiddensize in ipairs(opt.hiddensize) do 
    local rnn
    
