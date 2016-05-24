@@ -83,6 +83,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
    elseif opt.lstm then -- Long Short Term Memory units
       require 'nngraph'
       nn.FastLSTM.usenngraph = true -- faster
+      nn.FastLSTM.bn = true
       rnn = nn.FastLSTM(inputsize, hiddensize)
    else -- simple recurrent neural network
       local rm =  nn.Sequential() -- input is {x[t], h[t-1]}
