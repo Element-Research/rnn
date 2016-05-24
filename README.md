@@ -19,7 +19,6 @@ MathJax.Hub.Config({
 </script>
 <!--End Use Dollar Signs for inline math mode: -->
 
-<!-- End: Mathjax $ Symbols -->
 
 # rnn: recurrent neural networks #
 
@@ -391,12 +390,11 @@ The idea is that by turning `FastLSTM.bn` to `true`, the hidden-to-hidden transi
 i[t] = σ(BN(W[x->i]x[t]) + BN(W[h->i]h[t−1]) + b[1->i])                      (1)
 f[t] = σ(BN(W[x->f]x[t]) + BN(W[h->f]h[t−1]) + b[1->f])                      (2)
 z[t] = tanh(BN(W[x->c]x[t]) + BN(W[h->c]h[t−1]) + b[1->c])                   (3)
-c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
+c[t] = f[t]c[t−1] + i[t]z[t]                                                 (4)
 o[t] = σ(BN(W[x->o]x[t]) + BN(W[h->o]h[t−1]) + b[1->o])                      (5)
-h[t] = o[t]tanh(c[t])                                                (6)
+h[t] = o[t]tanh(c[t])                                                        (6)
 ``` 
-thereby reducing [internal covariate shift](arXiv.org/1502.03167v3) between time steps. It is a textbook implementation of Cooijmans et. al.'s [Recurrent Batch Normalization](arxiv.org/1603.09025) paper.
-
+thereby reducing [internal covariate shift](https://arXiv.org/1502.03167v3) between time steps. It is a textbook implementation of Cooijmans et. al.'s [Recurrent Batch Normalization](https://arxiv.org/1603.09025) paper.
 The batch normalizing transform is as defined:
 \begin{equation}                                    
   BN(h; \gamma, \beta) = \beta + \gamma \times \dfrac{ x - \mathbb{E}(\bar{x}) }{\sqrt{\mathbb{E}(\sigma(h)) + \epsilon}}                                  
@@ -406,7 +404,7 @@ where
 \\(\epsion \\) is a regularization hyperparameter to keep the division numerically stable. The authors recommend initializing \\(\gamma\\) to a small value and found 0.1 to be the value that did 
 not cause vanishing gradients. \\(\beta\\), the shift parameter, is null by default.
 
-Note that batch normalization only works when you use `nngraph`.
+Note that batch normalization *only works in `nngraph` mode* for now.
 To turn on batch normalization during training, do `nn.BNFastLSTM.bn = true`. An example is provided in [Recurrent Language Model](/examples/recurrent-language-model.lua#L83-L96).
 To alter the parameters of the batch normalization, do
 ```lua
