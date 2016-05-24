@@ -23,6 +23,8 @@ function FastLSTM:buildModel()
    -- http://arxiv.org/pdf/1502.03167v3.pdf
    --normalize recurrent terms W_h*h_{t-1} and W_x*x_t separately 
 
+   --Olalekan Ogunmolu <lexilighty@gmail.com>
+
    local bn_wx, bn_wh, bn_c  
    if self.bn then  
       bn_wx = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
