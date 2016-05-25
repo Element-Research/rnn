@@ -363,7 +363,7 @@ cloned for each time-step.
 <a name='rnn.RBNFastLSTM'></a>
 #### Recurrent Batch Normalization ####
 This implements the reparameterization of the `FastLSTM` class to enable faster convergence during training based on zero-centering the input-to-hidden transformation of RNNs (LSTMs). 
-The idea is that by turning `FastLSTM.bn` to `true`, the hidden-to-hidden transition of each LSTM cell is normalized according to 
+It reduces the [internal covariate shift](https://arXiv.org/1502.03167v3) between time steps. It implements Cooijmans et. al.'s [Recurrent Batch Normalization](https://arxiv.org/1603.09025). The hidden-to-hidden transition of each LSTM cell is normalized according to 
 ```lua
 i[t] = σ(BN(W[x->i]x[t]) + BN(W[h->i]h[t−1]) + b[1->i])                      (1)
 f[t] = σ(BN(W[x->f]x[t]) + BN(W[h->f]h[t−1]) + b[1->f])                      (2)
@@ -372,17 +372,15 @@ c[t] = f[t]c[t−1] + i[t]z[t]                                                 (
 o[t] = σ(BN(W[x->o]x[t]) + BN(W[h->o]h[t−1]) + b[1->o])                      (5)
 h[t] = o[t]tanh(c[t])                                                        (6)
 ``` 
-thereby reducing [internal covariate shift](https://arXiv.org/1502.03167v3) between time steps. It is a textbook implementation of Cooijmans et. al.'s [Recurrent Batch Normalization](https://arxiv.org/1603.09025) paper.
-The batch normalizing transform is as defined:                                   
+where the batch normalizing transform is:                                   
 ```lua
   BN(h; gamma, beta) = beta + gamma *      x - E(x)
                                        ------------------
                                          sqrt(E(σ(x) + eps))                       
 ```
-where `x` is a vector of (pre)activations to be normalized, `gamma`, and `beta` are model parameters that determine the mean and standard deviation of the normalized activation. `eps` is a regularization hyperparameter to keep the division numerically stable. The authors recommend initializing `gamma` to a small value and found 0.1 to be the value that did not cause vanishing gradients. `beta`, the shift parameter, is `null` by default.
+where `x` is a vector of (pre)activations to be normalized, `gamma`, and `beta` are model parameters that determine the mean and standard deviation of the normalized activation. `eps` is a regularization hyperparameter to keep the division numerically stable and `E(x)` and `E(σ(x))` are the estimates of the mean and variance in the mini-batch respectively. The authors recommend initializing `gamma` to a small value and found 0.1 to be the value that did not cause vanishing gradients. `beta`, the shift parameter, is `null` by default.
 
-Note that batch normalization <b>only works in `nngraph` mode</b> for now. 
-To turn on batch normalization during training, do 
+Note that batch normalization <b>only works in `nngraph` mode</b> for now. To turn on batch normalization during training, do 
 ```lua
   nn.FastLSTM.usenngraph = true
   nn.FastLSTM.bn = true
