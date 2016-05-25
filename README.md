@@ -1,25 +1,3 @@
-<script type="text/x-mathjax-config">
-MathJax.Hub.Config({
-  TeX: { equationNumbers: { autoNumber: "AMS" } }
-});
-</script>
-
-<!--Mathjax Parser -->
-<script type="text/javascript" async
-  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
-</script>
-<!--End Mathjax Parser -->
-
-<!--Use Dollar Signs for inline math mode: -->
-
-<script type="text/x-mathjax-config">
-MathJax.Hub.Config({
-  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
-});
-</script>
-<!--End Use Dollar Signs for inline math mode: -->
-
-
 # rnn: recurrent neural networks #
 
 This is a Recurrent Neural Network library that extends Torch's nn. 
@@ -395,23 +373,27 @@ o[t] = σ(BN(W[x->o]x[t]) + BN(W[h->o]h[t−1]) + b[1->o])                      
 h[t] = o[t]tanh(c[t])                                                        (6)
 ``` 
 thereby reducing [internal covariate shift](https://arXiv.org/1502.03167v3) between time steps. It is a textbook implementation of Cooijmans et. al.'s [Recurrent Batch Normalization](https://arxiv.org/1603.09025) paper.
-The batch normalizing transform is as defined:
-\begin{equation}                                    
-  BN(h; \gamma, \beta) = \beta + \gamma \times \dfrac{ x - \mathbb{E}(\bar{x}) }{\sqrt{\mathbb{E}(\sigma(h)) + \epsilon}}                                  
-\end{equation}
-where
-\\(x \in \mathbb{R}^d\\) is a vector of (pre)activations to be normalized, \\(\gamma, \beta \in \mathbb{R}^d\\) are model parameters that determine the mean and standard deviation of the normalized activation. 
-\\(\epsion \\) is a regularization hyperparameter to keep the division numerically stable. The authors recommend initializing \\(\gamma\\) to a small value and found 0.1 to be the value that did 
-not cause vanishing gradients. \\(\beta\\), the shift parameter, is null by default.
+The batch normalizing transform is as defined:                                   
+```lua
+  BN(h; gamma, beta) = beta + gamma *      x - E(x)
+                                       ------------------
+                                         sqrt(E(σ(x) + eps))                       
+```
+where `x` is a vector of (pre)activations to be normalized, `gamma`, and `beta` are model parameters that determine the mean and standard deviation of the normalized activation. `eps` is a regularization hyperparameter to keep the division numerically stable. The authors recommend initializing `gamma` to a small value and found 0.1 to be the value that did not cause vanishing gradients. `beta`, the shift parameter, is `null` by default.
 
-Note that batch normalization *only works in `nngraph` mode* for now.
-To turn on batch normalization during training, do `nn.BNFastLSTM.bn = true`. An example is provided in [Recurrent Language Model](/examples/recurrent-language-model.lua#L83-L96).
+Note that batch normalization <b>only works in `nngraph` mode</b> for now. 
+To turn on batch normalization during training, do 
+```lua
+  nn.FastLSTM.usenngraph = true
+  nn.FastLSTM.bn = true
+```
 To alter the parameters of the batch normalization, do
 ```lua
   rnn = nn.FastLSTM(inputSize, outputSize, [, rho] [, eps] [, momentum] [, affine])
 ```
-where momentum is same as \\(\gamma\\) (defaults to 0.1), `eps` \\(\equiv \epsilon\\) above and `affine` is a boolean whose state determines if the learnable affine transform is turned off(`false`) 
-or not(`true`). Affine defaults to `true`.
+where `momentum` is same as `gamma` in the equation above (defaults to 0.1), `eps` is equivalent to `epsilon` above and `affine` is a boolean whose state determines if the learnable affine transform is turned off(`false`) or not(`true`). Affine defaults to `true`.`
+
+Unit tested on the [Recurrent Language Model](/examples/recurrent-language-model.lua#L83-L96) example and [automated recurrent neural network](https://github.com/lakehanne/FARNN/blob/repeater/main.lua#L290-L318).
 
 <a name='rnn.GRU'></a>
 ## GRU ##
