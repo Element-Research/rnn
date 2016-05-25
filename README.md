@@ -9,7 +9,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
   * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
-    * [Recurrent Batch Normalized FastLSTM](#rnn.RBNFastLSTM) : normalized hidden-to-hidden transformations of the FastLSTM module;
+  * [Normalized FastLSTM](#rnn.RBNFastLSTM) : mini-batch normalized hidden-to-hidden transformations of FastLSTMs;
  * [GRU](#rnn.GRU) : Gated Recurrent Units module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
  * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
