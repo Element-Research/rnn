@@ -374,11 +374,11 @@ h[t] = o[t]tanh(c[t])                                                        (6)
 ``` 
 where the batch normalizing transform is:                                   
 ```lua
-  BN(h; gamma, beta) = beta + gamma *      x - E(x)
+  BN(h; gamma, beta) = beta + gamma *      hd - E(hd)
                                       ------------------
-                                       sqrt(E(σ(x) + eps))                       
+                                       sqrt(E(σ(hd) + eps))                       
 ```
-where `x` is a vector of (pre)activations to be normalized, `gamma`, and `beta` are model parameters that determine the mean and standard deviation of the normalized activation. `eps` is a regularization hyperparameter to keep the division numerically stable and `E(x)` and `E(σ(x))` are the estimates of the mean and variance in the mini-batch respectively. The authors recommend initializing `gamma` to a small value and found 0.1 to be the value that did not cause vanishing gradients. `beta`, the shift parameter, is `null` by default.
+where `hd` is a vector of (pre)activations to be normalized, `gamma`, and `beta` are model parameters that determine the mean and standard deviation of the normalized activation. `eps` is a regularization hyperparameter to keep the division numerically stable and `E(hd)` and `E(σ(hd))` are the estimates of the mean and variance in the mini-batch respectively. The authors recommend initializing `gamma` to a small value and found 0.1 to be the value that did not cause vanishing gradients. `beta`, the shift parameter, is `null` by default.
 
 Note that batch normalization <b>only works in `nngraph` mode</b> for now. To turn on batch normalization during training, do 
 ```lua
