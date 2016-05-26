@@ -107,7 +107,7 @@ locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
 locationSensor:add(nn[opt.transfer]())
 
 glimpseSensor = nn.Sequential()
-glimpseSensor:add(nn.DontCast(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale):float(),true))
+glimpseSensor:add(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale):float())
 glimpseSensor:add(nn.Collapse(3))
 glimpseSensor:add(nn.Linear(ds:imageSize('c')*(opt.glimpsePatchSize^2)*opt.glimpseDepth, opt.glimpseHiddenSize))
 glimpseSensor:add(nn[opt.transfer]())
@@ -241,6 +241,7 @@ xp = dp.Experiment{
 
 --[[GPU or CPU]]--
 if opt.cuda then
+   print"Using CUDA"
    require 'cutorch'
    require 'cunn'
    cutorch.setDevice(opt.useDevice)

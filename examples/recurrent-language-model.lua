@@ -283,4 +283,4 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    epoch = epoch + 1
 end
 print("Evaluate model using : ")
-print("th scripts/evaluate-rnnlm.lua --xplogpath "..paths.concat(opt.savepath, opt.id..'.t7')..(opt.cuda and '--cuda' or ''))
+print("th scripts/evaluate-rnnlm.lua --xplogpath "..paths.concat(opt.savepath, opt.id..'.t7')..(opt.cuda and ' --cuda' or ''))
