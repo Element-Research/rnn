@@ -22,7 +22,7 @@ function FastLSTM:buildModel()
    self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
    self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
    
-   if self.usenngraph then
+   if self.usenngraph or self.bn then
       require 'nngraph'
       return self:nngraphModel()
    end

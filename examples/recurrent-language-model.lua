@@ -31,6 +31,7 @@ cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
 -- rnn layer 
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
+cmd:option('--bn', false, 'use batch normalization. Only supported with --lstm')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
@@ -90,7 +91,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
    elseif opt.lstm then -- Long Short Term Memory units
       require 'nngraph'
       nn.FastLSTM.usenngraph = true -- faster
-      nn.FastLSTM.bn = true
+      nn.FastLSTM.bn = opt.bn
       rnn = nn.FastLSTM(inputsize, hiddensize)
    else -- simple recurrent neural network
       local rm =  nn.Sequential() -- input is {x[t], h[t-1]}

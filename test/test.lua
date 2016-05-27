@@ -6357,6 +6357,20 @@ function rnntest.SeqGRU_maskzero()
   end
 end
 
+function rnntest.FastLSTM_batchNorm()
+   nn.FastLSTM.bn = true
+   
+   local lstm = nn.FastLSTM(3,4)
+   local input, gradOutput = torch.randn(2,3), torch.randn(2,4)
+   local output = lstm:forward(input)
+   lstm:zeroGradParameters()
+   local gradInput = lstm:backward(input, gradOutput)
+   local modules = lstm:findModules('nn.BatchNormalization')
+   mytester:assert(#modules == 3)
+   
+   nn.FastLSTM.bn = false
+end
+
 function rnn.test(tests, benchmark_)
    mytester = torch.Tester()
    benchmark = benchmark_

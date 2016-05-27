@@ -8,8 +8,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : an abstract class inherited by Recurrent and LSTM;
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
-  * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
-  * [Normalized FastLSTM](#rnn.RBNFastLSTM) : mini-batch normalized hidden-to-hidden transformations of FastLSTMs;
+  * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM) with optional support for batch normalization;
  * [GRU](#rnn.GRU) : Gated Recurrent Units module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
  * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
@@ -364,9 +363,10 @@ Setting `usenngraph = true` will force all new instantiated instances of `FastLS
 to use `nngraph`'s `nn.gModule` to build the internal `recurrentModule` which is 
 cloned for each time-step.
 
-<a name='rnn.RBNFastLSTM'></a>
+<a name='rnn.FastLSTM.bn'></a>
 #### Recurrent Batch Normalization ####
-This implements the reparameterization of the `FastLSTM` class to enable faster convergence during training by zero-centering the input-to-hidden and hidden-to-hidden transformations. 
+
+This extends the `FastLSTM` class to enable faster convergence during training by zero-centering the input-to-hidden and hidden-to-hidden transformations. 
 It reduces the [internal covariate shift](https://arXiv.org/1502.03167v3) between time steps. It is an implementation of Cooijmans et. al.'s [Recurrent Batch Normalization](https://arxiv.org/1603.09025). The hidden-to-hidden transition of each LSTM cell is normalized according to 
 ```lua
 i[t] = σ(BN(W[x->i]x[t]) + BN(W[h->i]h[t−1]) + b[1->i])                      (1)
@@ -384,18 +384,13 @@ where the batch normalizing transform is:
 ```
 where `hd` is a vector of (pre)activations to be normalized, `gamma`, and `beta` are model parameters that determine the mean and standard deviation of the normalized activation. `eps` is a regularization hyperparameter to keep the division numerically stable and `E(hd)` and `E(σ(hd))` are the estimates of the mean and variance in the mini-batch respectively. The authors recommend initializing `gamma` to a small value and found 0.1 to be the value that did not cause vanishing gradients. `beta`, the shift parameter, is `null` by default.
 
-Note that batch normalization <b>only works in `nngraph` mode</b> for now. To turn on batch normalization during training, do 
+To turn on batch normalization during training, do:
 ```lua
-  nn.FastLSTM.usenngraph = true
-  nn.FastLSTM.bn = true
-```
-To alter the parameters of the batch normalization, do
-```lua
-  rnn = nn.FastLSTM(inputSize, outputSize, [, rho] [, eps] [, momentum] [, affine])
-```
-where `momentum` is same as `gamma` in the equation above (defaults to 0.1), `eps` is equivalent to `epsilon` above and `affine` is a boolean whose state determines if the learnable affine transform is turned off(`false`) or not(`true`). Affine defaults to `true`.`
+nn.FastLSTM.bn = true
+lstm = nn.FastLSTM(inputsize, outputsize, [rho, eps, momentum, affine]
+``` 
 
-Unit tested on the [Recurrent Language Model](/examples/recurrent-language-model.lua#L83-L96) example and [automated recurrent neural network](https://github.com/lakehanne/FARNN/blob/repeater/main.lua#L290-L318).
+where `momentum` is same as `gamma` in the equation above (defaults to 0.1), `eps` is defined above and `affine` is a boolean whose state determines if the learnable affine transform is turned off (`false`) or on (`true`, the default).
 
 <a name='rnn.GRU'></a>
 ## GRU ##
