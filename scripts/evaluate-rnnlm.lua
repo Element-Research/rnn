@@ -121,7 +121,7 @@ if opt.nsample > 0 then
 else
    local sumErr = 0
    
-   for i, inputs, targets in testset:subiter(100) do
+   for i, inputs, targets in testset:subiter(xplog.opt.seqlen or 100) do
       local targets = targetmodule:forward(targets)
       local inputs = opt.nce and {inputs, targets} or inputs
       local outputs = lm:forward(inputs)
