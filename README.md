@@ -33,7 +33,7 @@ Miscellaneous modules and criterions :
  * [SeqReverseSequence](#rnn.SeqReverseSequence) : reverses an input sequence on a specific dimension;
 
 Criterions used for handling sequential inputs and targets :
- * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets.
+ * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets (Tensor or Table).
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence.
 
 
@@ -1061,11 +1061,11 @@ This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
 c = nn.SequencerCriterion(criterion)
 ``` 
 
-Both the `input` and `target` are expected to be a sequence (a table). 
-For each step in the sequence, the corresponding elements of the input and target tables 
+Both the `input` and `target` are expected to be a sequence, either as a table or Tensor. 
+For each step in the sequence, the corresponding elements of the input and target 
 will be applied to the `criterion`.
 The output of `forward` is the sum of all individual losses in the sequence.
-This is useful when used in conjuction with a [Sequencer](#rnn.Sequencer).
+This is useful when used in conjunction with a [Sequencer](#rnn.Sequencer).
 
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
@@ -1076,7 +1076,7 @@ This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
 c = nn.RepeaterCriterion(criterion)
 ``` 
 
-The `input` is expected to be a sequence (a table). A single `target` is 
+The `input` is expected to be a sequence (table or Tensor). A single `target` is 
 repeatedly applied using the same `criterion` to each element in the `input` sequence.
 The output of `forward` is the sum of all individual losses in the sequence.
 This is useful for implementing models like [RCNNs](http://jmlr.org/proceedings/papers/v32/pinheiro14.pdf),

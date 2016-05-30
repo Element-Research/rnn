@@ -2626,6 +2626,21 @@ function rnntest.SequencerCriterion()
       mytester:assertTensorEq(gradInput[i]:float(), gradInput3[i], 0.000001, "SequencerCriterion backward type err "..i)
    end
    
+   -- Test tensor as input
+   local sc2 = sc:clone()
+   local split = nn.SplitTable(1)
+   local input = torch.randn(nStep, batchSize, inputSize):float()
+   local target = torch.Tensor(nStep, batchSize):float()
+   for i=1,nStep do
+     target[i] = torch.randperm(inputSize):narrow(1,1,batchSize)
+   end
+   local errTensorInput = sc:forward(input, target) -- As Tensor
+   local errTableInput = sc2:forward(split:forward(input), split:forward(target)) -- As Table
+   mytester:assert(math.abs(errTensorInput - errTableInput) == 0, "SequencerCriterion forward type err") 
+   local gradInputTensor = sc:backward(input, target)
+   local gradInputTable = sc:backward(split:forward(input), split:forward(target))
+   mytester:assertTensorEq(gradInputTensor, torch.cat(gradInputTable, 1):view(gradInputTensor:size()), 0, "SequencerCriterion backward type err ")
+   
    if pcall(function() require 'cunn' end) then
       -- test cuda()
       sc.gradInput = {}
@@ -2684,6 +2699,20 @@ function rnntest.RepeaterCriterion()
    for i=1,nStep do
       mytester:assertTensorEq(gradInput[i]:float(), gradInput3[i], 0.000001, "RepeaterCriterion backward type err "..i)
    end
+   
+   -- Test tensor as input
+   sc:double()
+   local sc2 = sc:clone()
+   local split = nn.SplitTable(1)
+   local input = torch.randn(nStep, batchSize, inputSize)
+   local target = torch.randperm(inputSize):narrow(1,1,batchSize)
+   local errTensorInput = sc:forward(input, target) -- As Tensor
+   local errTableInput = sc2:forward(split:forward(input), target) -- As Table
+   mytester:assert(math.abs(errTensorInput - errTableInput) == 0, "RepeaterCriterion forward type err") 
+   local gradInputTensor = sc:backward(input, target)
+   local gradInputTable = sc:backward(split:forward(input), target)
+   mytester:assertTensorEq(gradInputTensor, torch.cat(gradInputTable, 1):view(gradInputTensor:size()), 0, "RepeaterCriterion backward type err ")
+   
 end
 
 function rnntest.RecurrentAttention()

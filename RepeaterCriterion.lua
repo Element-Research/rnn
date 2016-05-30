@@ -16,23 +16,46 @@ end
 
 RepeaterCriterion.getStepCriterion = nn.SequencerCriterion.getStepCriterion
 
-function RepeaterCriterion:forward(inputTable, target)
+function RepeaterCriterion:forward(input, target)
    self.output = 0
+   local nStep
+   if torch.isTensor(input) then
+      nStep = input:size(1)
+   else
+      nStep = #input
+   end
+
    
-   for i,input in ipairs(inputTable) do
+   for i=1,nStep do
       local criterion = self:getStepCriterion(i)
-      self.output = self.output + criterion:forward(input, target)
+      self.output = self.output + criterion:forward(input[i], target)
    end
    
    return self.output
 end
 
-function RepeaterCriterion:backward(inputTable, target)
+function RepeaterCriterion:backward(input, target)
    self.gradInput = {}
+   if torch.isTensor(input) then
+      nStep = input:size(1)
+   else
+      nStep = #input
+   end
    
-   for i,input in ipairs(inputTable) do
+   local tableGradInput = {}
+   for i=1,nStep do
       local criterion = self:getStepCriterion(i)
-      self.gradInput[i] = criterion:backward(input, target)
+      tableGradInput[i] = criterion:backward(input[i], target)
+   end
+   
+   if torch.isTensor(input) then
+      self.gradInput = tableGradInput[1].new()
+      self.gradInput:resize(nStep, unpack(tableGradInput[1]:size():totable()))
+      for step=1,nStep do
+         self.gradInput[step]:copy(tableGradInput[step])
+      end
+   else
+      self.gradInput = tableGradInput
    end
    
    return self.gradInput
