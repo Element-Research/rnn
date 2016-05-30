@@ -57,9 +57,7 @@ for i=1,opt.numLayers do
       enc:add(nn.Sequencer(enc.lstmLayers[i]))
    end
 end
-if not opt.useSeqLSTM then
-   enc:add(nn.SelectTable(-1))
-end
+enc:add(nn.Select(1, -1))
 
 -- Decoder
 local dec = nn.Sequential()
@@ -75,9 +73,6 @@ for i=1,opt.numLayers do
       dec:add(nn.Sequencer(dec.lstmLayers[i]))
    end
 end
-if opt.useSeqLSTM then
-   dec:add(nn.SplitTable(1, 3))
-end
 dec:add(nn.Sequencer(nn.MaskZero(nn.Linear(opt.hiddenSize, opt.vocabSize), 1)))
 dec:add(nn.Sequencer(nn.MaskZero(nn.LogSoftMax(), 1)))
 
@@ -86,23 +81,15 @@ local criterion = nn.SequencerCriterion(nn.MaskZeroCriterion(nn.ClassNLLCriterio
 -- Some example data (batchsize = 2) with variable length input and output sequences
 
 -- The input sentences to the encoder, padded with zeros from the left
-local encInSeq = torch.Tensor({{0,0,0,0,1,2,3},{0,0,0,4,3,2,1}})
+local encInSeq = torch.Tensor({{0,0,0,0,1,2,3},{0,0,0,4,3,2,1}}):t()
 -- The input sentences to the decoder, padded with zeros from the right.
 -- Label '6' represents the start of a sentence (GO).
-local decInSeq = torch.Tensor({{6,1,2,3,4,0,0,0},{6,5,4,3,2,1,0,0}})
-
--- Transposition is needed for SeqLSTM
-if opt.useSeqLSTM then
-   encInSeq = encInSeq:t()
-   decInSeq = decInSeq:t()
-end
+local decInSeq = torch.Tensor({{6,1,2,3,4,0,0,0},{6,5,4,3,2,1,0,0}}):t()
 
 -- The expected output from the decoder (it will return one character per time-step),
 -- padded with zeros from the right
 -- Label '7' represents the end of sentence (EOS).
-local decOutSeq = torch.Tensor({{1,2,3,4,7,0,0,0},{5,4,3,2,1,7,0,0}})
--- The decoder predicts one per timestep, so we split accordingly.
-decOutSeq = nn.SplitTable(1, 1):forward(decOutSeq)
+local decOutSeq = torch.Tensor({{1,2,3,4,7,0,0,0},{5,4,3,2,1,7,0,0}}):t()
 
 for i=1,opt.niter do
    enc:zeroGradParameters()
