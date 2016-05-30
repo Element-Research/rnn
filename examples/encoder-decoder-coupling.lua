@@ -6,7 +6,7 @@ Example of "coupled" separate encoder and decoder networks, e.g. for sequence-to
 
 require 'rnn'
 
-version = 1.3 -- Added batch normalization, multiple layers and merged with seqLSTM example
+version = 1.3 -- Added multiple layers and merged with seqLSTM example
 
 local opt = {}
 opt.learningRate = 0.1
@@ -46,9 +46,6 @@ end
 -- Encoder
 local enc = nn.Sequential()
 enc:add(nn.LookupTableMaskZero(opt.vocabSize, opt.hiddenSize))
-if not opt.useSeqLSTM then
-   enc:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
-end
 enc.lstmLayers = {}
 for i=1,opt.numLayers do
    if opt.useSeqLSTM then
@@ -67,9 +64,6 @@ end
 -- Decoder
 local dec = nn.Sequential()
 dec:add(nn.LookupTableMaskZero(opt.vocabSize, opt.hiddenSize))
-if not opt.useSeqLSTM then
-   dec:add(nn.SplitTable(1, 2)) -- works for both online and mini-batch mode
-end
 dec.lstmLayers = {}
 for i=1,opt.numLayers do
    if opt.useSeqLSTM then
