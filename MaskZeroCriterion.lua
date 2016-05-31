@@ -9,7 +9,7 @@ function MaskZeroCriterion:__init(criterion, nInputDim)
    parent.__init(self)
    self.criterion = criterion
    assert(torch.isTypeOf(criterion, 'nn.Criterion'))
-   assert(torch.type(nInputDim) == 'number', 'Expecting nInputDim number at arg 1')
+   assert(torch.type(nInputDim) == 'number', 'Expecting nInputDim number at arg 2')
    self.nInputDim = nInputDim
 end
 
