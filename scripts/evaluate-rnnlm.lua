@@ -87,10 +87,7 @@ if opt.nsample > 0 then
          table.insert(sampletext, currentword)
          if currentword == '</S>' then
             -- sentences were trained independently, so we explicitly tell it to start a new sentence
-            inputs:fill(trainset.vocab['<S>'])
-            for i=1,2 do -- forward the start sentence tag 3 times to somewhat forget the last sentence.
-               lm:forward({inputs,{targets}})
-            end
+            lm:forget()
             prevword = trainset.vocab['<S>']
             table.insert(sampletext, '\n<S>')
          else
@@ -129,7 +126,6 @@ else
       sumErr = sumErr + err
    end
 
-   print(sumErr, sumErr/testset:size())
    local ppl = torch.exp(sumErr/testset:size())
    print("Test PPL : "..ppl)
 end
