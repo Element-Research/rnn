@@ -96,7 +96,8 @@ if not lm then
    -- input layer (i.e. word embedding space)
    local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.inputsize)
    lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
-   if opt.cpulookup then
+   if opt.cpulookup then 
+      -- this will be slower but will use up less memory.
       lookup = nn.DontCast(lookup:float(), false, true)
    end
    lm:add(lookup) -- input is seqlen x batchsize
