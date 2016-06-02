@@ -18,15 +18,15 @@ function FastLSTM:buildModel()
    -- input : {input, prevOutput, prevCell}
    -- output : {output, cell}
    
-   -- Calculate all four gates in one go : input, hidden, forget, output
-   self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
-   self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
-   
-   if self.usenngraph then
+   if self.usenngraph or self.bn then
       require 'nngraph'
       return self:nngraphModel()
    end
 
+   -- Calculate all four gates in one go : input, hidden, forget, output
+   self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
+   self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
+   
    local para = nn.ParallelTable():add(self.i2g):add(self.o2g)
    local gates = nn.Sequential()
    gates:add(nn.NarrowTable(1,2))
@@ -100,56 +100,60 @@ function FastLSTM:nngraphModel()
    -- http://arxiv.org/pdf/1502.03167v3.pdf
    --normalize recurrent terms W_h*h_{t-1} and W_x*x_t separately 
 
-   --Olalekan Ogunmolu <patlekano@gmail.com>
+   --Author: Olalekan Ogunmolu <patlekano@gmail.com>
+
+   -- Calculate all four gates in one go : input, hidden, forget, output
+   self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
+   self.o2g = nn.Linear(self.outputSize, 4*self.outputSize)
 
    local bn_wx, bn_wh, bn_c  
+   local i2h, h2h 
+
    if self.bn then  
       bn_wx = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
       bn_wh = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
       bn_c  = nn.BatchNormalization(self.outputSize, self.eps, self.momentum, self.affine)
 
-      
-      -- evaluate the input sums at once for efficiency
-      local i2h = bn_wx(self.i2g(x):annotate{name='i2h'}):annotate {name='bn_wx'}
-      local h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
-      local all_input_sums = nn.CAddTable()({i2h, h2h})
+      --we set beta_h = beta_x to zero to avoid unneccessary redundancy, falling back on pre-existing biases in i2g and o2g
+      bn_wx.bias:zero()
+      bn_wh.bias:zero()
+      bn_c.bias:zero()
 
-      local reshaped = nn.Reshape(4, self.outputSize)(all_input_sums)
-      -- input, hidden, forget, output
-      local n1, n2, n3, n4 = nn.SplitTable(2)(reshaped):split(4)
-      local in_gate = nn.Sigmoid()(n1)
-      local in_transform = nn.Tanh()(n2)
-      local forget_gate = nn.Sigmoid()(n3)
-      local out_gate = nn.Sigmoid()(n4)
+      --initialize gamma for gradient flow Sec 4
+      bn_wx.weight:fill(0.1)
+      bn_wh.weight:fill(0.1)
+      bn_c.weight:fill(0.1)
       
-      -- perform the LSTM update
-      local next_c           = nn.CAddTable()({
-        nn.CMulTable()({forget_gate, prev_c}),
-        nn.CMulTable()({in_gate,     in_transform})
-      })
-      -- gated cells form the output
-      local next_h = nn.CMulTable()({out_gate, nn.Tanh()(bn_c(next_c):annotate {name = 'bn_c'}) })
+      -- bnormalizing each term separately gives the model better control over contribution of gamma_x and gamma_h
+      i2h = bn_wx(self.i2g(x):annotate{name='i2h'}):annotate {name='bn_wx'}
+      h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
    else
       -- evaluate the input sums at once for efficiency
-      local i2h = self.i2g(x):annotate{name='i2h'}
-      local h2h = self.o2g(prev_h):annotate{name='h2h'}
-      local all_input_sums = nn.CAddTable()({i2h, h2h})
+      i2h = self.i2g(x):annotate{name='i2h'}
+      h2h = self.o2g(prev_h):annotate{name='h2h'}
+   end
+   local all_input_sums = nn.CAddTable()({i2h, h2h})
 
-      local reshaped = nn.Reshape(4, self.outputSize)(all_input_sums)
-      -- input, hidden, forget, output
-      local n1, n2, n3, n4 = nn.SplitTable(2)(reshaped):split(4)
-      local in_gate = nn.Sigmoid()(n1)
-      local in_transform = nn.Tanh()(n2)
-      local forget_gate = nn.Sigmoid()(n3)
-      local out_gate = nn.Sigmoid()(n4)
-      
-      -- perform the LSTM update
-      local next_c           = nn.CAddTable()({
-        nn.CMulTable()({forget_gate, prev_c}),
-        nn.CMulTable()({in_gate,     in_transform})
-      })
+   local reshaped = nn.Reshape(4, self.outputSize)(all_input_sums)
+   -- input, hidden, forget, output
+   local n1, n2, n3, n4 = nn.SplitTable(2)(reshaped):split(4)
+   local in_gate = nn.Sigmoid()(n1)
+   local in_transform = nn.Tanh()(n2)
+   local forget_gate = nn.Sigmoid()(n3)
+   local out_gate = nn.Sigmoid()(n4)
+   
+   -- perform the LSTM update
+   local next_c           = nn.CAddTable()({
+     nn.CMulTable()({forget_gate, prev_c}),
+     nn.CMulTable()({in_gate,     in_transform})
+   })
+   local next_h
+   if self.bn then
       -- gated cells form the output
-      local next_h = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
+      next_h = nn.CMulTable()({out_gate, nn.Tanh()(bn_c(next_c):annotate {name = 'bn_c'}) })
+   else
+      -- gated cells form the output
+      next_h = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
    end
 
    local outputs = {next_h, next_c}
