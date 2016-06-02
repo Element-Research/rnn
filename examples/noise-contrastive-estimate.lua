@@ -45,7 +45,7 @@ cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'rnnlm'), 'path to directory
 cmd:option('--id', '', 'id string of this experiment (used to name output file) (defaults to a unique id)')
 cmd:option('--tiny', false, 'use train_tiny.th7 training file')
 cmd:option('--dontsave', false, 'dont save the model')
-cmd:option('--cpulookup', false, 'keep lookuptable on CPU')
+cmd:option('--multigpu', false, 'distribute the model over 4 gpus')
 
 cmd:text()
 local opt = cmd:parse(arg or {})
@@ -91,54 +91,106 @@ end
 --[[ language model ]]--
 
 if not lm then
-   lm = nn.Sequential()
+   if opt.multigpu then
+      lm = nn.Sequential()
 
-   -- input layer (i.e. word embedding space)
-   local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.inputsize)
-   lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
-   if opt.cpulookup then 
-      -- this will be slower but will use up less memory.
-      lookup = nn.DontCast(lookup:float(), false, true)
-   end
-   lm:add(lookup) -- input is seqlen x batchsize
-   if opt.dropout > 0 then
-      lm:add(nn.Dropout(opt.dropout))
-   end
+      -- input layer (i.e. word embedding space)
+      local concat = nn.Concat(3)
+      for device=1,2 do
+         local inpusize = device == 1 and torch.floor(opt.inputsize/2) or torch.ceil(opt.inputsize/2)
+         local lookup = nn.LookupTableMaskZero(#trainset.ivocab, inputsize)
+         lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+         concat:add(nn.GPU(lookup, device)) -- input is seqlen x batchsize
+      end
+      
+      lm:add(nn.GPU(concat, 2))
+      if opt.dropout > 0 then
+         lm:add(nn.GPU(nn.Dropout(opt.dropout), 2))
+      end
 
-   -- rnn layers
-   local inputsize = opt.inputsize
-   for i,hiddensize in ipairs(opt.hiddensize) do
-      -- this is a faster version of nnSequencer(nn.FastLSTM(inpusize, hiddensize))
-      local rnn = nn.SeqLSTM(inputsize, hiddensize)
-      rnn.maskzero = true
-      lm:add(rnn)
+      -- rnn layers
+      local inputsize = opt.inputsize
+      for i,hiddensize in ipairs(opt.hiddensize) do
+         -- this is a faster version of nn.Sequencer(nn.FastLSTM(inpusize, hiddensize))
+         local rnn = nn.SeqLSTM(inputsize, hiddensize)
+         rnn.maskzero = true
+         local device = i < opt.hiddensize/2 and 2 or 3
+         lm:add(nn.GPU(rnn, device))
+         if opt.dropout > 0 then
+            lm:add(nn.GPU(nn.Dropout(opt.dropout), device))
+         end
+         inputsize = hiddensize
+      end
+
+      lm:add(nn.GPU(nn.SplitTable(1), 3))
+
+      -- output layer
+      local unigram = trainset.wordfreq:float()
+      local ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
+
+      -- NCE requires {input, target} as inputs
+      lm = nn.Sequential()
+         :add(nn.ParallelTable()
+            :add(lm):add(nn.Identity()))
+         :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
+
+      -- encapsulate stepmodule into a Sequencer
+      lm:add(nn.Sequencer(nn.MaskZero(ncemodule, 1)))
+
+      -- remember previous state between batches
+      lm:remember()
+
+      if opt.uniform > 0 then
+         for k,param in ipairs(lm:parameters()) do
+            param:uniform(-opt.uniform, opt.uniform)
+         end
+      end
+   else
+      lm = nn.Sequential()
+
+      -- input layer (i.e. word embedding space)
+      local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.inputsize)
+      lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+      lm:add(lookup) -- input is seqlen x batchsize
       if opt.dropout > 0 then
          lm:add(nn.Dropout(opt.dropout))
       end
-      inputsize = hiddensize
-   end
 
-   lm:add(nn.SplitTable(1))
+      -- rnn layers
+      local inputsize = opt.inputsize
+      for i,hiddensize in ipairs(opt.hiddensize) do
+         -- this is a faster version of nn.Sequencer(nn.FastLSTM(inpusize, hiddensize))
+         local rnn = nn.SeqLSTM(inputsize, hiddensize)
+         rnn.maskzero = true
+         lm:add(rnn)
+         if opt.dropout > 0 then
+            lm:add(nn.Dropout(opt.dropout))
+         end
+         inputsize = hiddensize
+      end
 
-   -- output layer
-   local unigram = trainset.wordfreq:float()
-   local ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
+      lm:add(nn.SplitTable(1))
 
-   -- NCE requires {input, target} as inputs
-   lm = nn.Sequential()
-      :add(nn.ParallelTable()
-         :add(lm):add(nn.Identity()))
-      :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
+      -- output layer
+      local unigram = trainset.wordfreq:float()
+      local ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
 
-   -- encapsulate stepmodule into a Sequencer
-   lm:add(nn.Sequencer(nn.MaskZero(ncemodule, 1)))
+      -- NCE requires {input, target} as inputs
+      lm = nn.Sequential()
+         :add(nn.ParallelTable()
+            :add(lm):add(nn.Identity()))
+         :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
-   -- remember previous state between batches
-   lm:remember()
+      -- encapsulate stepmodule into a Sequencer
+      lm:add(nn.Sequencer(nn.MaskZero(ncemodule, 1)))
 
-   if opt.uniform > 0 then
-      for k,param in ipairs(lm:parameters()) do
-         param:uniform(-opt.uniform, opt.uniform)
+      -- remember previous state between batches
+      lm:remember()
+
+      if opt.uniform > 0 then
+         for k,param in ipairs(lm:parameters()) do
+            param:uniform(-opt.uniform, opt.uniform)
+         end
       end
    end
 end
