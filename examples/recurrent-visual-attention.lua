@@ -246,6 +246,8 @@ if opt.cuda then
    require 'cunn'
    cutorch.setDevice(opt.useDevice)
    xp:cuda()
+else
+   xp:float()
 end
 
 xp:verbose(not opt.silent)
