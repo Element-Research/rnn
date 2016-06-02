@@ -108,15 +108,11 @@ function FastLSTM:nngraphModel()
 
    local bn_wx, bn_wh, bn_c  
    local i2h, h2h 
-<<<<<<< HEAD
 
-=======
->>>>>>> 180ea5059c3bb002f7fa84070c3501f9d56ca4ec
    if self.bn then  
       bn_wx = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
       bn_wh = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
       bn_c  = nn.BatchNormalization(self.outputSize, self.eps, self.momentum, self.affine)
-<<<<<<< HEAD
 
       --we set beta_h = beta_x to zero to avoid unneccessary redundancy, falling back on pre-existing biases in i2g and o2g
       bn_wx.bias:zero()
@@ -127,15 +123,12 @@ function FastLSTM:nngraphModel()
       bn_wx.weight:fill(0.1)
       bn_wh.weight:fill(0.1)
       bn_c.weight:fill(0.1)
-=======
->>>>>>> 180ea5059c3bb002f7fa84070c3501f9d56ca4ec
       
       -- bnormalizing each term separately gives the model better control over contribution of gamma_x and gamma_h
       i2h = bn_wx(self.i2g(x):annotate{name='i2h'}):annotate {name='bn_wx'}
       h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
    else
       -- evaluate the input sums at once for efficiency
-<<<<<<< HEAD
       i2h = self.i2g(x):annotate{name='i2h'}
       h2h = self.o2g(prev_h):annotate{name='h2h'}
    end
@@ -159,7 +152,6 @@ function FastLSTM:nngraphModel()
       -- gated cells form the output
       next_h = nn.CMulTable()({out_gate, nn.Tanh()(bn_c(next_c):annotate {name = 'bn_c'}) })
    else
-=======
       i2h = bn_wx(self.i2g(x):annotate{name='i2h'}):annotate {name='bn_wx'}
       h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
    else
@@ -187,7 +179,6 @@ function FastLSTM:nngraphModel()
       -- gated cells form the output
       next_h = nn.CMulTable()({out_gate, nn.Tanh()(bn_c(next_c):annotate {name = 'bn_c'}) })
    else
->>>>>>> 180ea5059c3bb002f7fa84070c3501f9d56ca4ec
       -- gated cells form the output
       next_h = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
    end
