@@ -54,7 +54,6 @@ function SeqGRU:__init(inputSize, outputSize)
   self.gradBias = torch.Tensor(3 * H):zero()
   self:reset()
 
-  self.cell = torch.Tensor() -- This will be (T, N, H)
   self.gates = torch.Tensor() -- This will be (T, N, 3H)
   self.buffer1 = torch.Tensor() -- This will be (N, H)
   self.buffer2 = torch.Tensor() -- This will be (N, H)
@@ -350,7 +349,6 @@ function SeqGRU:backward(input, gradOutput, scale)
 end
 
 function SeqGRU:clearState()
-  self.cell:set()
   self.gates:set()
   self.buffer1:set()
   self.buffer2:set()
