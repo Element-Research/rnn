@@ -92,12 +92,14 @@ end
 
 if not lm then
    if opt.multigpu then
+      assert(opt.maxnormout <= 0)
       lm = nn.Sequential()
-
+      lm:add(nn.Convert())
+      
       -- input layer (i.e. word embedding space)
       local concat = nn.Concat(3)
       for device=1,2 do
-         local inpusize = device == 1 and torch.floor(opt.inputsize/2) or torch.ceil(opt.inputsize/2)
+         local inputsize = device == 1 and torch.floor(opt.inputsize/2) or torch.ceil(opt.inputsize/2)
          local lookup = nn.LookupTableMaskZero(#trainset.ivocab, inputsize)
          lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
          concat:add(nn.GPU(lookup, device)) -- input is seqlen x batchsize
@@ -114,7 +116,7 @@ if not lm then
          -- this is a faster version of nn.Sequencer(nn.FastLSTM(inpusize, hiddensize))
          local rnn = nn.SeqLSTM(inputsize, hiddensize)
          rnn.maskzero = true
-         local device = i < opt.hiddensize/2 and 2 or 3
+         local device = 2 -- i < #opt.hiddensize/2 and 1 or 2
          lm:add(nn.GPU(rnn, device))
          if opt.dropout > 0 then
             lm:add(nn.GPU(nn.Dropout(opt.dropout), device))
@@ -126,7 +128,9 @@ if not lm then
 
       -- output layer
       local unigram = trainset.wordfreq:float()
-      local ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
+      ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
+      -- distribute weight, gradWeight and momentum on devices 3 and 4
+      ncemodule:multicuda(3,4) 
 
       -- NCE requires {input, target} as inputs
       lm = nn.Sequential()
@@ -135,7 +139,7 @@ if not lm then
          :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
       -- encapsulate stepmodule into a Sequencer
-      lm:add(nn.Sequencer(nn.MaskZero(ncemodule, 1)))
+      lm:add(nn.GPU(nn.Sequencer(nn.MaskZero(ncemodule, 1)), 1, opt.device))
 
       -- remember previous state between batches
       lm:remember()
@@ -347,8 +351,8 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       xplog.minvalnceloss = nceloss
       xplog.epoch = epoch 
       local filename = paths.concat(opt.savepath, opt.id..'.t7')
-      print("Found new minima. Saving to "..filename)
       if not opt.dontsave then
+         print("Found new minima. Saving to "..filename)
          torch.save(filename, xplog)
       end
       ntrial = 0
