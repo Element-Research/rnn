@@ -1,6 +1,7 @@
 -- The example demonstates the ability to nest AbstractRecurrent instances.
 -- In this case, an FastLSTM is nested withing a Recurrence.
 require 'rnn'
+require 'optim'
 
 -- hyper-parameters 
 batchSize = 8
@@ -29,6 +30,7 @@ local rnn = nn.Sequential()
 -- internally, rnn will be wrapped into a Recursor to make it an AbstractRecurrent instance.
 rnn = nn.Sequencer(rnn)
 
+local logger = optim.Logger(paths.concat('outputs', 'errors.txt'))
 print(rnn)
 
 -- build criterion
@@ -73,7 +75,9 @@ while true do
    local err = criterion:forward(outputs, targets)
    
    print(string.format("Iteration %d ; NLL err = %f ", iteration, err))
-
+   logger:add{['NLL training error'] = err}
+   logger:style{['NLL training error'] = '-'}
+   logger:plot()
    -- 3. backward sequence through rnn (i.e. backprop through time)
    
    local gradOutputs = criterion:backward(outputs, targets)

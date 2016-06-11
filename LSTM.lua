@@ -56,6 +56,8 @@ end
 
 function LSTM:buildForgetGate()
    self.forgetGate = self:buildGate()
+   --initialize the forget gate's bias to a large value e.g. 1 or 2 so it is initialized close to 1
+   self.forgetGate.bias = 1
    return self.forgetGate
 end
 

@@ -1,6 +1,7 @@
 require 'paths'
 require 'rnn'
 local dl = require 'dataload'
+require 'optim'
 
 version = 2
 

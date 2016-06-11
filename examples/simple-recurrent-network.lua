@@ -1,4 +1,7 @@
 require 'rnn'
+require 'optim'
+
+logger = optim.Logger(paths.concat('outputs', 'rect_log.txt'))
 
 -- hyper-parameters 
 batchSize = 8
@@ -73,7 +76,9 @@ while true do
    end
    
    print(string.format("Iteration %d ; NLL err = %f ", iteration, err))
-
+   logger:add{['NLL err'] = err}
+   logger:style{['NLL err'] = '-'}
+   logger:plot()
    -- 3. backward sequence through rnn (i.e. backprop through time)
    
    local gradOutputs, gradInputs = {}, {}

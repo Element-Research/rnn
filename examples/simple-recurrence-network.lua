@@ -1,5 +1,8 @@
 -- example use of nn.Recurrence
 require 'rnn'
+require 'optim'
+
+logger = optim.Logger(paths.concat('outputs', 'recs_log.txt'))
 
 -- hyper-parameters 
 batchSize = 8
@@ -69,7 +72,9 @@ while true do
    local err = criterion:forward(outputs, targets)
    
    print(string.format("Iteration %d ; NLL err = %f ", iteration, err))
-
+   logger:add{['NLL err'] = err}
+   logger:style{['NLL err'] = '-'}
+   logger:plot()
    -- 3. backward sequence through rnn (i.e. backprop through time)
    
    local gradOutputs = criterion:backward(outputs, targets)
