@@ -3,14 +3,15 @@ require 'rnn'
 require 'nngraph'
 local dl = require 'dataload'
 assert(nn.NCEModule and nn.NCEModule.version and nn.NCEModule.version >= 4, "update dpnn : luarocks install dpnn")
+require 'cunn'
 
 --[[ command line arguments ]]--
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text('Train a Language Model using stacked LSTM on Google Billion Words dataset')
 cmd:text('Example:')
-cmd:text("th noise-contrastive-estimate.lua --progress --earlystop 50 --cuda --device 2 --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --uniform 0.1 --cutoff 5 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
-cmd:text("th examples/noise-contrastive-estimate.lua --cuda --trainsize 400000 --validsize 40000 --cutoff 10 --batchsize 128 --seqlen 100 --hiddensize '{250,250}' --progress --device 2")
+cmd:text("th examples/multigpu-nce-rnnlm.lua --progress --earlystop 50 --device 2 --seqlen 20 --hiddensize '{200,200}' --batchsize 20 --startlr 1 --uniform 0.1 --cutoff 5 --schedule '{[5]=0.5,[6]=0.25,[7]=0.125,[8]=0.0625,[9]=0.03125,[10]=0.015625,[11]=0.0078125,[12]=0.00390625}'")
+cmd:text("th examples/multigpu-nce-rnnlm.lua.lua --trainsize 400000 --validsize 40000 --cutoff 10 --batchsize 128 --seqlen 100 --hiddensize '{250,250}' --progress --device 2")
 cmd:text("th scripts/evaluate-rnnlm.lua --xplogpath /data/save/rnnlm/ptb:atlas:1458081269:1.t7 --cuda")
 cmd:text('Options:')
 -- training
@@ -21,7 +22,6 @@ cmd:option('--schedule', '', 'learning rate schedule. e.g. {[5] = 0.004, [6] = 0
 cmd:option('--momentum', 0.9, 'momentum')
 cmd:option('--maxnormout', -1, 'max l2-norm of each layer\'s output neuron weights')
 cmd:option('--cutoff', -1, 'max l2-norm of concatenation of all gradParam tensors')
-cmd:option('--cuda', false, 'use CUDA')
 cmd:option('--device', 1, 'sets the device (GPU) to use')
 cmd:option('--profile', false, 'profile updateOutput,updateGradInput and accGradParameters in Sequential')
 cmd:option('--maxepoch', 1000, 'maximum number of epochs to run')
@@ -56,17 +56,14 @@ if not opt.silent then
    table.print(opt)
 end
 opt.id = opt.id == '' and ('gbw' .. ':' .. dl.uniqueid()) or opt.id
-opt.version = 5 -- refactored multigpu into its own file
+opt.version = 1
 
-if opt.cuda then -- do this before building model to prevent segfault
-   require 'cunn' 
-   cutorch.setDevice(opt.device)
-end 
+cutorch.setDevice(opt.device)
 
 local xplog, lm, criterion, targetmodule
 if opt.continue ~= '' then
    xplog = torch.load(opt.continue)
-   xplog.opt.cuda = opt.cuda
+   xplog.opt.cuda = true
    xplog.opt.device = opt.device
    xplog.opt.tiny = opt.tiny
    opt = xplog.opt
@@ -91,14 +88,22 @@ end
 --[[ language model ]]--
 
 if not lm then
+   assert(opt.maxnormout <= 0)
    lm = nn.Sequential()
-
+   lm:add(nn.Convert())
+   
    -- input layer (i.e. word embedding space)
-   local lookup = nn.LookupTableMaskZero(#trainset.ivocab, opt.inputsize)
-   lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
-   lm:add(lookup) -- input is seqlen x batchsize
+   local concat = nn.Concat(3)
+   for device=1,2 do
+      local inputsize = device == 1 and torch.floor(opt.inputsize/2) or torch.ceil(opt.inputsize/2)
+      local lookup = nn.LookupTableMaskZero(#trainset.ivocab, inputsize)
+      lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+      concat:add(nn.GPU(lookup, device)) -- input is seqlen x batchsize
+   end
+   
+   lm:add(nn.GPU(concat, 2))
    if opt.dropout > 0 then
-      lm:add(nn.Dropout(opt.dropout))
+      lm:add(nn.GPU(nn.Dropout(opt.dropout), 2))
    end
 
    -- rnn layers
@@ -107,19 +112,22 @@ if not lm then
       -- this is a faster version of nn.Sequencer(nn.FastLSTM(inpusize, hiddensize))
       local rnn = nn.SeqLSTM(inputsize, hiddensize)
       rnn.maskzero = true
-      lm:add(rnn)
+      local device = 2 -- i < #opt.hiddensize/2 and 1 or 2
+      lm:add(nn.GPU(rnn, device))
       if opt.dropout > 0 then
-         lm:add(nn.Dropout(opt.dropout))
+         lm:add(nn.GPU(nn.Dropout(opt.dropout), device))
       end
       inputsize = hiddensize
    end
 
-   lm:add(nn.SplitTable(1))
+   lm:add(nn.GPU(nn.SplitTable(1), 3))
 
    -- output layer
    local unigram = trainset.wordfreq:float()
-   local ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
+   ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
    ncemodule.batchnoise = not opt.rownoise
+   -- distribute weight, gradWeight and momentum on devices 3 and 4
+   ncemodule:multicuda(3,4) 
 
    -- NCE requires {input, target} as inputs
    lm = nn.Sequential()
@@ -128,7 +136,7 @@ if not lm then
       :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
    -- encapsulate stepmodule into a Sequencer
-   lm:add(nn.Sequencer(nn.MaskZero(ncemodule, 1)))
+   lm:add(nn.GPU(nn.Sequencer(nn.MaskZero(ncemodule, 1)), 1, opt.device))
    
    -- remember previous state between batches
    lm:remember()
