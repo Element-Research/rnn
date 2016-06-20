@@ -10,8 +10,6 @@ function SeqReverseSequence:__init(dim)
     parent.__init(self)
     self.output = torch.Tensor()
     self.gradInput = torch.Tensor()
-    self.outputIndices = torch.LongTensor()
-    self.gradIndices = torch.LongTensor()
     assert(dim, "Must specify dimension to reverse sequence over")
     assert(dim <= 3, "Dimension has to be no greater than 3 (Only supports up to a 3D Tensor).")
     self.dim = dim
@@ -19,6 +17,7 @@ end
 
 function SeqReverseSequence:reverseOutput(input)
     self.output:resizeAs(input)
+    self.outputIndices = self.outputIndices or ((torch.type(input) == 'torch.CudaTensor') and torch.CudaTensor() or torch.LongTensor())
     self.outputIndices:resize(input:size())
     local T = input:size(1)
     for x = 1, T do
@@ -46,6 +45,7 @@ end
 
 function SeqReverseSequence:reverseGradOutput(gradOutput)
     self.gradInput:resizeAs(gradOutput)
+    self.gradIndices = self.gradIndices or ((torch.type(gradOutput) == 'torch.CudaTensor') and torch.CudaTensor() or torch.LongTensor())
     self.gradIndices:resize(gradOutput:size())
     local T = gradOutput:size(1)
     for x = 1, T do
