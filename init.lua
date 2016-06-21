@@ -19,6 +19,7 @@ torch.include('rnn', 'Dropout.lua')
 
 -- for testing:
 torch.include('rnn', 'test.lua')
+torch.include('rnn', 'bigtest.lua')
 
 -- support modules
 torch.include('rnn', 'ZeroGrad.lua')

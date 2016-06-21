@@ -116,17 +116,28 @@ if opt.nsample > 0 then
       print(table.concat(sampletext, ' '))
    end
 else
-   local sumErr = 0
+   local sumErr, count = 0, 0
    
    for i, inputs, targets in testset:subiter(xplog.opt.seqlen or 100) do
+      inputs:apply(function(x)
+         if x > 0 then
+            count = count + 1
+         end
+      end)
       local targets = targetmodule:forward(targets)
       local inputs = opt.nce and {inputs, targets} or inputs
       local outputs = lm:forward(inputs)
       local err = criterion:forward(outputs, targets)
       sumErr = sumErr + err
    end
+   
+   if count ~= testset:size() then
+      local meanseqlen = testset:size()/(testset:size() - count)
+      print("mean sequence length : "..meanseqlen)
+      print("Old (wrong) Test PPL : "..torch.exp(sumErr/testset:size()))
+   end
 
-   local ppl = torch.exp(sumErr/testset:size())
+   local ppl = torch.exp(sumErr/count)
    print("Test PPL : "..ppl)
 end
 

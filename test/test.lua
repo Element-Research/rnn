@@ -2647,13 +2647,11 @@ function rnntest.SequencerCriterion()
       sc:cuda()
    
       local gradInput4 = {}
-      for i=1,nStep do
-         input[i] = input[i]:cuda()
-         target[i] = target[i]:cuda()
-      end
+      input = input:cuda()
+      target = target:cuda()
       
       local err4 = sc:forward(input, target)
-      mytester:assert(math.abs(err - err4) < 0.000001, "SequencerCriterion forward cuda err") 
+      mytester:assert(math.abs(errTensorInput - err4) < 0.000001, "SequencerCriterion forward cuda err") 
       local gradInput4 = sc:backward(input, target)
       for i=1,nStep do
          mytester:assertTensorEq(gradInput4[i]:float(), gradInput3[i], 0.000001, "SequencerCriterion backward cuda err "..i)
@@ -5891,7 +5889,7 @@ function rnntest.NCE_MaskZero()
       batchsize = 4,
       seqlen = 5,
       uniform = 0.1,
-      hiddensize = {10},
+      hiddensize = {100},
       vocabsize = 100,
       dropout = 0,
       k = 25
@@ -5989,7 +5987,7 @@ function rnntest.NCE_MaskZero()
       end
    end
    mytester:assert(found)
-   mytester:assert(err < starterr)
+   mytester:assert(err < starterr, string.format("err=%f should be smaller than starterr=%f", err, starterr))
 end
 
 local function check_size(x, dims)

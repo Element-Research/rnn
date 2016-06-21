@@ -10,5 +10,5 @@ FIND_PACKAGE(Torch REQUIRED)
 
 SET(src)
 FILE(GLOB luasrc *.lua)
-SET(luasrc ${luasrc} test/test.lua test/mnistsample.t7)
+SET(luasrc ${luasrc} test/test.lua test/mnistsample.t7 test/bigtest.lua)
 ADD_TORCH_PACKAGE(rnn "${src}" "${luasrc}" "Recurrent Neural Networks")
