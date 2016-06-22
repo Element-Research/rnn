@@ -15,13 +15,13 @@ cmd:text("th examples/multigpu-nce-rnnlm.lua.lua --trainsize 400000 --validsize 
 cmd:text("th scripts/evaluate-rnnlm.lua --xplogpath /data/save/rnnlm/ptb:atlas:1458081269:1.t7 --cuda")
 cmd:text('Options:')
 -- training
-cmd:option('--startlr', 0.05, 'learning rate at t=0')
-cmd:option('--minlr', 0.00001, 'minimum learning rate')
-cmd:option('--saturate', 400, 'epoch at which linear decayed LR will reach minlr')
+cmd:option('--startlr', 0.7, 'learning rate at t=0')
+cmd:option('--minlr', 0.001, 'minimum learning rate')
+cmd:option('--saturate', 300, 'epoch at which linear decayed LR will reach minlr')
 cmd:option('--schedule', '', 'learning rate schedule. e.g. {[5] = 0.004, [6] = 0.001}')
-cmd:option('--momentum', 0.9, 'momentum')
+cmd:option('--momentum', -1, 'momentum (requires an additional copy of all params)')
 cmd:option('--maxnormout', -1, 'max l2-norm of each layer\'s output neuron weights')
-cmd:option('--cutoff', -1, 'max l2-norm of concatenation of all gradParam tensors')
+cmd:option('--cutoff', 10, 'max l2-norm of concatenation of all gradParam tensors')
 cmd:option('--device', 1, 'sets the device (GPU) to use')
 cmd:option('--profile', false, 'profile updateOutput,updateGradInput and accGradParameters in Sequential')
 cmd:option('--maxepoch', 1000, 'maximum number of epochs to run')
@@ -29,7 +29,7 @@ cmd:option('--earlystop', 50, 'maximum number of epochs to wait to find a better
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
-cmd:option('--k', 25, 'how many noise samples to use for NCE')
+cmd:option('--k', 400, 'how many noise samples to use for NCE')
 cmd:option('--continue', '', 'path to model for which training should be continued. Note that current options (except for device, cuda and tiny) will be ignored.')
 cmd:option('--Z', -1, 'normalization constant for NCE module (-1 approximates it from first batch).')
 cmd:option('--rownoise', false, 'sample k noise samples for each row for NCE module')
@@ -98,12 +98,12 @@ if not lm then
       local inputsize = device == 1 and torch.floor(opt.inputsize/2) or torch.ceil(opt.inputsize/2)
       local lookup = nn.LookupTableMaskZero(#trainset.ivocab, inputsize)
       lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
-      concat:add(nn.GPU(lookup, device)) -- input is seqlen x batchsize
+      concat:add(nn.GPU(lookup, device):cuda()) -- input is seqlen x batchsize
    end
    
-   lm:add(nn.GPU(concat, 2))
+   lm:add(nn.GPU(concat, 2):cuda())
    if opt.dropout > 0 then
-      lm:add(nn.GPU(nn.Dropout(opt.dropout), 2))
+      lm:add(nn.GPU(nn.Dropout(opt.dropout), 2):cuda())
    end
 
    -- rnn layers
@@ -112,19 +112,27 @@ if not lm then
       -- this is a faster version of nn.Sequencer(nn.FastLSTM(inpusize, hiddensize))
       local rnn = nn.SeqLSTM(inputsize, hiddensize)
       rnn.maskzero = true
-      local device = 2 -- i < #opt.hiddensize/2 and 1 or 2
-      lm:add(nn.GPU(rnn, device))
+      local device = i <= #opt.hiddensize/2 and 1 or 2
+      lm:add(nn.GPU(rnn, device):cuda())
       if opt.dropout > 0 then
-         lm:add(nn.GPU(nn.Dropout(opt.dropout), device))
+         lm:add(nn.GPU(nn.Dropout(opt.dropout), device):cuda())
       end
       inputsize = hiddensize
    end
 
-   lm:add(nn.GPU(nn.SplitTable(1), 3))
+   lm:add(nn.GPU(nn.SplitTable(1), 3):cuda())
+   
+   if opt.uniform > 0 then
+      for k,param in ipairs(lm:parameters()) do
+         assert(torch.type(param) == 'torch.CudaTensor')
+         cutorch.withDevice(param:getDevice(), function() param:uniform(-opt.uniform, opt.uniform) end)
+      end
+   end
 
    -- output layer
    local unigram = trainset.wordfreq:float()
    ncemodule = nn.NCEModule(inputsize, #trainset.ivocab, opt.k, unigram, opt.Z)
+   ncemodule:reset() -- initializes bias to get approx. Z = 1
    ncemodule.batchnoise = not opt.rownoise
    -- distribute weight, gradWeight and momentum on devices 3 and 4
    ncemodule:multicuda(3,4) 
@@ -136,16 +144,11 @@ if not lm then
       :add(nn.ZipTable()) -- {{x1,x2,...}, {t1,t2,...}} -> {{x1,t1},{x2,t2},...}
 
    -- encapsulate stepmodule into a Sequencer
-   lm:add(nn.GPU(nn.Sequencer(nn.MaskZero(ncemodule, 1)), 1, opt.device))
+   local masked = nn.MaskZero(ncemodule, 1):cuda()
+   lm:add(nn.GPU(nn.Sequencer(masked), 3, opt.device):cuda())
    
    -- remember previous state between batches
    lm:remember()
-
-   if opt.uniform > 0 then
-      for k,param in ipairs(lm:parameters()) do
-         param:uniform(-opt.uniform, opt.uniform)
-      end
-   end
 end
 
 if opt.profile then
@@ -163,23 +166,18 @@ if not (criterion and targetmodule) then
    local crit = nn.MaskZeroCriterion(nn.NCECriterion(), 0)
 
    -- target is also seqlen x batchsize.
-   targetmodule = nn.SplitTable(1)
-   if opt.cuda then
-      targetmodule = nn.Sequential()
-         :add(nn.Convert())
-         :add(targetmodule)
-   end
+   targetmodule = nn.Sequential()
+      :add(nn.Convert())
+      :add(nn.SplitTable(1))
     
    criterion = nn.SequencerCriterion(crit)
 end
 
 --[[ CUDA ]]--
 
-if opt.cuda then
-   lm:cuda()
-   criterion:cuda()
-   targetmodule:cuda()
-end
+lm:cuda()
+criterion:cuda()
+targetmodule:cuda()
 
 --[[ experiment log ]]--
 

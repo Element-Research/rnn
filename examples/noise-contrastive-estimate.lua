@@ -2,7 +2,7 @@ require 'paths'
 require 'rnn'
 require 'nngraph'
 local dl = require 'dataload'
-assert(nn.NCEModule and nn.NCEModule.version and nn.NCEModule.version >= 4, "update dpnn : luarocks install dpnn")
+assert(nn.NCEModule and nn.NCEModule.version and nn.NCEModule.version >= 6, "update dpnn : luarocks install dpnn")
 
 --[[ command line arguments ]]--
 cmd = torch.CmdLine()
@@ -29,19 +29,19 @@ cmd:option('--earlystop', 50, 'maximum number of epochs to wait to find a better
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
-cmd:option('--k', 25, 'how many noise samples to use for NCE')
+cmd:option('--k', 100, 'how many noise samples to use for NCE')
 cmd:option('--continue', '', 'path to model for which training should be continued. Note that current options (except for device, cuda and tiny) will be ignored.')
-cmd:option('--Z', -1, 'normalization constant for NCE module (-1 approximates it from first batch).')
+cmd:option('--Z', 1, 'normalization constant for NCE module (-1 approximates it from first batch).')
 cmd:option('--rownoise', false, 'sample k noise samples for each row for NCE module')
 -- rnn layer 
 cmd:option('--seqlen', 50, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
-cmd:option('--hiddensize', '{200,200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
+cmd:option('--hiddensize', '{256,256}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
 cmd:option('--dropout', 0, 'ancelossy dropout with this probability after each rnn layer. dropout <= 0 disables it.')
 -- data
-cmd:option('--batchsize', 32, 'number of examples per batch')
-cmd:option('--trainsize', -1, 'number of train time-steps seen between each epoch')
-cmd:option('--validsize', -1, 'number of valid time-steps used for early stopping and cross-validation') 
+cmd:option('--batchsize', 128, 'number of examples per batch')
+cmd:option('--trainsize', 400000, 'number of train time-steps seen between each epoch')
+cmd:option('--validsize', 40000, 'number of valid time-steps used for early stopping and cross-validation') 
 cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'rnnlm'), 'path to directory where experiment log (includes model) will be saved')
 cmd:option('--id', '', 'id string of this experiment (used to name output file) (defaults to a unique id)')
 cmd:option('--tiny', false, 'use train_tiny.th7 training file')
@@ -56,7 +56,7 @@ if not opt.silent then
    table.print(opt)
 end
 opt.id = opt.id == '' and ('gbw' .. ':' .. dl.uniqueid()) or opt.id
-opt.version = 5 -- refactored multigpu into its own file
+opt.version = 6 -- better NCE bias initialization + new default hyper-params
 
 if opt.cuda then -- do this before building model to prevent segfault
    require 'cunn' 
@@ -137,6 +137,7 @@ if not lm then
       for k,param in ipairs(lm:parameters()) do
          param:uniform(-opt.uniform, opt.uniform)
       end
+      ncemodule:reset()
    end
 end
 
