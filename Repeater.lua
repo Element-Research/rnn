@@ -11,7 +11,7 @@ function Repeater:__init(module, rho)
    parent.__init(self)
    assert(torch.type(rho) == 'number', "expecting number value for arg 2")
    self.rho = rho
-   self.module = (not torch.isTypeOf(rnn, 'nn.AbstractRecurrent')) and nn.Recursor(module) or module
+   self.module = (not torch.isTypeOf(module, 'nn.AbstractRecurrent')) and nn.Recursor(module) or module
    
    self.module:maxBPTTstep(rho) -- hijack rho (max number of time-steps for backprop)
    
