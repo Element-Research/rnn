@@ -7,6 +7,7 @@
 -- The recurrentModule should output Tensor or table : output(t) 
 -- given input table : {input(t), output(t-1)}
 ------------------------------------------------------------------------
+local _ = require 'moses'
 local Recurrence, parent = torch.class('nn.Recurrence', 'nn.AbstractRecurrent')
 
 function Recurrence:__init(recurrentModule, outputSize, nInputDim, rho)
