@@ -52,11 +52,11 @@ local opt = cmd:parse(arg or {})
 opt.hiddensize = loadstring(" return "..opt.hiddensize)()
 opt.schedule = loadstring(" return "..opt.schedule)()
 opt.inputsize = opt.inputsize == -1 and opt.hiddensize[1] or opt.inputsize
+opt.id = opt.id == '' and ('gbw' .. ':' .. dl.uniqueid()) or opt.id
+opt.version = 6 -- better NCE bias initialization + new default hyper-params
 if not opt.silent then
    table.print(opt)
 end
-opt.id = opt.id == '' and ('gbw' .. ':' .. dl.uniqueid()) or opt.id
-opt.version = 6 -- better NCE bias initialization + new default hyper-params
 
 if opt.cuda then -- do this before building model to prevent segfault
    require 'cunn' 
