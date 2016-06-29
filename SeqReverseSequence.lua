@@ -70,3 +70,18 @@ function SeqReverseSequence:updateGradInput(inputTable, gradOutput)
     end
     return self.gradInput
 end
+
+function SeqReverseSequence:type(type, typecache)
+   if type then
+      self.outputIndices = nil
+      self.gradIndices = nil
+   end
+   return parent.type(self, type, typecache)
+end
+
+function SeqReverseSequence:clearState()
+   self.output:set()
+   self.gradInput:set()
+   self.outputIndices = nil
+   self.gradIndices = nil
+end
