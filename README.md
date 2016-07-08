@@ -47,7 +47,7 @@ The following are example training scripts using this package :
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) shows you how to couple encoder and decoder `LSTMs` for sequence-to-sequence networks;
   * [Simple Recurrent Network](examples/simple-recurrent-network.lua) shows a simple example for building and training a simple recurrent neural network;
-  * [Simple Sequencer Network](examples/simple-recurrent-network.lua) is a version of the above script that uses the Sequencer to decorate the `rnn` instead;
+  * [Simple Sequencer Network](examples/simple-sequencer-network.lua) is a version of the above script that uses the Sequencer to decorate the `rnn` instead;
   * [Sequence to One](examples/sequence-to-one.lua) demonstrates how to do many to one sequence learning as is the case for sentiment analysis;
   * [Multivariate Time Series](examples/recurrent-time-series.lua) demonstrates how train a simple RNN to do multi-variate time-series predication.
 
