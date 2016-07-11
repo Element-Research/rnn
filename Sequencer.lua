@@ -10,6 +10,7 @@
 ------------------------------------------------------------------------
 assert(not nn.Sequencer, "update nnx package : luarocks install nnx")
 local Sequencer, parent = torch.class('nn.Sequencer', 'nn.AbstractSequencer')
+local _ = require 'moses'
 
 function Sequencer:__init(module)
    parent.__init(self)

@@ -1,3 +1,4 @@
+local _ = require 'moses'
 local rnntest = torch.TestSuite()
 local precision = 1e-5
 local mytester

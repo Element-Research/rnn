@@ -96,15 +96,14 @@ function FastLSTM:nngraphModel()
    
    local x, prev_h, prev_c = unpack(inputs)
 
-   --apply recurrent batch normalization 
-   -- http://arxiv.org/pdf/1502.03167v3.pdf
-   --normalize recurrent terms W_h*h_{t-1} and W_x*x_t separately 
-
-   --Olalekan Ogunmolu <patlekano@gmail.com>
-
    local bn_wx, bn_wh, bn_c  
    local i2h, h2h 
    if self.bn then  
+      -- apply recurrent batch normalization 
+      -- http://arxiv.org/pdf/1502.03167v3.pdf
+      -- normalize recurrent terms W_h*h_{t-1} and W_x*x_t separately 
+      -- Olalekan Ogunmolu <patlekano@gmail.com>
+   
       bn_wx = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
       bn_wh = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
       bn_c  = nn.BatchNormalization(self.outputSize, self.eps, self.momentum, self.affine)
@@ -112,6 +111,10 @@ function FastLSTM:nngraphModel()
       -- evaluate the input sums at once for efficiency
       i2h = bn_wx(self.i2g(x):annotate{name='i2h'}):annotate {name='bn_wx'}
       h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
+      
+      -- add bias after BN as per paper
+      self.o2g:noBias()
+      h2h = nn.Add(4*self.outputSize)(h2h)
    else
       -- evaluate the input sums at once for efficiency
       i2h = self.i2g(x):annotate{name='i2h'}
