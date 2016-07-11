@@ -28,7 +28,6 @@ cmd:option('--maxEpoch', 2000, 'maximum number of epochs to run')
 cmd:option('--maxTries', 100, 'maximum number of epochs to try to find a better local minima for early-stopping')
 cmd:option('--transfer', 'ReLU', 'activation function')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
-cmd:option('--xpPath', '', 'path to a previously saved model')
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'dont print anything to stdout')
 
@@ -64,11 +63,6 @@ if not opt.silent then
    table.print(opt)
 end
 
-if opt.xpPath ~= '' then
-   -- check that saved model exists
-   assert(paths.filep(opt.xpPath), opt.xpPath..' does not exist')
-end
-
 --[[data]]--
 if opt.dataset == 'TranslatedMnist' then
    ds = torch.checkpoint(
@@ -78,24 +72,6 @@ if opt.dataset == 'TranslatedMnist' then
    )
 else
    ds = dp[opt.dataset]()
-end
-
---[[Saved experiment]]--
-if opt.xpPath ~= '' then
-   if opt.cuda then
-      require 'optim'
-      require 'cunn'
-      cutorch.setDevice(opt.useDevice)
-   end
-   xp = torch.load(opt.xpPath)
-   if opt.cuda then
-      xp:cuda()
-   else
-      xp:float()
-   end
-   print"running"
-   xp:run(ds)
-   os.exit()
 end
 
 --[[Model]]--
