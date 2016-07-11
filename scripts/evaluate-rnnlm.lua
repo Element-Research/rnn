@@ -134,7 +134,6 @@ else
    if count ~= testset:size() then
       local meanseqlen = testset:size()/(testset:size() - count)
       print("mean sequence length : "..meanseqlen)
-      print("Old (wrong) Test PPL : "..torch.exp(sumErr/testset:size()))
    end
 
    local ppl = torch.exp(sumErr/count)
