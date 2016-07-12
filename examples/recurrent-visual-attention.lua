@@ -15,6 +15,7 @@ cmd:text('Train a Recurrent Model for Visual Attention')
 cmd:text('Example:')
 cmd:text('$> th rnn-visual-attention.lua > results.txt')
 cmd:text('Options:')
+cmd:option('--xpPath', '/path/to/saved_model.dat', 'path to a previously saved model')
 cmd:option('--learningRate', 0.01, 'learning rate at t=0')
 cmd:option('--minLR', 0.00001, 'minimum learning rate')
 cmd:option('--saturateEpoch', 800, 'epoch at which linear decayed LR will reach minLR')
@@ -75,6 +76,19 @@ else
 end
 
 --[[Model]]--
+if opt.xpPath ~= '' then
+     assert(paths.filep(opt.xpPath), opt.xpPath..' does not exist')
+
+    if opt.cuda then
+        require 'cunn'
+        require 'optim'
+        cutorch.setDevice(opt.useDevice)
+    end
+
+    xp = torch.load(opt.xpPath)
+    saved_model = xp:model()
+    opt = xp.opt
+end
 
 -- glimpse network (rnn input layer)
 locationSensor = nn.Sequential()
@@ -197,8 +211,14 @@ if not opt.noTest then
 end
 
 --[[Experiment]]--
+if opt.xpPath ~= '' then
+    model = saved_model
+else
+    model = agent
+end
+
 xp = dp.Experiment{
-   model = agent,
+   model = model,
    optimizer = train,
    validator = valid,
    tester = tester,
