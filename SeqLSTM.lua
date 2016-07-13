@@ -174,7 +174,6 @@ function SeqLSTM:updateOutput(input)
    local H, R, D = self.hiddensize, self.outputsize, self.inputsize
    
    self._output = self._output or self.weight.new()
-   self._hidden = self._hidden or self.weight.new()
    
    -- remember previous state?
    local remember
@@ -228,7 +227,7 @@ function SeqLSTM:updateOutput(input)
    local Wh = self.weightR
 
    local h, c = self._output, self.cell
-   h:resize(T, N, H):zero()
+   h:resize(T, N, R):zero()
    c:resize(T, N, H):zero()
    local prev_h, prev_c = h0, c0
    self.gates:resize(T, N, 4 * H):zero()
@@ -258,7 +257,7 @@ function SeqLSTM:updateOutput(input)
          self.zeroMask = self.zeroMask or ((torch.type(cur_x) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
          self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)     
          -- zero masked output
-         self:recursiveMask({self.next_h, h[t], next_c, cur_gates}, self.zeroMask)
+         self:recursiveMask({self.next_h, next_c, cur_gates}, self.zeroMask)
       end
       
       prev_h, prev_c = self.next_h, next_c
@@ -273,6 +272,10 @@ function SeqLSTM:updateOutput(input)
    end
 
    return self.output
+end
+
+function SeqLSTM:adapter(scale, t)
+   -- Placeholder for SeqLSTMP
 end
 
 function SeqLSTM:backward(input, gradOutput, scale)
@@ -405,7 +408,6 @@ function SeqLSTM:clearState()
    self._grad_x = nil
    self.output:set()
    self._output = nil
-   self._hidden = nil
    self.gradInput = nil
    
    self.zeroMask = nil
