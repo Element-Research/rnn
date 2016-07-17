@@ -86,77 +86,80 @@ if opt.xpPath ~= '' then
     end
 
     xp = torch.load(opt.xpPath)
-    saved_model = xp:model()
+    agent = xp:model()
+    local checksum = agent:parameters()[1]:sum()
+    xp.opt.progress = opt.progress
     opt = xp.opt
-end
-
--- glimpse network (rnn input layer)
-locationSensor = nn.Sequential()
-locationSensor:add(nn.SelectTable(2))
-locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
-locationSensor:add(nn[opt.transfer]())
-
-glimpseSensor = nn.Sequential()
-glimpseSensor:add(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale):float())
-glimpseSensor:add(nn.Collapse(3))
-glimpseSensor:add(nn.Linear(ds:imageSize('c')*(opt.glimpsePatchSize^2)*opt.glimpseDepth, opt.glimpseHiddenSize))
-glimpseSensor:add(nn[opt.transfer]())
-
-glimpse = nn.Sequential()
-glimpse:add(nn.ConcatTable():add(locationSensor):add(glimpseSensor))
-glimpse:add(nn.JoinTable(1,1))
-glimpse:add(nn.Linear(opt.glimpseHiddenSize+opt.locatorHiddenSize, opt.imageHiddenSize))
-glimpse:add(nn[opt.transfer]())
-glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
-
--- rnn recurrent layer
-if opt.FastLSTM then
-  recurrent = nn.FastLSTM(opt.hiddenSize, opt.hiddenSize)
 else
-  recurrent = nn.Linear(opt.hiddenSize, opt.hiddenSize)
-end
+
+   -- glimpse network (rnn input layer)
+   locationSensor = nn.Sequential()
+   locationSensor:add(nn.SelectTable(2))
+   locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
+   locationSensor:add(nn[opt.transfer]())
+
+   glimpseSensor = nn.Sequential()
+   glimpseSensor:add(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale):float())
+   glimpseSensor:add(nn.Collapse(3))
+   glimpseSensor:add(nn.Linear(ds:imageSize('c')*(opt.glimpsePatchSize^2)*opt.glimpseDepth, opt.glimpseHiddenSize))
+   glimpseSensor:add(nn[opt.transfer]())
+
+   glimpse = nn.Sequential()
+   glimpse:add(nn.ConcatTable():add(locationSensor):add(glimpseSensor))
+   glimpse:add(nn.JoinTable(1,1))
+   glimpse:add(nn.Linear(opt.glimpseHiddenSize+opt.locatorHiddenSize, opt.imageHiddenSize))
+   glimpse:add(nn[opt.transfer]())
+   glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
+
+   -- rnn recurrent layer
+   if opt.FastLSTM then
+     recurrent = nn.FastLSTM(opt.hiddenSize, opt.hiddenSize)
+   else
+     recurrent = nn.Linear(opt.hiddenSize, opt.hiddenSize)
+   end
 
 
--- recurrent neural network
-rnn = nn.Recurrent(opt.hiddenSize, glimpse, recurrent, nn[opt.transfer](), 99999)
+   -- recurrent neural network
+   rnn = nn.Recurrent(opt.hiddenSize, glimpse, recurrent, nn[opt.transfer](), 99999)
 
-imageSize = ds:imageSize('h')
-assert(ds:imageSize('h') == ds:imageSize('w'))
+   imageSize = ds:imageSize('h')
+   assert(ds:imageSize('h') == ds:imageSize('w'))
 
--- actions (locator)
-locator = nn.Sequential()
-locator:add(nn.Linear(opt.hiddenSize, 2))
-locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
-locator:add(nn.ReinforceNormal(2*opt.locatorStd, opt.stochastic)) -- sample from normal, uses REINFORCE learning rule
-assert(locator:get(3).stochastic == opt.stochastic, "Please update the dpnn package : luarocks install dpnn")
-locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
-locator:add(nn.MulConstant(opt.unitPixels*2/ds:imageSize("h")))
+   -- actions (locator)
+   locator = nn.Sequential()
+   locator:add(nn.Linear(opt.hiddenSize, 2))
+   locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
+   locator:add(nn.ReinforceNormal(2*opt.locatorStd, opt.stochastic)) -- sample from normal, uses REINFORCE learning rule
+   assert(locator:get(3).stochastic == opt.stochastic, "Please update the dpnn package : luarocks install dpnn")
+   locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
+   locator:add(nn.MulConstant(opt.unitPixels*2/ds:imageSize("h")))
 
-attention = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
+   attention = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
 
--- model is a reinforcement learning agent
-agent = nn.Sequential()
-agent:add(nn.Convert(ds:ioShapes(), 'bchw'))
-agent:add(attention)
+   -- model is a reinforcement learning agent
+   agent = nn.Sequential()
+   agent:add(nn.Convert(ds:ioShapes(), 'bchw'))
+   agent:add(attention)
 
--- classifier :
-agent:add(nn.SelectTable(-1))
-agent:add(nn.Linear(opt.hiddenSize, #ds:classes()))
-agent:add(nn.LogSoftMax())
+   -- classifier :
+   agent:add(nn.SelectTable(-1))
+   agent:add(nn.Linear(opt.hiddenSize, #ds:classes()))
+   agent:add(nn.LogSoftMax())
 
--- add the baseline reward predictor
-seq = nn.Sequential()
-seq:add(nn.Constant(1,1))
-seq:add(nn.Add(1))
-concat = nn.ConcatTable():add(nn.Identity()):add(seq)
-concat2 = nn.ConcatTable():add(nn.Identity()):add(concat)
+   -- add the baseline reward predictor
+   seq = nn.Sequential()
+   seq:add(nn.Constant(1,1))
+   seq:add(nn.Add(1))
+   concat = nn.ConcatTable():add(nn.Identity()):add(seq)
+   concat2 = nn.ConcatTable():add(nn.Identity()):add(concat)
 
--- output will be : {classpred, {classpred, basereward}}
-agent:add(concat2)
+   -- output will be : {classpred, {classpred, basereward}}
+   agent:add(concat2)
 
-if opt.uniform > 0 then
-   for k,param in ipairs(agent:parameters()) do
-      param:uniform(-opt.uniform, opt.uniform)
+   if opt.uniform > 0 then
+      for k,param in ipairs(agent:parameters()) do
+         param:uniform(-opt.uniform, opt.uniform)
+      end
    end
 end
 
@@ -211,14 +214,9 @@ if not opt.noTest then
 end
 
 --[[Experiment]]--
-if opt.xpPath ~= '' then
-    model = saved_model
-else
-    model = agent
-end
 
 xp = dp.Experiment{
-   model = model,
+   model = agent,
    optimizer = train,
    validator = valid,
    tester = tester,
@@ -254,4 +252,7 @@ end
 
 xp.opt = opt
 
+if checksum then
+   assert(math.abs(xp:model():parameters()[1]:sum() - checksum) < 0.0001, "Loaded model parameters were changed???")
+end
 xp:run(ds)
