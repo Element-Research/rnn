@@ -5683,13 +5683,19 @@ function rnntest.clearState()
       local t = {torch.Tensor(4), torch.Tensor(4), torch.Tensor(4)}
       local output = seq:forward(input)
    end
+   
+   local nsharedclone = #seqLSTM.sharedClones
    seq:clearState()
 
    -- Test if shared clones are deleted
-   mytester:assert(#seqLSTM.sharedClones == 0, 'sharedClones should be empty after clear')
+   mytester:assert(#seqLSTM.sharedClones == nsharedclone, 'sharedClones should remain after clear')
    mytester:assert(#seqLSTM.cells == 0, 'cells should be empty after clear')
    mytester:assert(#seqLSTM.gradCells == 0, 'gradCells should be empty after clear')
-   mytester:assert(seqLSTM.nSharedClone == 0, 'nSharedClone should reflect count')
+   mytester:assert(seqLSTM.nSharedClone == nsharedclone, 'nSharedClone should reflect count')
+   
+   for i=1,nsharedclone do
+      mytester:assert(#seqLSTM.sharedClones[i].output == 0, 'shared clones should be cleared of state')
+   end
 
    -- Make sure it still works after clearing
    for i=1,10 do
