@@ -1,7 +1,7 @@
 local LookupTableMaskZero, parent = torch.class('nn.LookupTableMaskZero', 'nn.LookupTable')
 
 function LookupTableMaskZero:__init(nIndex, nOutput)
-  parent.__init(self, nIndex + 1, nOutput)
+  parent.__init(self, nIndex + 1, nOutput, 1)
 end
 
 function LookupTableMaskZero:updateOutput(input)
