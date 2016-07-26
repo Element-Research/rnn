@@ -20,13 +20,13 @@ cmd:text('Train a LSTM based sentiments classifier on Twitter dataset.')
 cmd:text('Options:')
 -- Data
 cmd:option('--datapath', '/data/Twitter/', 'Path to Twitter data.')
-cmd:option('seqLen', 25, 'Sequence Length. BPTT for this many time steps.')
-cmd:option('minFreq', 10, 'Min frequency for a word to be considered in vocab.')
-cmd:option('validRatio', 0.2, 'Part of trainSet to be used as validSet.')
-cmd:option('lookupDim', 128, 'Lookup feature dimensionality.')
-cmd:option('lookupDropout', 0, 'Lookup feature dimensionality.')
-cmd:option('hiddenSizes', '{256, 256}', 'Hidden size for LSTM.')
-cmd:option('dropouts', '{0, 0}', 'Dropout on hidden representations.')
+cmd:option('--seqLen', 25, 'Sequence Length. BPTT for this many time steps.')
+cmd:option('--minFreq', 10, 'Min freq for a word to be considered in vocab.')
+cmd:option('--validRatio', 0.2, 'Part of trainSet to be used as validSet.')
+cmd:option('--lookupDim', 128, 'Lookup feature dimensionality.')
+cmd:option('--lookupDropout', 0, 'Lookup feature dimensionality.')
+cmd:option('--hiddenSizes', '{256, 256}', 'Hidden size for LSTM.')
+cmd:option('--dropouts', '{0, 0}', 'Dropout on hidden representations.')
 cmd:option('--useCuda', false, 'Use GPU for training.')
 cmd:option('--deviceId', 1, 'Device Id.')
 cmd:option('--batchSize', 128, 'number of examples per batch')
@@ -152,6 +152,7 @@ for epoch=1, epochs do
    confusion:zero()
    model:training()
    for i, inputs, targets in trainSet:sampleiter(batchSize, epochSize) do
+      xlua.progress(i, epochSize)
       trainInputs:resize(inputs:size()):copy(inputs)
       trainTargets:resize(targets:size()):copy(targets)
 
@@ -184,6 +185,7 @@ for epoch=1, epochs do
       print("Best train accuracy: ".. best_train_accu ..
                   " current accu: ".. confusion.totalValid)
       best_train_accu = confusion.totalValid
+      best_train_model = model:clone()
    end
 
    -- Validation accuracy
@@ -212,6 +214,7 @@ for epoch=1, epochs do
                   " current accu: ".. confusion.totalValid)
       best_valid_accu = confusion.totalValid
       earlyStopCount = 0
+      best_valid_model = model:clone()
    else
       earlyStopCount = earlyStopCount + 1
    end
@@ -223,12 +226,13 @@ for epoch=1, epochs do
 end
 
 -- Testing Accuracy
+model = best_valid_model
 model:evaluate()
 confusion:zero()
 for i, inputs, targets in testSet:sampleiter(batchSize, testSet:size()) do
    trainInputs:resize(inputs:size()):copy(inputs)
    trainTargets:resize(targets:size()):copy(targets)
-   local output = model:forward(trainInputs)
+   local outputs = model:forward(trainInputs)
 
    if useCuda then
       conOutputs = outputs:float()
