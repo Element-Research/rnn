@@ -98,8 +98,13 @@ function AbstractRecurrent:recycle(offset)
 end
 
 function nn.AbstractRecurrent:clearState()
-   nn.utils.clear(self, '_input', '_gradOutput', '_gradOutputs', 'sharedClones', 'gradPrevOutput', 'cell', 'cells', 'gradCells')
-   self.nSharedClone = 0
+   self:forget()
+   -- keep the first two sharedClones
+   nn.utils.clear(self, '_input', '_gradOutput', '_gradOutputs', 'gradPrevOutput', 'cell', 'cells', 'gradCells', 'outputs', 'gradInputs')
+   for i, clone in ipairs(self.sharedClones) do
+      clone:clearState()
+   end
+   self.recurrentModule:clearState()
    return parent.clearState(self)
 end
 

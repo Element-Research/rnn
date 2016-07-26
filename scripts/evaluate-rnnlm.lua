@@ -13,6 +13,7 @@ cmd:option('--cuda', false, 'model was saved with cuda')
 cmd:option('--device', 1, 'which GPU device to use')
 cmd:option('--nsample', -1, 'sample this many words from the language model')
 cmd:option('--temperature', 1, 'temperature of multinomial. Increase to sample wildly, reduce to be more deterministic.')
+cmd:option('--dumpcsv', false, 'dump training and validation error to CSV file')
 cmd:text()
 local opt = cmd:parse(arg or {})
 
@@ -33,11 +34,27 @@ local targetmodule = xplog.targetmodule
 
 print("Hyper-parameters (xplog.opt):")
 print(xplog.opt)
-print("Epoch " .. xplog.epoch)
-print("Training Error")
-print(unpack(xplog.trainnceloss or xplog.trainppl))
-print("Valid Error")
-print(unpack(xplog.valnceloss or xplog.valppl))
+
+local trainerr = xplog.trainnceloss or xplog.trainppl
+local validerr = xplog.valnceloss or xplog.valppl
+
+print(string.format("Error (epoch=%d): training=%f; validation=%f", xplog.epoch, trainerr[#trainerr], validerr[#validerr]))
+
+if opt.dumpcsv then
+   local csvfile = opt.xplogpath:match('([^/]+)[.]t7$')..'.csv'
+   paths.mkdir('learningcurves')
+   csvpath = paths.concat('learningcurves', csvfile)
+   
+   local file = io.open(csvpath, 'w')
+   file:write("epoch,trainerr,validerr\n")
+   for i=1,#trainerr do
+      file:write(string.format('%d,%f,%f\n', i, trainerr[i], validerr[i]))
+   end
+   file:close()
+   
+   print("CSV file saved to "..csvpath)
+   os.exit()
+end
 
 local trainset, validset, testset
 if xplog.dataset == 'PennTreeBank' then

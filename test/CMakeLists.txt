@@ -1,2 +1,2 @@
-
-install_files(${INSTALL_PREFIX} test.lua)
+FILE(GLOB luasrc *.lua)
+ADD_TORCH_PACKAGE(rnn/test "${src}" "${luasrc}")
