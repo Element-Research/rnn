@@ -42,12 +42,15 @@ local SeqLSTM, parent = torch.class('nn.SeqLSTM', 'nn.Module')
 
 function SeqLSTM:__init(inputsize, outputsize)
    parent.__init(self)
-
-   local D, H = inputsize, outputsize
-   self.inputsize, self.outputsize = D, H
-
-   self.weight = torch.Tensor(D + H, 4 * H)
-   self.gradWeight = torch.Tensor(D + H, 4 * H):zero()
+   local D, H, R = inputsize, outputsize, outputsize
+   self.inputsize, self.hiddensize, self.outputsize = D, H, R
+   
+   self.weightX = torch.Tensor(D, 4 * H)
+   self.weightR = torch.Tensor(R, 4 * H)
+   self.weight = parent.flatten({self.weightX, self.weightR}) --, self.weightO:view(-1)}
+   self.gradWeightX = torch.Tensor(D, 4 * H):zero()
+   self.gradWeightR = torch.Tensor(R, 4 * H):zero()
+   self.gradWeight = parent.flatten({self.gradWeightX, self.gradWeightR}) --, self.gradWeightO:view(-1)}
    self.bias = torch.Tensor(4 * H)
    self.gradBias = torch.Tensor(4 * H):zero()
    self:reset()
@@ -168,7 +171,7 @@ function SeqLSTM:updateOutput(input)
    self.recompute_backward = true
    local c0, h0, x = self:_prepare_size(input)
    local N, T = x:size(2), x:size(1)
-   local D, H = self.inputsize, self.outputsize
+   local H, R, D = self.hiddensize, self.outputsize, self.inputsize
    
    self._output = self._output or self.weight.new()
    
@@ -211,7 +214,7 @@ function SeqLSTM:updateOutput(input)
          assert(prev_N == N, 'batch sizes must be consistent with userPrevOutput')
          h0:resizeAs(self.userPrevOutput):copy(self.userPrevOutput)
       elseif h0:nElement() == 0 or not remember then
-         h0:resize(N, H):zero()
+         h0:resize(N, R):zero()
       elseif remember then
          local prev_T, prev_N = self._output:size(1), self._output:size(2)
          assert(prev_N == N, 'batch sizes must be the same to remember states')
@@ -220,20 +223,19 @@ function SeqLSTM:updateOutput(input)
    end
 
    local bias_expand = self.bias:view(1, 4 * H):expand(N, 4 * H)
-   local Wx = self.weight[{{1, D}}]
-   local Wh = self.weight[{{D + 1, D + H}}]
+   local Wx = self.weightX
+   local Wh = self.weightR
 
    local h, c = self._output, self.cell
-   h:resize(T, N, H):zero()
+   h:resize(T, N, R):zero()
    c:resize(T, N, H):zero()
    local prev_h, prev_c = h0, c0
    self.gates:resize(T, N, 4 * H):zero()
    for t = 1, T do
       local cur_x = x[t]
-      local next_h = h[t]
+      self.next_h = h[t]
       local next_c = c[t]
       local cur_gates = self.gates[t]
-      
       cur_gates:addmm(bias_expand, cur_x, Wx)
       cur_gates:addmm(prev_h, Wh)
       cur_gates[{{}, {1, 3 * H}}]:sigmoid()
@@ -242,9 +244,10 @@ function SeqLSTM:updateOutput(input)
       local f = cur_gates[{{}, {H + 1, 2 * H}}] -- forget gate
       local o = cur_gates[{{}, {2 * H + 1, 3 * H}}] -- output gate
       local g = cur_gates[{{}, {3 * H + 1, 4 * H}}] -- input transform
-      next_h:cmul(i, g)
-      next_c:cmul(f, prev_c):add(next_h)
-      next_h:tanh(next_c):cmul(o)
+      self.next_h:cmul(i, g)
+      next_c:cmul(f, prev_c):add(self.next_h)
+      self.next_h:tanh(next_c):cmul(o)
+      self:adapter(t)
       
       if self.maskzero then
          -- build mask from input
@@ -254,10 +257,10 @@ function SeqLSTM:updateOutput(input)
          self.zeroMask = self.zeroMask or ((torch.type(cur_x) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
          self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)     
          -- zero masked output
-         self:recursiveMask({next_h, next_c, cur_gates}, self.zeroMask)
+         self:recursiveMask({self.next_h, next_c, cur_gates}, self.zeroMask)
       end
       
-      prev_h, prev_c = next_h, next_c
+      prev_h, prev_c = self.next_h, next_c
    end
    self.userPrevOutput = nil
    self.userPrevCell = nil
@@ -271,6 +274,10 @@ function SeqLSTM:updateOutput(input)
    return self.output
 end
 
+function SeqLSTM:adapter(scale, t)
+   -- Placeholder for SeqLSTMP
+end
+
 function SeqLSTM:backward(input, gradOutput, scale)
    self.recompute_backward = false
    scale = scale or 1.0
@@ -279,9 +286,9 @@ function SeqLSTM:backward(input, gradOutput, scale)
    local c0, h0, x, grad_h = self:_prepare_size(input, gradOutput)
    assert(grad_h, "Expecting gradOutput")
    local N, T = x:size(2), x:size(1)
-   local D, H = self.inputsize, self.outputsize
+   local H, R, D = self.hiddensize, self.outputsize, self.inputsize
    
-   self._grad_x = self._grad_x or self.weight.new()
+   self._grad_x = self._grad_x or self.weightX.new()
    
    if not c0 then c0 = self.c0 end
    if not h0 then h0 = self.h0 end
@@ -289,10 +296,10 @@ function SeqLSTM:backward(input, gradOutput, scale)
    local grad_c0, grad_h0, grad_x = self.grad_c0, self.grad_h0, self._grad_x
    local h, c = self._output, self.cell
    
-   local Wx = self.weight[{{1, D}}]
-   local Wh = self.weight[{{D + 1, D + H}}]
-   local grad_Wx = self.gradWeight[{{1, D}}]
-   local grad_Wh = self.gradWeight[{{D + 1, D + H}}]
+   local Wx = self.weightX
+   local Wh = self.weightR
+   local grad_Wx = self.gradWeightX
+   local grad_Wh = self.gradWeightR
    local grad_b = self.gradBias
 
    grad_h0:resizeAs(h0):zero()
@@ -300,7 +307,7 @@ function SeqLSTM:backward(input, gradOutput, scale)
    grad_x:resizeAs(x):zero()
    self.buffer1:resizeAs(h0)
    self.buffer2:resizeAs(c0)
-   local grad_next_h = self.gradPrevOutput and self.buffer1:copy(self.gradPrevOutput) or self.buffer1:zero()
+   self.grad_next_h = self.gradPrevOutput and self.buffer1:copy(self.gradPrevOutput) or self.buffer1:zero()
    local grad_next_c = self.userNextGradCell and self.buffer2:copy(self.userNextGradCell) or self.buffer2:zero()
    
    for t = T, 1, -1 do
@@ -311,7 +318,10 @@ function SeqLSTM:backward(input, gradOutput, scale)
       else
          prev_h, prev_c = h[t - 1], c[t - 1]
       end
-      grad_next_h:add(grad_h[t])
+      self.grad_next_h:add(grad_h[t])
+      
+      
+      self:gradAdapter(scale, t)
 
       local i = self.gates[{t, {}, {1, H}}]
       local f = self.gates[{t, {}, {H + 1, 2 * H}}]
@@ -331,12 +341,12 @@ function SeqLSTM:backward(input, gradOutput, scale)
       local tanh_next_c = grad_ai:tanh(next_c)
       local tanh_next_c2 = grad_af:cmul(tanh_next_c, tanh_next_c)
       local my_grad_next_c = grad_ao
-      my_grad_next_c:fill(1):add(-1, tanh_next_c2):cmul(o):cmul(grad_next_h)
+      my_grad_next_c:fill(1):add(-1, tanh_next_c2):cmul(o):cmul(self.grad_next_h)
       grad_next_c:add(my_grad_next_c)
       
       -- We need tanh_next_c (currently in grad_ai) to compute grad_ao; after
       -- that we can overwrite it.
-      grad_ao:fill(1):add(-1, o):cmul(o):cmul(tanh_next_c):cmul(grad_next_h)
+      grad_ao:fill(1):add(-1, o):cmul(o):cmul(tanh_next_c):cmul(self.grad_next_h)
 
       -- Use grad_ai as a temporary buffer for computing grad_ag
       local g2 = grad_ai:cmul(g, g)
@@ -351,11 +361,12 @@ function SeqLSTM:backward(input, gradOutput, scale)
       grad_Wh:addmm(scale, prev_h:t(), grad_a)
       local grad_a_sum = self.buffer3:resize(1, 4 * H):sum(grad_a, 1)
       grad_b:add(scale, grad_a_sum)
-
-      grad_next_h:mm(grad_a, Wh:t())
+      
+      self.grad_next_h = torch.mm(grad_a, Wh:t())
       grad_next_c:cmul(f)
+      
    end
-   grad_h0:copy(grad_next_h)
+   grad_h0:copy(self.grad_next_h)
    grad_c0:copy(grad_next_c)
    
    if self.batchfirst then
@@ -377,6 +388,10 @@ function SeqLSTM:backward(input, gradOutput, scale)
    end
 
    return self.gradInput
+end
+
+function SeqLSTM:gradAdapter(scale, t)
+   -- Placeholder for SeqLSTMP
 end
 
 function SeqLSTM:clearState()
