@@ -10,66 +10,52 @@ local dl = require 'dataload'
 
 torch.setdefaulttensortype("torch.FloatTensor")
 
-op = xlua.OptionParser('%prog [options]')
-
+--[[ Command line arguments --]]
+cmd = torch.CmdLine()
+cmd:text()
+cmd:text('Train a LSTM based sentiments classifier on Twitter dataset.')
+cmd:text('Options:')
 -- Data
-op:option{'-d', '--datapath', action='store', dest='datapath',
-          help='path to Twitter Sentiment Analysis data.',
-          default='/media/eos/private/twitter'}
-op:option{'--seqLen', action='store', dest='seqLen', help='Sequence Length',
-          default=25}
-op:option{'--minFreq', action='store', dest='minFreq',
-          help='Drop words with occurance less than minFreq', default=10}
-op:option{'--validRatio', action='store', dest='validRatio',
-          help='Proportion of data to be used for validation.', default=0.2}
+cmd:option('--datapath', '/data/Twitter/', 'Path to Twitter data.')
+cmd:option('seqLen', 25, 'Sequence Length. BPTT for this many time steps.')
+cmd:option('minFreq', 10, 'Min frequency for a word to be considered in vocab.')
+cmd:option('validRatio', 0.2, 'Part of trainSet to be used as validSet.')
+cmd:option('lookupDim', 128, 'Lookup feature dimensionality.')
+cmd:option('lookupDropout', 0, 'Lookup feature dimensionality.')
+cmd:option('hiddenSizes', '{256, 256}', 'Hidden size for LSTM.')
+cmd:option('dropouts', '{0, 0}', 'Dropout on hidden representations.')
+cmd:option('--useCuda', false, 'Use GPU for training.')
+cmd:option('--batchSize', 128, 'number of examples per batch')
+cmd:option('--epochs', 1000, 'maximum number of epochs to run')
+cmd:option('--earlyStopThresh', 50, 'Early stopping threshold.')
 
--- Model
-op:option{'--lookupDim', action='store', dest='lookupDim',
-          help='Feature dimensionality of lookuptable.', default=128}
-op:option{'--lookupDropout', action='store', dest='lookupDropout',
-          help='Dropout on lookup representation.', default=0}
-op:option{'--hiddenSizes', action='store', dest='hiddenSizes',
-          help='Hidden Layers', default='{256, 256}'}
-op:option{'--dropouts', action='store', dest='dropouts',
-          help='Dropouts', default='{0, 0}'}
-
--- Command line arguments
-opt = op:parse()
-op:summarize()
+cmd:text()
+local opt = cmd:parse(arg or {})
 
 -- Data
 datapath = opt.datapath
-seqLen = tonumber(opt.seqLen)
-minFreq = tonumber(opt.minFreq)
-validRatio = tonumber(opt.validRatio)
+seqLen = opt.seqLen
+minFreq = opt.minFreq
+validRatio = opt.validRatio
 
-trainFile = paths.concat(datapath, "trainSet.dl")
-validFile = paths.concat(datapath, "validSet.dl")
-testFile = paths.concat(datapath, "testSet.dl")
+classes = {'0', '2', '4'}
 
-if paths.filep(trainFile) and paths.filep(validFile)
-   and paths.filep(testFile) then
-   trainSet = torch.load(trainFile)
-   validSet = torch.load(validFile)
-   testSet = torch.load(testFile)
-else
-   trainSet, validSet, testSet = dl.loadTwitterSentiment(datapath, minFreq,
-                                                         seqLen, validRatio)
-   torch.save(trainFile, trainSet)
-   torch.save(validFile, validSet)
-   torch.save(testFile, testSet)
-end
+trainSet, validSet, testSet = dl.loadSentiment140(datapath, minFreq,
+                                                  seqLen, validRatio)
 
 -- Model
 lookupDim = tonumber(opt.lookupDim)
 lookupDropout = tonumber(opt.lookupDropout)
 hiddenSizes = loadstring(" return " .. opt.hiddenSizes)()
 dropouts = loadstring(" return " .. opt.dropouts)()
+
 model = nn.Sequential()
+
+-- Transpose, such that input is seqLen x batchSize
+model:add(nn.Transpose({1,2}))
 
 -- LookupTable
 local lookup = nn.LookupTableMaskZero(#trainSet.ivocab, lookupDim)
--- FIXME: Ask about maxoutnorm
 model:add(lookup)
 if lookupDropout ~= 0 then model:add(nn.Dropout(lookupDropout)) end
 
@@ -81,5 +67,20 @@ for i, hiddenSize in ipairs(hiddenSizes) do
    model:add(rnn)
    if dropouts[i] ~= 0 and dropouts[i] ~= nil then
       model:add(nn.Dropout(dropouts[i]))
-   end 
+   end
+   inputSize = hiddenSize 
 end
+model:add(nn.Select(1, -1))
+
+-- Output Layer
+model:add(nn.Linear(hiddenSizes[#hiddenSizes], #classes))
+model:add(nn.LogSoftMax())
+
+-- Criterion 
+criterion = nn.ClassNLLCriterion()
+
+-- Training
+useCuda = opt.useCuda
+batchSize = opt.batchSize
+epochs = opt.epochs
+earlyStopThresh = opt.earlyStopThresh
