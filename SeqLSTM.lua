@@ -40,23 +40,22 @@ see a bit higher memory usage in practice.
 --]]
 local SeqLSTM, parent = torch.class('nn.SeqLSTM', 'nn.Module')
 
-function SeqLSTM:__init(inputsize, outputsize)
+function SeqLSTM:__init(inputsize, hiddensize, outputsize)
    parent.__init(self)
-   local D, H, R = inputsize, outputsize, outputsize
+   -- for non-SeqLSTMP, only inputsize, hiddensize=outputsize are provided
+   outputsize = outputsize or hiddensize
+   local D, H, R = inputsize, hiddensize, outputsize
    self.inputsize, self.hiddensize, self.outputsize = D, H, R
    
-   self.weightX = torch.Tensor(D, 4 * H)
-   self.weightR = torch.Tensor(R, 4 * H)
-   self.weight = parent.flatten({self.weightX, self.weightR}) --, self.weightO:view(-1)}
-   self.gradWeightX = torch.Tensor(D, 4 * H):zero()
-   self.gradWeightR = torch.Tensor(R, 4 * H):zero()
-   self.gradWeight = parent.flatten({self.gradWeightX, self.gradWeightR}) --, self.gradWeightO:view(-1)}
+   self.weight = torch.Tensor(D+R, 4 * H)
+   self.gradWeight = torch.Tensor(D+R, 4 * H)
+   
    self.bias = torch.Tensor(4 * H)
    self.gradBias = torch.Tensor(4 * H):zero()
    self:reset()
 
-   self.cell = torch.Tensor()      -- This will be  (T, N, H)
-   self.gates = torch.Tensor()    -- This will be (T, N, 4H)
+   self.cell = torch.Tensor()    -- This will be  (T, N, H)
+   self.gates = torch.Tensor()   -- This will be (T, N, 4H)
    self.buffer1 = torch.Tensor() -- This will be (N, H)
    self.buffer2 = torch.Tensor() -- This will be (N, H)
    self.buffer3 = torch.Tensor() -- This will be (1, 4H)
@@ -223,8 +222,8 @@ function SeqLSTM:updateOutput(input)
    end
 
    local bias_expand = self.bias:view(1, 4 * H):expand(N, 4 * H)
-   local Wx = self.weightX
-   local Wh = self.weightR
+   local Wx = self.weight:narrow(1,1,D)
+   local Wh = self.weight:narrow(1,D+1,R)
 
    local h, c = self._output, self.cell
    h:resize(T, N, R):zero()
@@ -288,7 +287,7 @@ function SeqLSTM:backward(input, gradOutput, scale)
    local N, T = x:size(2), x:size(1)
    local H, R, D = self.hiddensize, self.outputsize, self.inputsize
    
-   self._grad_x = self._grad_x or self.weightX.new()
+   self._grad_x = self._grad_x or self.weight:narrow(1,1,D).new()
    
    if not c0 then c0 = self.c0 end
    if not h0 then h0 = self.h0 end
@@ -296,10 +295,10 @@ function SeqLSTM:backward(input, gradOutput, scale)
    local grad_c0, grad_h0, grad_x = self.grad_c0, self.grad_h0, self._grad_x
    local h, c = self._output, self.cell
    
-   local Wx = self.weightX
-   local Wh = self.weightR
-   local grad_Wx = self.gradWeightX
-   local grad_Wh = self.gradWeightR
+   local Wx = self.weight:narrow(1,1,D)
+   local Wh = self.weight:narrow(1,D+1,R)
+   local grad_Wx = self.gradWeight:narrow(1,1,D)
+   local grad_Wh = self.gradWeight:narrow(1,D+1,R)
    local grad_b = self.gradBias
 
    grad_h0:resizeAs(h0):zero()
