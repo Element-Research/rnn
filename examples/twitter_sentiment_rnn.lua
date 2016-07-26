@@ -193,7 +193,7 @@ for epoch=1, epochs do
    for i, inputs, targets in validSet:sampleiter(batchSize, validSet:size()) do
       trainInputs:resize(inputs:size()):copy(inputs)
       trainTargets:resize(targets:size()):copy(targets)
-      local output = model:forward(trainInputs)
+      local outputs = model:forward(trainInputs)
       local f = criterion:forward(outputs, trainTargets)
       validLoss = validLoss + f
 
@@ -206,7 +206,7 @@ for epoch=1, epochs do
       end
       confusion:batchAdd(conOutputs, conTargets)
    end
-   confusion:totalValids()
+   confusion:updateValids()
    if best_valid_accu < confusion.totalValid then
       print("Best valid accuracy: ".. best_valid_accu ..
                   " current accu: ".. confusion.totalValid)
