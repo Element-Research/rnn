@@ -133,7 +133,6 @@ else
 end
 print(optimState)
 
-
 -- Variables for intermediate data
 trainInputs = useCuda and torch.CudaTensor() or torch.FloatTensor()
 trainTargets = useCuda and torch.CudaTensor() or torch.FloatTensor()
@@ -215,6 +214,27 @@ for epoch=1, epochs do
       best_valid_accu = confusion.totalValid
       earlyStopCount = 0
       best_valid_model = model:clone()
+
+      -- Compute corresponding testing accuracy
+      model:evaluate()
+      confusion:zero()
+      for i, inputs, targets in testSet:sampleiter(batchSize, testSet:size()) do
+         trainInputs:resize(inputs:size()):copy(inputs)
+         trainTargets:resize(targets:size()):copy(targets)
+         local outputs = model:forward(trainInputs)
+
+         if useCuda then
+            conOutputs = outputs:float()
+            conTargets = trainTargets:float()
+         else
+            conOutputs = outputs
+            conTargets = trainTargets
+         end
+         confusion:batchAdd(conOutputs, conTargets)
+      end
+      confusion:updateValids()
+      print("TestSet confusion")
+      print(confusion)
    else
       earlyStopCount = earlyStopCount + 1
    end
