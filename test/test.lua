@@ -5499,6 +5499,129 @@ function rnntest.SeqLSTM_maskzero()
    end
 end
 
+function rnntest.SeqLSTMP_main()
+   -- test that LSTM = LSTMP when projection layer is identity
+   local inputsize = 2 
+   local hiddensize = 3
+   local outputsize = 3
+   local seqlen = 6
+   local batchsize = 5
+   
+   local lstm = nn.SeqLSTM(inputsize, outputsize)
+   local lstmp = nn.SeqLSTMP(inputsize, hiddensize, outputsize)
+   
+   local params, gradParams = lstm:parameters()
+   local paramsp, gradParamsp = lstmp:parameters()
+   
+   mytester:assert(#params + 1 == #paramsp)
+   
+   for i=1,#params do
+      paramsp[i]:copy(params[i])
+   end 
+   
+   local wO = paramsp[3]
+   mytester:assertTableEq(wO:size():totable(), {3,3})
+   wO:eye(3,3)
+   
+   local input = torch.randn(seqlen, batchsize, inputsize)
+   local gradOutput = torch.randn(seqlen, batchsize, outputsize)
+   
+   local output = lstm:forward(input)
+   local outputp = lstmp:forward(input)
+   
+   mytester:assertTensorEq(output, outputp, 0.000001)
+   
+   lstm:zeroGradParameters()
+   lstmp:zeroGradParameters()
+   
+   mytester:assert(math.abs(gradParamsp[3]:sum()) < 0.00001)
+   
+   local gradInput = lstm:backward(input, gradOutput)
+   local gradInputp = lstmp:backward(input, gradOutput)
+   
+   mytester:assertTensorEq(gradInput, gradInputp, 0.000001)
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams[i], gradParamsp[i], 0.000001)
+   end
+   
+   mytester:assert(math.abs(gradParamsp[3]:sum()) > 0.00001)
+   
+   -- test with maskzero
+   
+   for i=1,seqlen do
+      for j=1,batchsize do
+         if math.random() < 0.2 then
+            input[{i,j,{}}]:zero()
+         end
+      end
+   end
+   
+   lstmp.maskzero = true
+   lstm.maskzero = true
+   
+   local output = lstm:forward(input)
+   local outputp = lstmp:forward(input)
+   
+   mytester:assertTensorEq(output, outputp, 0.000001)
+   
+   lstm:zeroGradParameters()
+   lstmp:zeroGradParameters()
+   
+   local gradInput = lstm:backward(input, gradOutput)
+   local gradInputp = lstmp:backward(input, gradOutput)
+   
+   mytester:assertTensorEq(gradInput, gradInputp, 0.000001)
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams[i], gradParamsp[i], 0.000001)
+   end
+   
+   mytester:assert(math.abs(gradParamsp[3]:sum()) > 0.00001)
+   
+   -- test with hiddensize ~= outputsize and maskzero
+   lstm = nil
+   
+   local hiddensize = 4
+   
+   local lstmp = nn.SeqLSTMP(inputsize, hiddensize, outputsize)
+   local lstmp2 = nn.SeqLSTMP(inputsize, hiddensize, outputsize)
+   
+   local params, gradParams = lstmp:parameters()
+   local params2, gradParams2 = lstmp2:parameters()
+   
+   for i=1,#params do
+      params[i]:copy(params2[i])
+   end
+   
+   lstmp:zeroGradParameters()
+   lstmp2:zeroGradParameters()
+   
+   local input = torch.randn(seqlen, batchsize, inputsize)
+   input[3] = 0 -- zero the 3 time-step
+   
+   lstmp.maskzero = true
+   local output = lstmp:forward(input)
+   local gradInput = lstmp:backward(input, gradOutput)
+   
+   lstmp2:remember('neither')
+   local input1, input2 = input:sub(1,2), input:sub(4,seqlen)
+   local gradOutput1, gradOutput2 = gradOutput:sub(1,2), gradOutput:sub(4,seqlen)
+   local output2 = torch.zeros(output:size())
+   local gradInput2 = torch.zeros(gradInput:size())
+   output2:sub(1,2):copy(lstmp2:forward(input1))
+   gradInput2:sub(1,2):copy(lstmp2:backward(input1, gradOutput1))
+   output2:sub(4,seqlen):copy(lstmp2:forward(input2))
+   gradInput2:sub(4,seqlen):copy(lstmp2:backward(input2, gradOutput2))
+   
+   mytester:assertTensorEq(output, output2, 0.000001)
+   mytester:assertTensorEq(gradInput, gradInput2, 0.000001)
+   
+   for i=1,#params do
+      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.000001, 'error in gradParams '..i)
+   end
+end
+
 function rnntest.FastLSTM_issue203()
    torch.manualSeed(123)
    local nActions = 3

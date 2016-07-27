@@ -246,6 +246,8 @@ function SeqLSTM:updateOutput(input)
       self.next_h:cmul(i, g)
       next_c:cmul(f, prev_c):add(self.next_h)
       self.next_h:tanh(next_c):cmul(o)
+      
+      -- for LSTMP
       self:adapter(t)
       
       if self.maskzero then
@@ -319,7 +321,20 @@ function SeqLSTM:backward(input, gradOutput, scale)
       end
       self.grad_next_h:add(grad_h[t])
       
+      if self.maskzero and torch.type(self) ~= 'nn.SeqLSTM' then 
+         -- we only do this for sub-classes (LSTM doesn't need it)   
+         -- build mask from input
+         local cur_x = x[t]
+         local vectorDim = cur_x:dim()
+         self._zeroMask = self._zeroMask or cur_x.new()
+         self._zeroMask:norm(cur_x, 2, vectorDim)
+         self.zeroMask = self.zeroMask or ((torch.type(cur_x) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
+         self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)
+         -- zero masked gradOutput
+         self:recursiveMask(self.grad_next_h, self.zeroMask)
+      end
       
+      -- for LSTMP
       self:gradAdapter(scale, t)
 
       local i = self.gates[{t, {}, {1, H}}]

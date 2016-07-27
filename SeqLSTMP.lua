@@ -11,9 +11,12 @@ function SeqLSTMP:__init(inputsize, hiddensize, outputsize)
 end
 
 function SeqLSTMP:adapter(t)
-   self._hidden = self._hidden or self.next_h.new(T, N, H)
+   local T, N = self._output:size(1), self._output:size(2)
+   self._hidden = self._hidden or self.next_h.new()
+   self._hidden:resize(T, N, self.hiddensize)
    
    self._hidden[t]:copy(self.next_h)
+   self.next_h:resize(N,self.outputsize)
    self.next_h:mm(self._hidden[t], self.weightO)
 end
 
@@ -21,6 +24,7 @@ function SeqLSTMP:gradAdapter(scale, t)
    self.buffer3:resizeAs(self.grad_next_h):copy(self.grad_next_h)
    
    self.gradWeightO:addmm(scale, self._hidden[t]:t(), self.grad_next_h)
+   self.grad_next_h:resize(self._output:size(2), self.hiddensize)
    self.grad_next_h:mm(self.buffer3, self.weightO:t())
 end
 
