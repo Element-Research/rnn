@@ -18,6 +18,7 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence  (Tensor or Table);
  * [SeqLSTM](#rnn.SeqLSTM) : a very fast version of `nn.Sequencer(nn.FastLSTM)` where the `input` and `output` are tensors;
+  * [SeqLSTMP](#rnn.SeqLSTMP) : `SeqLSTM` with a projection layer;
  * [SeqGRU](#rnn.SeqGRU) : a very fast version of `nn.Sequencer(nn.GRU)` where the `input` and `output` are tensors;
  * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
@@ -756,6 +757,17 @@ This module is a faster version of `nn.Sequencer(nn.FastLSTM(inputsize, outputsi
 seqlstm = nn.SeqLSTM(inputsize, outputsize)
 ``` 
 
+Each time-step is computed as follows (same as [FastLSTM](#rnn.FastLSTM)):
+
+```lua
+i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + b[1->i])                      (1)
+f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + b[1->f])                      (2)
+z[t] = tanh(W[x->c]x[t] + W[h->c]h[t−1] + b[1->c])                   (3)
+c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
+o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
+h[t] = o[t]tanh(c[t])                                                (6)
+``` 
+
 A notable difference is that this module expects the `input` and `gradOutput` to 
 be tensors instead of tables. The default shape is `seqlen x batchsize x inputsize` for
 the `input` and `seqlen x batchsize x outputsize` for the `output` :
@@ -791,6 +803,38 @@ Like the `Sequencer`, the `SeqLSTM` provides a [remember](rnn.Sequencer.remember
 Note that a `SeqLSTM` cannot replace `FastLSTM` in code that decorates it with a
 `AbstractSequencer` or `Recursor` as this would be equivalent to `Sequencer(Sequencer(FastLSTM))`.
 You have been warned.
+
+<a name='rnn.SeqLSTMP'></a>
+## SeqLSTMP ##
+References:
+ * A. [LSTM RNN Architectures for Large Scale Acoustic Modeling](http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/43905.pdf)
+ * B. [Exploring the Limits of Language Modeling](https://arxiv.org/pdf/1602.02410v2.pdf)
+ 
+```lua
+lstmp = nn.SeqLSTMP(inputsize, hiddensize, outputsize)
+``` 
+
+The `SeqLSTMP` is a subclass of [SeqLSTM](#rnn.SeqLSTM). 
+It differs in that after computing the hidden state `h[t]` (eq. 6), it is 
+projected onto `r[t]` using a simple linear transform (eq. 7). 
+The computation of the gates also uses the previous such projection `r[t-1]` (eq. 1, 2, 3, 5).
+This differs from `SeqLSTM` which uses `h[t-1]` instead of `r[t-1]`.
+ 
+The computation of a time-step outlined in `SeqLSTM` is replaced with the following:
+```lua
+i[t] = σ(W[x->i]x[t] + W[r->i]r[t−1] + b[1->i])                      (1)
+f[t] = σ(W[x->f]x[t] + W[r->f]r[t−1] + b[1->f])                      (2)
+z[t] = tanh(W[x->c]x[t] + W[h->c]r[t−1] + b[1->c])                   (3)
+c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
+o[t] = σ(W[x->o]x[t] + W[r->o]r[t−1] + b[1->o])                      (5)
+h[t] = o[t]tanh(c[t])                                                (6)
+r[t] = W[h->r]h[t]                                                   (7)
+``` 
+
+The algorithm is outlined in ref. A and benchmarked with state of the art results on the Google billion words dataset in ref. B.
+`SeqLSTMP` can be used with an `hiddensize >> outputsize` such that the effective size of the memory cells `c[t]` 
+and gates `i[t]`, `f[t]` and `o[t]` can be much larger than the actual input `x[t]` and output `r[t]`.
+For fixed `inputsize` and `outputsize`, the `SeqLSTMP` will be able to remember much more information than the `SeqLSTM`.
 
 <a name='rnn.SeqGRU'></a>
 ## SeqGRU ##
