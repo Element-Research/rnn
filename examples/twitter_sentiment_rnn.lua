@@ -46,7 +46,7 @@ seqLen = opt.seqLen
 minFreq = opt.minFreq
 validRatio = opt.validRatio
 
-classes = {'0', '2', '4'}
+classes = {'Negative', 'Positive'}
 
 trainSet, validSet, testSet = dl.loadSentiment140(datapath, minFreq,
                                                   seqLen, validRatio)
