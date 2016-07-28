@@ -36,9 +36,21 @@ cmd:option('--adam', false, 'Use Adaptive moment estimation optimizer.')
 cmd:option('--learningRate', 0.001, 'Learning rate.')
 cmd:option('--learningRateDecay', 1e-7, 'Learning rate decay.')
 cmd:option('--momentum', 0, 'Momentum')
+cmd:option('--loadModel', false, 'Load pretrained model and train further.')
+cmd:option('--modelpath', nil, 'Pre trained model path.')
+cmd:option('--useOldOpt', false, 'Use old command line options.')
 
 cmd:text()
 local opt = cmd:parse(arg or {})
+
+-- Loading pretrained model and corresponding options if required.
+if opt.loadModel then
+   model = torch.load(opt.modelpath)
+   if opt.useOldOpt then
+      opt = torch.load(opt.modelpath..".opt")
+   end
+   opt.loadModel = true
+end
 
 -- Data
 datapath = opt.datapath
@@ -52,37 +64,42 @@ trainSet, validSet, testSet = dl.loadSentiment140(datapath, minFreq,
                                                   seqLen, validRatio)
 
 -- Model
-lookupDim = tonumber(opt.lookupDim)
-lookupDropout = tonumber(opt.lookupDropout)
-hiddenSizes = loadstring(" return " .. opt.hiddenSizes)()
-dropouts = loadstring(" return " .. opt.dropouts)()
+if not opt.loadModel then
+   modelPath = paths.concat(datapath, "Sentiment140_model")
+   lookupDim = tonumber(opt.lookupDim)
+   modelPath = modelPath .. "_" .. tostring(lookupDim)
+   lookupDropout = tonumber(opt.lookupDropout)
+   modelPath = modelPath .. "_" .. tostring(lookupDropout)
+   hiddenSizes = loadstring(" return " .. opt.hiddenSizes)()
+   dropouts = loadstring(" return " .. opt.dropouts)()
 
-model = nn.Sequential()
+   model = nn.Sequential()
 
--- Transpose, such that input is seqLen x batchSize
-model:add(nn.Transpose({1,2}))
+   -- Transpose, such that input is seqLen x batchSize
+   model:add(nn.Transpose({1,2}))
 
--- LookupTable
-local lookup = nn.LookupTableMaskZero(#trainSet.ivocab, lookupDim)
-model:add(lookup)
-if lookupDropout ~= 0 then model:add(nn.Dropout(lookupDropout)) end
+   -- LookupTable
+   local lookup = nn.LookupTableMaskZero(#trainSet.ivocab, lookupDim)
+   model:add(lookup)
+   if lookupDropout ~= 0 then model:add(nn.Dropout(lookupDropout)) end
 
--- Recurrent layers
-local inputSize = lookupDim
-for i, hiddenSize in ipairs(hiddenSizes) do
-   local rnn = nn.SeqLSTM(inputSize, hiddenSize)
-   rnn.maskzero = true
-   model:add(rnn)
-   if dropouts[i] ~= 0 and dropouts[i] ~= nil then
-      model:add(nn.Dropout(dropouts[i]))
+   -- Recurrent layers
+   local inputSize = lookupDim
+   for i, hiddenSize in ipairs(hiddenSizes) do
+      local rnn = nn.SeqLSTM(inputSize, hiddenSize)
+      rnn.maskzero = true
+      model:add(rnn)
+      if dropouts[i] ~= 0 and dropouts[i] ~= nil then
+         model:add(nn.Dropout(dropouts[i]))
+      end
+      inputSize = hiddenSize 
    end
-   inputSize = hiddenSize 
-end
-model:add(nn.Select(1, -1))
+   model:add(nn.Select(1, -1))
 
--- Output Layer
-model:add(nn.Linear(hiddenSizes[#hiddenSizes], #classes))
-model:add(nn.LogSoftMax())
+   -- Output Layer
+   model:add(nn.Linear(hiddenSizes[#hiddenSizes], #classes))
+   model:add(nn.LogSoftMax())
+end
 
 -- Criterion 
 criterion = nn.ClassNLLCriterion()
