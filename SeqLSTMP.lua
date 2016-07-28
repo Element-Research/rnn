@@ -1,13 +1,29 @@
 local SeqLSTMP, parent = torch.class('nn.SeqLSTMP', 'nn.SeqLSTM')
 
+SeqLSTMP.dpnn_parameters = {'weight', 'bias', 'weightO'}
+SeqLSTMP.dpnn_gradParameters = {'gradWeight', 'gradBias', 'gradWeightO'}
+
 function SeqLSTMP:__init(inputsize, hiddensize, outputsize)
    assert(inputsize and hiddensize and outputsize, "Expecting input, hidden and output size")
-   parent.__init(self, inputsize, hiddensize, outputsize)
-   
    local D, H, R = inputsize, hiddensize, outputsize
    
-   self.weightO = torch.Tensor(H, R):zero()
-   self.gradWeightO = torch.Tensor(H, R):zero()
+   self.weightO = torch.Tensor(H, R)
+   self.gradWeightO = torch.Tensor(H, R)
+   
+   parent.__init(self, inputsize, hiddensize, outputsize)
+end
+
+function SeqLSTMP:reset(std)
+   self.bias:zero()
+   self.bias[{{self.outputsize + 1, 2 * self.outputsize}}]:fill(1)
+   if not std then
+      self.weight:normal(0, 1.0 / math.sqrt(self.hiddensize + self.inputsize))
+      self.weightO:normal(0, 1.0 / math.sqrt(self.outputsize + self.hiddensize))
+   else
+      self.weight:normal(0, std)
+      self.weightO:normal(0, std)
+   end
+   return self
 end
 
 function SeqLSTMP:adapter(t)

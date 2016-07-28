@@ -37,6 +37,7 @@ cmd:option('--rownoise', false, 'sample k noise samples for each row for NCE mod
 cmd:option('--seqlen', 50, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
 cmd:option('--hiddensize', '{256,256}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
+cmd:option('--projsize', -1, 'size of the projection layer (number of hidden cell units for LSTMP)')
 cmd:option('--dropout', 0, 'ancelossy dropout with this probability after each rnn layer. dropout <= 0 disables it.')
 -- data
 cmd:option('--batchsize', 128, 'number of examples per batch')
@@ -105,7 +106,8 @@ if not lm then
    local inputsize = opt.inputsize
    for i,hiddensize in ipairs(opt.hiddensize) do
       -- this is a faster version of nn.Sequencer(nn.FastLSTM(inpusize, hiddensize))
-      local rnn = nn.SeqLSTM(inputsize, hiddensize)
+      local rnn =  opt.projsize < 1 and nn.SeqLSTM(inputsize, hiddensize) 
+         or nn.SeqLSTMP(inputsize, opt.projsize, hiddensize) -- LSTM with a projection layer
       rnn.maskzero = true
       lm:add(rnn)
       if opt.dropout > 0 then
