@@ -44,13 +44,22 @@ cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'Twitter'),
 
 cmd:text()
 local opt = cmd:parse(arg or {})
+print(opt)
 
 -- Loading pretrained model and corresponding options if required.
 if opt.loadModel then
-   model = torch.load(opt.modelpath)
+   print("Loading pretrained model")
+   local modelpath = opt.modelpath
+   model = torch.load(modelpath)
+   model = model:float()
    if opt.useOldOpt then
+      print("Loading corresponding options")
       opt = torch.load(opt.modelpath..".opt")
+      opt.useOldOpt = true
    end
+   opt.modelpath = modelpath
+   modelPath = opt.modelpath
+   opt.loadModel = true
 end
 
 -- Data
@@ -68,6 +77,7 @@ trainSet, validSet, testSet = dl.loadSentiment140(datapath, minFreq,
 
 -- Model
 if not opt.loadModel then
+   print("Building model")
    modelPath = paths.concat(savepath, 
                             "Sentiment140_model_" .. dl.uniqueid() .. ".net")
    lookupDim = tonumber(opt.lookupDim)
@@ -86,7 +96,6 @@ if not opt.loadModel then
    if lookupDropout ~= 0 then model:add(nn.Dropout(lookupDropout)) end
 
    -- Recurrent layers
-   modelPath = modelPath .. "_LSTM"
    local inputSize = lookupDim
    for i, hiddenSize in ipairs(hiddenSizes) do
       local rnn = nn.SeqLSTM(inputSize, hiddenSize)
@@ -106,8 +115,9 @@ if not opt.loadModel then
    -- Save options
    optionsPath = modelPath .. ".opt"
    torch.save(optionsPath, opt)
-   print(modelPath, optionsPath)
 end
+print("Model path: " .. modelPath)
+collectgarbage()
 
 -- Criterion 
 criterion = nn.ClassNLLCriterion()
