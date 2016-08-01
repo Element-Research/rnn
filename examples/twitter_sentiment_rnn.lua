@@ -37,8 +37,10 @@ cmd:option('--learningRate', 0.001, 'Learning rate.')
 cmd:option('--learningRateDecay', 1e-7, 'Learning rate decay.')
 cmd:option('--momentum', 0, 'Momentum')
 cmd:option('--loadModel', false, 'Load pretrained model and train further.')
-cmd:option('--modelpath', nil, 'Pre trained model path.')
+cmd:option('--modelpath', '', 'Pre trained model path.')
 cmd:option('--useOldOpt', false, 'Use old command line options.')
+cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'Twitter'),
+       'path to directory where experiment log (includes model) will be saved')
 
 cmd:text()
 local opt = cmd:parse(arg or {})
@@ -49,11 +51,12 @@ if opt.loadModel then
    if opt.useOldOpt then
       opt = torch.load(opt.modelpath..".opt")
    end
-   opt.loadModel = true
 end
 
 -- Data
 datapath = opt.datapath
+savepath = opt.savepath
+paths.mkdir(savepath)
 seqLen = opt.seqLen
 minFreq = opt.minFreq
 validRatio = opt.validRatio
@@ -65,11 +68,10 @@ trainSet, validSet, testSet = dl.loadSentiment140(datapath, minFreq,
 
 -- Model
 if not opt.loadModel then
-   modelPath = paths.concat(datapath, "Sentiment140_model")
+   modelPath = paths.concat(savepath, 
+                            "Sentiment140_model_" .. dl.uniqueid() .. ".net")
    lookupDim = tonumber(opt.lookupDim)
-   modelPath = modelPath .. "_" .. tostring(lookupDim)
    lookupDropout = tonumber(opt.lookupDropout)
-   modelPath = modelPath .. "_" .. tostring(lookupDropout)
    hiddenSizes = loadstring(" return " .. opt.hiddenSizes)()
    dropouts = loadstring(" return " .. opt.dropouts)()
 
@@ -84,6 +86,7 @@ if not opt.loadModel then
    if lookupDropout ~= 0 then model:add(nn.Dropout(lookupDropout)) end
 
    -- Recurrent layers
+   modelPath = modelPath .. "_LSTM"
    local inputSize = lookupDim
    for i, hiddenSize in ipairs(hiddenSizes) do
       local rnn = nn.SeqLSTM(inputSize, hiddenSize)
@@ -99,6 +102,11 @@ if not opt.loadModel then
    -- Output Layer
    model:add(nn.Linear(hiddenSizes[#hiddenSizes], #classes))
    model:add(nn.LogSoftMax())
+
+   -- Save options
+   optionsPath = modelPath .. ".opt"
+   torch.save(optionsPath, opt)
+   print(modelPath, optionsPath)
 end
 
 -- Criterion 
@@ -201,7 +209,7 @@ for epoch=1, epochs do
       print("Best train accuracy: ".. best_train_accu ..
                   " current accu: ".. confusion.totalValid)
       best_train_accu = confusion.totalValid
-      best_train_model = model:clone()
+      --best_train_model = model:clone()
    end
 
    -- Validation accuracy
@@ -231,6 +239,8 @@ for epoch=1, epochs do
       best_valid_accu = confusion.totalValid
       earlyStopCount = 0
       best_valid_model = model:clone()
+      best_valid_model:clearState()
+      torch.save(modelPath, best_valid_model)
 
       -- Compute corresponding testing accuracy
       model:evaluate()
@@ -257,7 +267,7 @@ for epoch=1, epochs do
    end
    
    if earlyStopCount >= earlyStopThresh then
-      print("Early stopping.")
+      print("Early stopping at epoch: " .. tostring(epoch))
       break
    end
 end
@@ -281,5 +291,5 @@ for i, inputs, targets in testSet:sampleiter(batchSize, testSet:size()) do
    confusion:batchAdd(conOutputs, conTargets)
 end
 confusion:updateValids()
-print("TestSet confusion")
+print("Best validation model TestSet confusion:")
 print(confusion)
