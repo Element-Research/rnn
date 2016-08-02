@@ -170,6 +170,7 @@ function SeqLSTM:updateOutput(input)
    self.recompute_backward = true
    local c0, h0, x = self:_prepare_size(input)
    local N, T = x:size(2), x:size(1)
+   self.hiddensize = self.hiddensize or self.outputsize -- backwards compat
    local H, R, D = self.hiddensize, self.outputsize, self.inputsize
    
    self._output = self._output or self.weight.new()
@@ -287,6 +288,7 @@ function SeqLSTM:backward(input, gradOutput, scale)
    local c0, h0, x, grad_h = self:_prepare_size(input, gradOutput)
    assert(grad_h, "Expecting gradOutput")
    local N, T = x:size(2), x:size(1)
+   self.hiddensize = self.hiddensize or self.outputsize -- backwards compat
    local H, R, D = self.hiddensize, self.outputsize, self.inputsize
    
    self._grad_x = self._grad_x or self.weight:narrow(1,1,D).new()
