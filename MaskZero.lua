@@ -68,7 +68,7 @@ function MaskZero:updateOutput(input)
    local vectorDim = rmi:dim() 
    self._zeroMask = self._zeroMask or rmi.new()
    self._zeroMask:norm(rmi, 2, vectorDim)
-   self.zeroMask = self.zeroMask or ((torch.type(rmi) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
+   self.zeroMask = self.zeroMask or ((torch.type(rmi) == 'torch.CudaTensor') and torch.CudaByteTensor() or torch.ByteTensor())
    self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)
    
    -- forward through decorated module
