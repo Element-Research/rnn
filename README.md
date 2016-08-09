@@ -1027,6 +1027,16 @@ the first Tensor is the first one encountered when doing a depth-first search.
 
 This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
 
+Caveat: `MaskZero` not guarantee that the `output` and `gradInput` tensors of the internal modules 
+of the decorated `module` will be zeroed as well when the `input` is zero as well. 
+`MaskZero` only affects the immediate `gradInput` and `output` of the module that it encapsulates.
+However, for most modules, the gradient update for that time-step will be zero because 
+backpropagating a gradient of zeros will typically yield zeros all the way to the input.
+In this respect, modules to avoid in encapsulating inside a `MaskZero` are `AbsractRecurrent` 
+instances as the flow of gradients between different time-steps internally. 
+Instead, call the [AbstractRecurrent.maskZero](#nn.AbstractRecurrent.maskZero) method
+to encapsulate the internal `recurrentModule`.
+
 <a name='rnn.TrimZero'></a>
 ## TrimZero ##
 
