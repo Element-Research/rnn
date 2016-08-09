@@ -124,6 +124,7 @@ when doing backward propagation. It sets the object's `output` attribute
 to point to the output at time-step `step`. 
 This method was introduced to solve a very annoying bug.
 
+<a name='rnn.AbstractRecurrent.maskZero'></a>
 ### maskZero(nInputDim) ###
 Decorates the internal `recurrentModule` with [MaskZero](#rnn.MaskZero). 
 The `output` Tensor (or table thereof) of the `recurrentModule`
@@ -1034,7 +1035,7 @@ However, for most modules, the gradient update for that time-step will be zero b
 backpropagating a gradient of zeros will typically yield zeros all the way to the input.
 In this respect, modules to avoid in encapsulating inside a `MaskZero` are `AbsractRecurrent` 
 instances as the flow of gradients between different time-steps internally. 
-Instead, call the [AbstractRecurrent.maskZero](#nn.AbstractRecurrent.maskZero) method
+Instead, call the [AbstractRecurrent.maskZero](#rnn.AbstractRecurrent.maskZero) method
 to encapsulate the internal `recurrentModule`.
 
 <a name='rnn.TrimZero'></a>
