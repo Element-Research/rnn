@@ -53,7 +53,8 @@ function MaskZeroCriterion:updateOutput(input, target)
    self._zeroMask = self._zeroMask or rmi.new()
    self._zeroMask:norm(rmi, 2, vectorDim)
    local zeroMask = self._zeroMask
-   if torch.isTypeOf(zeroMask, 'torch.CudaTensor') then
+   if torch.isTypeOf(zeroMask, 'torch.CudaTensor') or
+         torch.isTypeOf(zeroMask, 'torch.ClTensor') then
       self.__zeroMask = self.__zeroMask or torch.FloatTensor()
       self.__zeroMask:resize(self._zeroMask:size()):copy(self._zeroMask)
       zeroMask = self._zeroMask
