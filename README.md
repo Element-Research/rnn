@@ -230,10 +230,10 @@ A [composite Module](https://github.com/torch/nn/blob/master/doc/containers.md#c
 The `nn.Recurrent(start, input, feedback, [transfer, rho, merge])` constructor takes 6 arguments:
  * `start` : the size of the output (excluding the batch dimension), or a Module that will be inserted between the `input` Module and `transfer` module during the first step of the propagation. When `start` is a size (a number or `torch.LongTensor`), then this *start* Module will be initialized as `nn.Add(start)` (see Ref. A).
  * `input` : a Module that processes input Tensors (or Tables). Output must be of same size as `start` (or its output in the case of a `start` Module), and same size as the output of the `feedback` Module.
- * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `transfer` Module.
- * `transfer` : a non-linear Module used to process the element-wise sum of the `input` and `feedback` module outputs, or in the case of the first step, the output of the *start* Module.
- * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Due to the vanishing gradients effect, references A and B recommend `rho = 5` (or lower). Defaults to 99999.
+ * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `merge` module.
  * `merge` : a [table Module](https://github.com/torch/nn/blob/master/doc/table.md#table-layers) that merges the outputs of the `input` and `feedback` Module before being forwarded through the `transfer` Module.
+ * `transfer` : a non-linear Module used to process the output of the `merge` module, or in the case of the first step, the output of the `start` Module.
+ * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Due to the vanishing gradients effect, references A and B recommend `rho = 5` (or lower). Defaults to 99999.
  
 An RNN is used to process a sequence of inputs. 
 Each step in the sequence should be propagated by its own `forward` (and `backward`), 
