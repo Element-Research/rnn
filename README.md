@@ -1125,7 +1125,6 @@ average of all individual losses in the sequence, otherwise, the output of `forw
 the sum of all individual losses in the sequence.
 This is useful when used in conjunction with a [Sequencer](#rnn.Sequencer).
 
-
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
 
