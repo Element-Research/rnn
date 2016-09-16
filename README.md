@@ -1120,8 +1120,11 @@ c = nn.SequencerCriterion(criterion)
 Both the `input` and `target` are expected to be a sequence, either as a table or Tensor. 
 For each step in the sequence, the corresponding elements of the input and target 
 will be applied to the `criterion`.
-The output of `forward` is the sum of all individual losses in the sequence.
+If the `sizeAverage` of the `criterion` is `true`, the output of `forward` is the 
+average of all individual losses in the sequence, otherwise, the output of `forward` is 
+the sum of all individual losses in the sequence.
 This is useful when used in conjunction with a [Sequencer](#rnn.Sequencer).
+
 
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
