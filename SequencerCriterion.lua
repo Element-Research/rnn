@@ -50,6 +50,10 @@ function SequencerCriterion:updateOutput(input, target)
       self.output = self.output + criterion:forward(input[i], target[i])
    end
    
+   if self.criterion.sizeAverage then
+      self.output = self.output / nStep
+   end
+
    return self.output
 end
 
