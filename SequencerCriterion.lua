@@ -8,7 +8,7 @@
 ------------------------------------------------------------------------
 local SequencerCriterion, parent = torch.class('nn.SequencerCriterion', 'nn.Criterion')
 
-function SequencerCriterion:__init(criterion)
+function SequencerCriterion:__init(criterion, sizeAverage)
    parent.__init(self)
    self.criterion = criterion
    if torch.isTypeOf(criterion, 'nn.ModuleCriterion') then
@@ -16,6 +16,11 @@ function SequencerCriterion:__init(criterion)
          "Instead, try the other way around : "..
          "ModuleCriterion decorates a SequencerCriterion. "..
          "Its modules can also be similarly decorated with a Sequencer.")
+   end
+   if sizeAverage ~= nil then
+      self.sizeAverage = sizeAverage
+   else
+      self.sizeAverage = false
    end
    self.clones = {}
    self.gradInput = {}
@@ -50,7 +55,7 @@ function SequencerCriterion:updateOutput(input, target)
       self.output = self.output + criterion:forward(input[i], target[i])
    end
    
-   if self.criterion.sizeAverage then
+   if self.sizeAverage then
       self.output = self.output / nStep
    end
 
