@@ -64,6 +64,7 @@ end
 
 function SequencerCriterion:updateGradInput(input, target)
    self.gradInput = {}
+   local nStep
    if torch.isTensor(input) then
       assert(torch.isTensor(target), "expecting target Tensor since input is a Tensor")
       assert(target:size(1) == input:size(1), "target should have as many elements as input")
@@ -78,6 +79,10 @@ function SequencerCriterion:updateGradInput(input, target)
    for i=1,nStep do
       local criterion = self:getStepCriterion(i)
       tableGradInput[i] = criterion:backward(input[i], target[i])
+      
+      if self.sizeAverage then
+         tableGradInput[i]:div(nStep)
+      end
    end
    
    if torch.isTensor(input) then
