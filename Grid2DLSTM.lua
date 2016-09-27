@@ -31,6 +31,7 @@ function Grid2DLSTM:__init(inputSize, outputSize, nb_layers, dropout, tie_weight
    -- build the model
    self.cell2gate = (cell2gate == nil) and true or cell2gate
    self.recurrentModule = self:buildModel()
+
    -- make it work with nn.Container
    self.modules[1] = self.recurrentModule
    self.sharedClones[1] = self.recurrentModule
@@ -40,6 +41,24 @@ function Grid2DLSTM:__init(inputSize, outputSize, nb_layers, dropout, tie_weight
 
    self.cells = {}
    self.gradCells = {}
+
+   -- initialization
+  --  local net_params = self.recurrentModule:parameters()
+   --
+  --  for _, p in pairs(net_params) do
+  --    p:uniform(-0.08, 0.08)
+  --  end
+   --
+    -- initialize the LSTM forget gates with slightly higher biases to encourage remembering in the beginning
+    for layer_idx = 1, opt.num_layers do
+        for _,node in ipairs(self.recurrentModule.forwardnodes) do
+            if node.data.annotations.name == "i2h_" .. layer_idx then
+                print('setting forget gate biases to 1 in LSTM layer ' .. layer_idx)
+                -- the gates are, in order, i,f,o,g, so f is the 2nd block of weights
+                node.data.module.bias[{{self.outputSize+1, 2*self.outputSize}}]:fill(1.0)
+            end
+        end
+    end
 
 end
 
@@ -128,18 +147,18 @@ function Grid2DLSTM:buildModel()
 end
 
 function Grid2DLSTM:updateOutput(input)
-  if self.step == 1 then
-    -- the initial state of the cell/hidden states
-    self.cells = {[0] = {}}
-
-    for L=1,self.nb_layers do
-      local h_init = torch.zeros(input:size(1), self.outputSize):cuda()
-      table.insert(self.cells[0], h_init:clone())
-      table.insert(self.cells[0], h_init:clone()) -- extra initial state for prev_c
-    end
-  end
-
+  -- if self.step == 1 then
+  --   -- the initial state of the cell/hidden states
+  --   self.cells = {[0] = {}}
+  --
+  --   for L=1,self.nb_layers do
+  --     local h_init = torch.zeros(input:size(1), self.outputSize):cuda()
+  --     table.insert(self.cells[0], h_init:clone())
+  --     table.insert(self.cells[0], h_init:clone()) -- extra initial state for prev_c
+  --   end
+  -- end
   local input_mem_cell = torch.zeros(input:size(1),  self.outputSize):float():cuda()
+  -- print(self.cells[self.step-1])
   local rnn_inputs = {input_mem_cell, input, unpack(self.cells[self.step-1])}
   local lst
   if self.train ~= false then
@@ -152,11 +171,10 @@ function Grid2DLSTM:updateOutput(input)
   end
 
   self.cells[self.step] = {}
-  for i=1,#(self.cells[0]) do table.insert(self.cells[self.step], lst[i]) end -- extract the state, without output
+  for i=1,#(self.cells[0]) do table.insert(self.cells[self.step], lst[i]) end
 
   self.outputs[self.step] = lst[#lst]
   self.output = lst[#lst]
-  self.cell = cell
 
   self.step = self.step + 1
   self.gradPrevOutput = nil
@@ -176,8 +194,6 @@ function Grid2DLSTM:_updateGradInput(input, gradOutput)
   local recurrentModule = self:getStepModule(step)
 
   -- backward propagate through this step
-  local gradCell = (step == self.step-1) and self.zeroTensor or self.gradCells[step]
-
   if (step == self.step-1) then
     self.gradCells = {[step] = {}}
     for L=1,self.nb_layers do
@@ -185,22 +201,25 @@ function Grid2DLSTM:_updateGradInput(input, gradOutput)
       table.insert(self.gradCells[step], h_init:clone())
       table.insert(self.gradCells[step], h_init:clone()) -- extra initial state for prev_c
     end
+    local input_mem_cell = torch.zeros(input:size(1),  self.outputSize):float():cuda()
+    self.rnn_inputs = {input_mem_cell, input, unpack(self.cells[step-1])}
   end
 
   table.insert(self.gradCells[step], gradOutput)
 
-  local input_mem_cell = torch.zeros(input:size(1),  self.outputSize):float():cuda()
-  local rnn_inputs = {input_mem_cell, input, unpack(self.cells[step-1])}
 
-  local dlst = recurrentModule:updateGradInput(rnn_inputs, self.gradCells[step])
+
+  local dlst = recurrentModule:updateGradInput(self.rnn_inputs, self.gradCells[step])
   self.gradCells[step-1] = {}
+  local gradInput = {}
   for k,v in pairs(dlst) do
       if k > 2 then -- k <= skip_index is gradient on inputs, which we dont need
           -- note we do k-1 because first item is dembeddings, and then follow the
           -- derivatives of the state, starting at index 2. I know...
           self.gradCells[step-1][k-2] = v
+      else
+        table.insert(gradInput, v)
       end
-      if k == 2 then gradInput = v end
   end
   return gradInput
 end
