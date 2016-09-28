@@ -23,6 +23,7 @@ end
 
 function Grid2DLSTM:__init( outputSize, nb_layers, dropout, tie_weights, rho, cell2gate)
    parent.__init(self, rho or 9999)
+   self.inputSize = outputSize
    self.outputSize = outputSize
    self.should_tie_weights = tie_weights or true
    self.dropout = dropout or 0
