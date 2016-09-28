@@ -21,10 +21,9 @@ function lstm(h_t, h_d, prev_c, rnn_size)
 end
 
 
-function Grid2DLSTM:__init(inputSize, outputSize, nb_layers, dropout, tie_weights, rho, cell2gate)
+function Grid2DLSTM:__init( outputSize, nb_layers, dropout, tie_weights, rho, cell2gate)
    parent.__init(self, rho or 9999)
-   self.inputSize = inputSize
-   self.outputSize = outputSize or inputSize
+   self.outputSize = outputSize
    self.should_tie_weights = tie_weights or true
    self.dropout = dropout or 0
    self.nb_layers = nb_layers
@@ -89,7 +88,7 @@ function Grid2DLSTM:buildModel()
       if L == 1 then
         -- We're in the first layer
         prev_c_d = inputs[1] -- input_c_d: the starting depth dimension memory cell, just a zero vec.
-        prev_h_d = nn.LookupTable(self.inputSize, self.outputSize)(inputs[2]) -- input_h_d: the starting depth dimension hidden state. We map a char into hidden space via a lookup table
+        prev_h_d = inputs[2]  -- input_h_d: the starting depth dimension hidden state.
       else
         -- We're in the higher layers 2...N
         -- Take hidden and memory cell from layers below
@@ -161,6 +160,7 @@ function Grid2DLSTM:updateOutput(input)
   local input_mem_cell = torch.zeros(input:size(1),  self.outputSize):float():cuda()
 
   local rnn_inputs = {input_mem_cell, input, unpack(self.cells[self.step-1])}
+-- print(input:size())
   local lst
   if self.train ~= false then
      self:recycle()
@@ -209,7 +209,6 @@ function Grid2DLSTM:_updateGradInput(input, gradOutput)
   table.insert(self.gradCells[step], gradOutput)
 
 
-
   local dlst = recurrentModule:updateGradInput(self.rnn_inputs, self.gradCells[step])
   self.gradCells[step-1] = {}
   local gradInput = {}
@@ -222,7 +221,7 @@ function Grid2DLSTM:_updateGradInput(input, gradOutput)
         table.insert(gradInput, v)
       end
   end
-  return gradInput
+  return gradInput[2]
 end
 
 function Grid2DLSTM:_accGradParameters(input, gradOutput, scale)
