@@ -147,18 +147,19 @@ function Grid2DLSTM:buildModel()
 end
 
 function Grid2DLSTM:updateOutput(input)
-  -- if self.step == 1 then
-  --   -- the initial state of the cell/hidden states
-  --   self.cells = {[0] = {}}
-  --
-  --   for L=1,self.nb_layers do
-  --     local h_init = torch.zeros(input:size(1), self.outputSize):cuda()
-  --     table.insert(self.cells[0], h_init:clone())
-  --     table.insert(self.cells[0], h_init:clone()) -- extra initial state for prev_c
-  --   end
-  -- end
+  if (self.step == 1) and not self.cells[0] then
+    -- the initial state of the cell/hidden states
+    print("Initializing the cell/hidden states")
+    self.cells = {[0] = {}}
+
+    for L=1,self.nb_layers do
+      local h_init = torch.zeros(input:size(1), self.outputSize):cuda()
+      table.insert(self.cells[0], h_init:clone())
+      table.insert(self.cells[0], h_init:clone()) -- extra initial state for prev_c
+    end
+  end
   local input_mem_cell = torch.zeros(input:size(1),  self.outputSize):float():cuda()
-  -- print(self.cells[self.step-1])
+
   local rnn_inputs = {input_mem_cell, input, unpack(self.cells[self.step-1])}
   local lst
   if self.train ~= false then
