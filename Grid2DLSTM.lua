@@ -50,7 +50,7 @@ function Grid2DLSTM:__init(inputSize, outputSize, nb_layers, dropout, tie_weight
   --  end
    --
     -- initialize the LSTM forget gates with slightly higher biases to encourage remembering in the beginning
-    for layer_idx = 1, opt.num_layers do
+    for layer_idx = 1, self.nb_layers do
         for _,node in ipairs(self.recurrentModule.forwardnodes) do
             if node.data.annotations.name == "i2h_" .. layer_idx then
                 print('setting forget gate biases to 1 in LSTM layer ' .. layer_idx)
