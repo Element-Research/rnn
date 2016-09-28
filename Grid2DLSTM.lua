@@ -23,7 +23,7 @@ end
 
 function Grid2DLSTM:__init( outputSize, nb_layers, dropout, tie_weights, rho, cell2gate)
    parent.__init(self, rho or 9999)
-   self.inputSize = outputSize
+   self.inputSize = outputSize -- for compatibility with tostring function in AbstractRecurrent
    self.outputSize = outputSize
    self.should_tie_weights = tie_weights or true
    self.dropout = dropout or 0
@@ -147,17 +147,24 @@ function Grid2DLSTM:buildModel()
 end
 
 function Grid2DLSTM:updateOutput(input)
-  if (self.step == 1) and not self.cells[0] then
-    -- the initial state of the cell/hidden states
-    print("Initializing the cell/hidden states")
-    self.cells = {[0] = {}}
 
-    for L=1,self.nb_layers do
-      local h_init = torch.zeros(input:size(1), self.outputSize):cuda()
-      table.insert(self.cells[0], h_init:clone())
-      table.insert(self.cells[0], h_init:clone()) -- extra initial state for prev_c
+  if self.step == 1 then
+    -- the initial state of the cell/hidden states
+    if self.userPrevCell then
+      -- print("Initializing the cell/hidden states with user previous cell")
+      self.cells = { [0] = self.userPrevCell }
+    else
+      -- print("Initializing the cell/hidden states with zero")
+      self.cells = {[0] = {}}
+
+      for L=1,self.nb_layers do
+        local h_init = torch.zeros(input:size(1), self.outputSize):cuda()
+        table.insert(self.cells[0], h_init:clone())
+        table.insert(self.cells[0], h_init:clone()) -- extra initial state for prev_c
+      end
     end
   end
+
   local input_mem_cell = torch.zeros(input:size(1),  self.outputSize):float():cuda()
 
   local rnn_inputs = {input_mem_cell, input, unpack(self.cells[self.step-1])}
