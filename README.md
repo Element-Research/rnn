@@ -21,6 +21,7 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
   * [SeqLSTMP](#rnn.SeqLSTMP) : `SeqLSTM` with a projection layer;
  * [SeqGRU](#rnn.SeqGRU) : a very fast version of `nn.Sequencer(nn.GRU)` where the `input` and `output` are tensors;
  * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
+ * [SeqDropout](#rnn.SeqDropout) : Dropout for SeqLSTM, SeqGRU and SeqBRNN;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
@@ -866,6 +867,11 @@ brnn = nn.SeqBRNN(5, 5)
 print(brnn:forward(input))
 ``` 
 Prints an output of a 1x1x5 tensor.
+
+<a name='rnn.SeqDropout'></a>
+## SeqDropout ##
+
+A Dropout Module changed from nn.Dropout, used for SeqLSTM, SeqGRU and SeqBRNN, the whole sequence will share the same mask which is different from nn.Dropout. The input of this module should be ```seqlen x batchsize x inputsize```.
 
 <a name='rnn.BiSequencer'></a>
 ## BiSequencer ##
