@@ -1114,15 +1114,16 @@ Gives us an output of torch.Tensor({{6,7,8,9,10},{1,2,3,4,5}})
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
 
 ```lua
-c = nn.SequencerCriterion(criterion, sizeAverage)
+c = nn.SequencerCriterion(criterion, [sizeAverage])
 ``` 
 
 Both the `input` and `target` are expected to be a sequence, either as a table or Tensor. 
 For each step in the sequence, the corresponding elements of the input and target 
 will be applied to the `criterion`.
-The output of `forward` is the sum of all individual losses in the sequence. if 
-`sizeAverage` is set, the output is the average of all individual losses.
+The output of `forward` is the sum of all individual losses in the sequence. 
 This is useful when used in conjunction with a [Sequencer](#rnn.Sequencer).
+
+If `sizeAverage` is `true` (default is `false`), the `output` loss and `gradInput` is averaged over each time-step.
 
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
