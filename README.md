@@ -8,28 +8,34 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : an abstract class inherited by Recurrent and LSTM;
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
-  * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM);
+  * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM) with optional support for batch normalization;
  * [GRU](#rnn.GRU) : Gated Recurrent Units module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
  * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
+ * [NormStabilizer](#rnn.NormStabilizer) : implements [norm-stabilization](http://arxiv.org/abs/1511.08400) criterion (add this module between RNNs);
 
 Modules that `forward` entire sequences through a decorated `AbstractRecurrent` instance :
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
- * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence;
+ * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence  (Tensor or Table);
+ * [SeqLSTM](#rnn.SeqLSTM) : a very fast version of `nn.Sequencer(nn.FastLSTM)` where the `input` and `output` are tensors;
+  * [SeqLSTMP](#rnn.SeqLSTMP) : `SeqLSTM` with a projection layer;
+ * [SeqGRU](#rnn.SeqGRU) : a very fast version of `nn.Sequencer(nn.GRU)` where the `input` and `output` are tensors;
+ * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
  * [Repeater](#rnn.Repeater) : repeatedly applies the same input to an AbstractRecurrent instance;
  * [RecurrentAttention](#rnn.RecurrentAttention) : a generalized attention model for [REINFORCE modules](https://github.com/nicholas-leonard/dpnn#nn.Reinforce);
 
 Miscellaneous modules and criterions :
- * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros.
- * [TrimZero](#rnn.TrimZero) : is more computationally efficient than `MaskZero` when input length is variable to avoid calculating zero vectors while doing forward/backward.
- * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros.
- * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros
+ * [MaskZero](#rnn.MaskZero) : zeroes the `output` and `gradOutput` rows of the decorated module for commensurate `input` rows which are tensors of zeros;
+ * [TrimZero](#rnn.TrimZero) : same behavior as `MaskZero`, but more efficient when `input` contains lots zero-masked rows;
+ * [LookupTableMaskZero](#rnn.LookupTableMaskZero) : extends `nn.LookupTable` to support zero indexes for padding. Zero indexes are forwarded as tensors of zeros;
+ * [MaskZeroCriterion](#rnn.MaskZeroCriterion) : zeros the `gradInput` and `err` rows of the decorated criterion for commensurate `input` rows which are tensors of zeros;
+ * [SeqReverseSequence](#rnn.SeqReverseSequence) : reverses an input sequence on a specific dimension;
 
 Criterions used for handling sequential inputs and targets :
- * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets;
- * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence;
+ * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets (Tensor or Table).
+ * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence.
 
 
 <a name='rnn.examples'></a>
@@ -38,20 +44,23 @@ Criterions used for handling sequential inputs and targets :
 The following are example training scripts using this package :
 
   * [RNN/LSTM/GRU](examples/recurrent-language-model.lua) for Penn Tree Bank dataset;
+  * [Noise Contrastive Estimate](examples/noise-contrastive-estimate.lua) for training multi-layer [SeqLSTM](#rnn.SeqLSTM) language models on the [Google Billion Words dataset](https://github.com/Element-Research/dataload#dl.loadGBW). The example uses [MaskZero](#rnn.MaskZero) to train independent variable length sequences using the [NCEModule](https://github.com/Element-Research/dpnn#nn.NCEModule) and [NCECriterion](https://github.com/Element-Research/dpnn#nn.NCECriterion). This script is our fastest yet boasting speeds of 20,000 words/second (on NVIDIA Titan X) with a 2-layer LSTM having 250 hidden units, a batchsize of 128 and sequence length of a 100. Note that you will need to have [Torch installed with Lua instead of LuaJIT](http://torch.ch/docs/getting-started.html#_);
   * [Recurrent Model for Visual Attention](examples/recurrent-visual-attention.lua) for the MNIST dataset;
   * [Encoder-Decoder LSTM](examples/encoder-decoder-coupling.lua) shows you how to couple encoder and decoder `LSTMs` for sequence-to-sequence networks;
   * [Simple Recurrent Network](examples/simple-recurrent-network.lua) shows a simple example for building and training a simple recurrent neural network;
-  * [Simple Sequencer Network](examples/simple-recurrent-network.lua) is a version of the above script that uses the Sequencer to decorate the `rnn` instead;
+  * [Simple Sequencer Network](examples/simple-sequencer-network.lua) is a version of the above script that uses the Sequencer to decorate the `rnn` instead;
   * [Sequence to One](examples/sequence-to-one.lua) demonstrates how to do many to one sequence learning as is the case for sentiment analysis;
   * [Multivariate Time Series](examples/recurrent-time-series.lua) demonstrates how train a simple RNN to do multi-variate time-series predication.
 
 ### External Resources
 
+  * [rnn-benchmarks](https://github.com/glample/rnn-benchmarks) : benchmarks comparing Torch (using this library), Theano and TensorFlow.
   * [Harvard Jupyter Notebook Tutorial](http://nbviewer.jupyter.org/github/CS287/Lectures/blob/gh-pages/notebooks/ElementRNNTutorial.ipynb) : an in-depth tutorial for how to use the Element-Research rnn package by Harvard University;
   * [dpnn](https://github.com/Element-Research/dpnn) : this is a dependency of the __rnn__ package. It contains useful nn extensions, modules and criterions;
   * [dataload](https://github.com/Element-Research/dataload) : a collection of torch dataset loaders;
   * [RNN/LSTM/BRNN/BLSTM training script ](https://github.com/nicholas-leonard/dp/blob/master/examples/recurrentlanguagemodel.lua) for Penn Tree Bank or Google Billion Words datasets;
   * A brief (1 hours) overview of Torch7, which includes some details about the __rnn__ packages (at the end), is available via this [NVIDIA GTC Webinar video](http://on-demand.gputechconf.com/gtc/2015/webinar/torch7-applied-deep-learning-for-vision-natural-language.mp4). In any case, this presentation gives a nice overview of Logistic Regression, Multi-Layer Perceptrons, Convolutional Neural Networks and Recurrent Neural Networks using Torch7;
+  * [Sequence to Sequence mapping using encoder-decoder RNNs](https://github.com/rahul-iisc/seq2seq-mapping) : a complete training example using synthetic data.
   * [ConvLSTM](https://github.com/viorik/ConvLSTM) is a repository for training a [Spatio-temporal video autoencoder with differentiable memory](http://arxiv.org/abs/1511.06309).
   * An [time series example](https://github.com/rracinskij/rnntest01/blob/master/rnntest01.lua) for univariate timeseries prediction.
   
@@ -72,6 +81,7 @@ Most issues can be resolved by updating the various dependencies:
 luarocks install torch
 luarocks install nn
 luarocks install dpnn
+luarocks install torchx
 ```
 
 If you are using CUDA :
@@ -114,6 +124,7 @@ when doing backward propagation. It sets the object's `output` attribute
 to point to the output at time-step `step`. 
 This method was introduced to solve a very annoying bug.
 
+<a name='rnn.AbstractRecurrent.maskZero'></a>
 ### maskZero(nInputDim) ###
 Decorates the internal `recurrentModule` with [MaskZero](#rnn.MaskZero). 
 The `output` Tensor (or table thereof) of the `recurrentModule`
@@ -219,10 +230,10 @@ A [composite Module](https://github.com/torch/nn/blob/master/doc/containers.md#c
 The `nn.Recurrent(start, input, feedback, [transfer, rho, merge])` constructor takes 6 arguments:
  * `start` : the size of the output (excluding the batch dimension), or a Module that will be inserted between the `input` Module and `transfer` module during the first step of the propagation. When `start` is a size (a number or `torch.LongTensor`), then this *start* Module will be initialized as `nn.Add(start)` (see Ref. A).
  * `input` : a Module that processes input Tensors (or Tables). Output must be of same size as `start` (or its output in the case of a `start` Module), and same size as the output of the `feedback` Module.
- * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `transfer` Module.
- * `transfer` : a non-linear Module used to process the element-wise sum of the `input` and `feedback` module outputs, or in the case of the first step, the output of the *start* Module.
- * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Due to the vanishing gradients effect, references A and B recommend `rho = 5` (or lower). Defaults to 99999.
+ * `feedback` : a Module that feedbacks the previous output Tensor (or Tables) up to the `merge` module.
  * `merge` : a [table Module](https://github.com/torch/nn/blob/master/doc/table.md#table-layers) that merges the outputs of the `input` and `feedback` Module before being forwarded through the `transfer` Module.
+ * `transfer` : a non-linear Module used to process the output of the `merge` module, or in the case of the first step, the output of the `start` Module.
+ * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Due to the vanishing gradients effect, references A and B recommend `rho = 5` (or lower). Defaults to 99999.
  
 An RNN is used to process a sequence of inputs. 
 Each step in the sequence should be propagated by its own `forward` (and `backward`), 
@@ -337,7 +348,7 @@ Note that we recommend decorating the `LSTM` with a `Sequencer`
 ## FastLSTM ##
 
 A faster version of the [LSTM](#rnn.LSTM). 
-Basically, the input, forget and output gates, as well as the hidden state are computed at one fell swoop.
+Basically, the input, forget and output gates, as well as the hidden state are computed at one fellswoop.
 
 Note that `FastLSTM` does not use peephole connections between cell and gates. The algorithm from `LSTM` changes as follows:
 ```lua
@@ -355,6 +366,35 @@ This is a static attribute of the `FastLSTM` class. The default value is `false`
 Setting `usenngraph = true` will force all new instantiated instances of `FastLSTM` 
 to use `nngraph`'s `nn.gModule` to build the internal `recurrentModule` which is 
 cloned for each time-step.
+
+<a name='rnn.FastLSTM.bn'></a>
+#### Recurrent Batch Normalization ####
+
+This extends the `FastLSTM` class to enable faster convergence during training by zero-centering the input-to-hidden and hidden-to-hidden transformations. 
+It reduces the [internal covariate shift](https://arXiv.org/1502.03167v3) between time steps. It is an implementation of Cooijmans et. al.'s [Recurrent Batch Normalization](https://arxiv.org/1603.09025). The hidden-to-hidden transition of each LSTM cell is normalized according to 
+```lua
+i[t] = σ(BN(W[x->i]x[t]) + BN(W[h->i]h[t−1]) + b[1->i])                      (1)
+f[t] = σ(BN(W[x->f]x[t]) + BN(W[h->f]h[t−1]) + b[1->f])                      (2)
+z[t] = tanh(BN(W[x->c]x[t]) + BN(W[h->c]h[t−1]) + b[1->c])                   (3)
+c[t] = f[t]c[t−1] + i[t]z[t]                                                 (4)
+o[t] = σ(BN(W[x->o]x[t]) + BN(W[h->o]h[t−1]) + b[1->o])                      (5)
+h[t] = o[t]tanh(c[t])                                                        (6)
+``` 
+where the batch normalizing transform is:                                   
+```lua
+  BN(h; gamma, beta) = beta + gamma *      hd - E(hd)
+                                      ------------------
+                                       sqrt(E(σ(hd) + eps))                       
+```
+where `hd` is a vector of (pre)activations to be normalized, `gamma`, and `beta` are model parameters that determine the mean and standard deviation of the normalized activation. `eps` is a regularization hyperparameter to keep the division numerically stable and `E(hd)` and `E(σ(hd))` are the estimates of the mean and variance in the mini-batch respectively. The authors recommend initializing `gamma` to a small value and found 0.1 to be the value that did not cause vanishing gradients. `beta`, the shift parameter, is `null` by default.
+
+To turn on batch normalization during training, do:
+```lua
+nn.FastLSTM.bn = true
+lstm = nn.FastLSTM(inputsize, outputsize, [rho, eps, momentum, affine]
+``` 
+
+where `momentum` is same as `gamma` in the equation above (defaults to 0.1), `eps` is defined above and `affine` is a boolean whose state determines if the learnable affine transform is turned off (`false`) or on (`true`, the default).
 
 <a name='rnn.GRU'></a>
 ## GRU ##
@@ -554,9 +594,51 @@ Note : We could very well reimplement the `LSTM` module using the
 newer `Recursor` and `Recurrent` modules, but that would mean 
 breaking backwards compatibility for existing models saved on disk.
 
+<a name='rnn.NormStabilizer'></a>
+## NormStabilizer ##
+
+Ref. A : [Regularizing RNNs by Stabilizing Activations](http://arxiv.org/abs/1511.08400)
+
+This module implements the [norm-stabilization](http://arxiv.org/abs/1511.08400) criterion:
+
+```lua
+ns = nn.NormStabilizer([beta])
+``` 
+
+This module regularizes the hidden states of RNNs by minimizing the difference between the
+L2-norms of consecutive steps. The cost function is defined as :
+```
+loss = beta * 1/T sum_t( ||h[t]|| - ||h[t-1]|| )^2
+``` 
+where `T` is the number of time-steps. Note that we do not divide the gradient by `T`
+such that the chosen `beta` can scale to different sequence sizes without being changed.
+
+The sole argument `beta` is defined in ref. A. Since we don't divide the gradients by
+the number of time-steps, the default value of `beta=1` should be valid for most cases. 
+
+This module should be added between RNNs (or LSTMs or GRUs) to provide better regularization of the hidden states. 
+For example :
+```lua
+local stepmodule = nn.Sequential()
+   :add(nn.FastLSTM(10,10))
+   :add(nn.NormStabilizer())
+   :add(nn.FastLSTM(10,10))
+   :add(nn.NormStabilizer())
+local rnn = nn.Sequencer(stepmodule)
+``` 
+
+To use it with `SeqLSTM` you can do something like this :
+```lua
+local rnn = nn.Sequential()
+   :add(nn.SeqLSTM(10,10))
+   :add(nn.Sequencer(nn.NormStabilizer()))
+   :add(nn.SeqLSTM(10,10))
+   :add(nn.Sequencer(nn.NormStabilizer()))
+``` 
+
 <a name='rnn.AbstractSequencer'></a>
 ## AbstractSequencer ##
-This abastract class implements a light interface shared by 
+This abstract class implements a light interface shared by 
 subclasses like : `Sequencer`, `Repeater`, `RecurrentAttention`, `BiSequencer` and so on.
   
 <a name='rnn.Sequencer'></a>
@@ -573,7 +655,7 @@ This Module is a kind of [decorator](http://en.wikipedia.org/wiki/Decorator_patt
 used to abstract away the intricacies of `AbstractRecurrent` modules. While an `AbstractRecurrent` instance 
 requires that a sequence to be presented one input at a time, each with its own call to `forward` (and `backward`),
 the `Sequencer` forwards an `input` sequence (a table) into an `output` sequence (a table of the same length).
-It also takes care of calling `forget`, `backwardOnline` and other such AbstractRecurrent-specific methods.
+It also takes care of calling `forget` on AbstractRecurrent instances.
 
 ### Input/Output Format
 
@@ -587,7 +669,8 @@ The `Sequencer` requires inputs and outputs to be of shape `seqlen x batchsize x
 
 Above is an example input sequence for a character level language model.
 It has `seqlen` is 5 which means that it contains sequences of 5 time-steps. 
-The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table.
+The openning `{` and closing `}` illustrate that the time-steps are elements of a Lua table, although 
+it also accepts full Tensors of shape `seqlen x batchsize x featsize`. 
 The `batchsize` is 2 as their are two independent sequences : `{ H, E, L, L, O }` and `{ F, U, Z, Z, Y, }`.
 The `featsize` is 1 as their is only one feature dimension per character and each such character is of size 1.
 So the input in this case is a table of `seqlen` time-steps where each time-step is represented by a `batchsize x featsize` Tensor.
@@ -612,12 +695,20 @@ input = {torch.randn(3,4), torch.randn(3,4), torch.randn(3,4)}
 rnn:forward(input[1])
 rnn:forward(input[2])
 rnn:forward(input[3])
-```
+``` 
 
 Equivalently, we can use a Sequencer to forward the entire `input` sequence at once:
 
 ```lua
 seq = nn.Sequencer(rnn)
+seq:forward(input)
+``` 
+
+We can also forward Tensors instead of Tables :
+
+```lua
+-- seqlen x batchsize x featsize
+input = torch.randn(3,3,4)
 seq:forward(input)
 ``` 
 
@@ -642,6 +733,7 @@ Nevertheless, existing code shouldn't be affected by the change.
 For a concise example of its use, please consult the [simple-sequencer-network.lua](examples/simple-sequencer-network.lua)
 training script.
 
+<a name='rnn.Sequencer.remember'></a>
 ### remember([mode]) ###
 When `mode='neither'` (the default behavior of the class), the Sequencer will additionally call [forget](#nn.AbstractRecurrent.forget) before each call to `forward`. 
 When `mode='both'` (the default when calling this function), the Sequencer will never call [forget](#nn.AbstractRecurrent.forget).
@@ -656,6 +748,124 @@ Accepted values for argument `mode` are as follows :
 
 ### forget() ###
 Calls the decorated AbstractRecurrent module's `forget` method.
+
+<a name='rnn.SeqLSTM'></a>
+## SeqLSTM ##
+
+This module is a faster version of `nn.Sequencer(nn.FastLSTM(inputsize, outputsize))` :
+
+```lua
+seqlstm = nn.SeqLSTM(inputsize, outputsize)
+``` 
+
+Each time-step is computed as follows (same as [FastLSTM](#rnn.FastLSTM)):
+
+```lua
+i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + b[1->i])                      (1)
+f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + b[1->f])                      (2)
+z[t] = tanh(W[x->c]x[t] + W[h->c]h[t−1] + b[1->c])                   (3)
+c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
+o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
+h[t] = o[t]tanh(c[t])                                                (6)
+``` 
+
+A notable difference is that this module expects the `input` and `gradOutput` to 
+be tensors instead of tables. The default shape is `seqlen x batchsize x inputsize` for
+the `input` and `seqlen x batchsize x outputsize` for the `output` :
+
+```lua
+input = torch.randn(seqlen, batchsize, inputsize)
+gradOutput = torch.randn(seqlen, batchsize, outputsize)
+
+output = seqlstm:forward(input)
+gradInput = seqlstm:backward(input, gradOutput)
+``` 
+
+Note that if you prefer to transpose the first two dimension (i.e. `batchsize x seqlen` instead of the default `seqlen x batchsize`)
+you can set `seqlstm.batchfirst = true` following initialization.
+
+For variable length sequences, set `seqlstm.maskzero = true`. 
+This is equivalent to calling `maskZero(1)` on a `FastLSTM` wrapped by a `Sequencer`:
+```lua
+fastlstm = nn.FastLSTM(inputsize, outputsize)
+fastlstm:maskZero(1)
+seqfastlstm = nn.Sequencer(fastlstm)
+``` 
+
+For `maskzero = true`, input sequences are expected to be seperated by tensor of zeros for a time step.
+
+The `seqlstm:toFastLSTM()` method generates a [FastLSTM](#rnn.FastLSTM) instance initialized with the parameters 
+of the `seqlstm` instance. Note however that the resulting parameters will not be shared (nor can they ever be).
+
+Like the `FastLSTM`, the `SeqLSTM` does not use peephole connections between cell and gates (see [FastLSTM](#rnn.FastLSTM) for details).
+
+Like the `Sequencer`, the `SeqLSTM` provides a [remember](rnn.Sequencer.remember) method.
+
+Note that a `SeqLSTM` cannot replace `FastLSTM` in code that decorates it with a
+`AbstractSequencer` or `Recursor` as this would be equivalent to `Sequencer(Sequencer(FastLSTM))`.
+You have been warned.
+
+<a name='rnn.SeqLSTMP'></a>
+## SeqLSTMP ##
+References:
+ * A. [LSTM RNN Architectures for Large Scale Acoustic Modeling](http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/43905.pdf)
+ * B. [Exploring the Limits of Language Modeling](https://arxiv.org/pdf/1602.02410v2.pdf)
+ 
+```lua
+lstmp = nn.SeqLSTMP(inputsize, hiddensize, outputsize)
+``` 
+
+The `SeqLSTMP` is a subclass of [SeqLSTM](#rnn.SeqLSTM). 
+It differs in that after computing the hidden state `h[t]` (eq. 6), it is 
+projected onto `r[t]` using a simple linear transform (eq. 7). 
+The computation of the gates also uses the previous such projection `r[t-1]` (eq. 1, 2, 3, 5).
+This differs from `SeqLSTM` which uses `h[t-1]` instead of `r[t-1]`.
+ 
+The computation of a time-step outlined in `SeqLSTM` is replaced with the following:
+```lua
+i[t] = σ(W[x->i]x[t] + W[r->i]r[t−1] + b[1->i])                      (1)
+f[t] = σ(W[x->f]x[t] + W[r->f]r[t−1] + b[1->f])                      (2)
+z[t] = tanh(W[x->c]x[t] + W[h->c]r[t−1] + b[1->c])                   (3)
+c[t] = f[t]c[t−1] + i[t]z[t]                                         (4)
+o[t] = σ(W[x->o]x[t] + W[r->o]r[t−1] + b[1->o])                      (5)
+h[t] = o[t]tanh(c[t])                                                (6)
+r[t] = W[h->r]h[t]                                                   (7)
+``` 
+
+The algorithm is outlined in ref. A and benchmarked with state of the art results on the Google billion words dataset in ref. B.
+`SeqLSTMP` can be used with an `hiddensize >> outputsize` such that the effective size of the memory cells `c[t]` 
+and gates `i[t]`, `f[t]` and `o[t]` can be much larger than the actual input `x[t]` and output `r[t]`.
+For fixed `inputsize` and `outputsize`, the `SeqLSTMP` will be able to remember much more information than the `SeqLSTM`.
+
+<a name='rnn.SeqGRU'></a>
+## SeqGRU ##
+
+This module is a faster version of `nn.Sequencer(nn.GRU(inputsize, outputsize))` :
+
+```lua
+seqGRU = nn.SeqGRU(inputsize, outputsize)
+``` 
+
+Usage of SeqGRU differs from GRU in the same manner as SeqLSTM differs from LSTM. Therefore see [SeqLSTM](#rnn.SeqLSTM) for more details.
+
+<a name='rnn.SeqBRNN'></a>
+## SeqBRNN ##
+
+```lua
+brnn = nn.SeqBRNN(inputSize, outputSize, [batchFirst], [merge])
+``` 
+
+A bi-directional RNN that uses SeqLSTM. Internally contains a 'fwd' and 'bwd' module of SeqLSTM. Expects an input shape of ```seqlen x batchsize x inputsize```.
+By setting [batchFirst] to true, the input shape can be ```batchsize x seqLen x inputsize```. Merge module defaults to CAddTable(), summing the outputs from each
+output layer.
+
+Example:
+```
+input = torch.rand(1, 1, 5)
+brnn = nn.SeqBRNN(5, 5)
+print(brnn:forward(input))
+``` 
+Prints an output of a 1x1x5 tensor.
 
 <a name='rnn.BiSequencer'></a>
 ## BiSequencer ##
@@ -818,15 +1028,32 @@ the first Tensor is the first one encountered when doing a depth-first search.
 
 This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
 
+Caveat: `MaskZero` not guarantee that the `output` and `gradInput` tensors of the internal modules 
+of the decorated `module` will be zeroed as well when the `input` is zero as well. 
+`MaskZero` only affects the immediate `gradInput` and `output` of the module that it encapsulates.
+However, for most modules, the gradient update for that time-step will be zero because 
+backpropagating a gradient of zeros will typically yield zeros all the way to the input.
+In this respect, modules to avoid in encapsulating inside a `MaskZero` are `AbsractRecurrent` 
+instances as the flow of gradients between different time-steps internally. 
+Instead, call the [AbstractRecurrent.maskZero](#rnn.AbstractRecurrent.maskZero) method
+to encapsulate the internal `recurrentModule`.
+
 <a name='rnn.TrimZero'></a>
 ## TrimZero ##
+
+WARNING : only use this module if your input contains lots of zeros. 
+In almost all cases, [`MaskZero`](#rnn.MaskZero) will be faster, especially with CUDA.
+
+Ref. A : [TrimZero: A Torch Recurrent Module for Efficient Natural Language Processing](https://bi.snu.ac.kr/Publications/Conferences/Domestic/KIIS2016S_JHKim.pdf)
+
 The usage is the same with `MaskZero`.
 
 ```lua
 mz = nn.TrimZero(module, nInputDim)
 ```
 
-The only difference from `MaskZero` is that it reduces computational costs by varying a batch size, if any, for the case that varying lengths are provided in the input. Notice that when the lengths are consistent, `MaskZero` will be faster, because `TrimZero` has an operational cost. 
+The only difference from `MaskZero` is that it reduces computational costs by varying a batch size, if any, for the case that varying lengths are provided in the input. 
+Notice that when the lengths are consistent, `MaskZero` will be faster, because `TrimZero` has an operational cost. 
 
 In short, the result is the same with `MaskZero`'s, however, `TrimZero` is faster than `MaskZero` only when sentence lengths is costly vary.
 
@@ -863,20 +1090,40 @@ the first Tensor is the first one encountered when doing a depth-first search.
 
 This decorator makes it possible to pad sequences with different lengths in the same batch with zero vectors.
 
+<a name='rnn.SeqReverseSequence'></a>
+## SeqReverseSequence ##
+
+```lua
+reverseSeq = nn.SeqReverseSequence(dim)
+```
+
+Reverses an input tensor on a specified dimension. The reversal dimension can be no larger than three.
+
+Example:
+```
+input = torch.Tensor({{1,2,3,4,5}, {6,7,8,9,10}})
+reverseSeq = nn.SeqReverseSequence(1)
+print(reverseSeq:forward(input))
+
+Gives us an output of torch.Tensor({{6,7,8,9,10},{1,2,3,4,5}})
+```
+
 <a name='rnn.SequencerCriterion'></a>
 ## SequencerCriterion ##
 
 This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
 
 ```lua
-c = nn.SequencerCriterion(criterion)
+c = nn.SequencerCriterion(criterion, [sizeAverage])
 ``` 
 
-Both the `input` and `target` are expected to be a sequence (a table). 
-For each step in the sequence, the corresponding elements of the input and target tables 
+Both the `input` and `target` are expected to be a sequence, either as a table or Tensor. 
+For each step in the sequence, the corresponding elements of the input and target 
 will be applied to the `criterion`.
-The output of `forward` is the sum of all individual losses in the sequence.
-This is useful when used in conjuction with a [Sequencer](#rnn.Sequencer).
+The output of `forward` is the sum of all individual losses in the sequence. 
+This is useful when used in conjunction with a [Sequencer](#rnn.Sequencer).
+
+If `sizeAverage` is `true` (default is `false`), the `output` loss and `gradInput` is averaged over each time-step.
 
 <a name='rnn.RepeaterCriterion'></a>
 ## RepeaterCriterion ##
@@ -887,7 +1134,7 @@ This Criterion is a [decorator](http://en.wikipedia.org/wiki/Decorator_pattern):
 c = nn.RepeaterCriterion(criterion)
 ``` 
 
-The `input` is expected to be a sequence (a table). A single `target` is 
+The `input` is expected to be a sequence (table or Tensor). A single `target` is 
 repeatedly applied using the same `criterion` to each element in the `input` sequence.
 The output of `forward` is the sum of all individual losses in the sequence.
 This is useful for implementing models like [RCNNs](http://jmlr.org/proceedings/papers/v32/pinheiro14.pdf),

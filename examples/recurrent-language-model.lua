@@ -31,8 +31,10 @@ cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
 -- rnn layer 
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
+cmd:option('--bn', false, 'use batch normalization. Only supported with --lstm')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
+cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
 cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
 cmd:option('--dropout', 0, 'apply dropout with this probability after each rnn layer. dropout <= 0 disables it.')
 -- data
@@ -46,10 +48,16 @@ cmd:text()
 local opt = cmd:parse(arg or {})
 opt.hiddensize = loadstring(" return "..opt.hiddensize)()
 opt.schedule = loadstring(" return "..opt.schedule)()
+opt.inputsize = opt.inputsize == -1 and opt.hiddensize[1] or opt.inputsize
 if not opt.silent then
    table.print(opt)
 end
 opt.id = opt.id == '' and ('ptb' .. ':' .. dl.uniqueid()) or opt.id
+
+if opt.cuda then
+   require 'cunn'
+   cutorch.setDevice(opt.device)
+end
 
 --[[ data set ]]--
 
@@ -64,7 +72,7 @@ end
 local lm = nn.Sequential()
 
 -- input layer (i.e. word embedding space)
-local lookup = nn.LookupTable(#trainset.ivocab, opt.hiddensize[1])
+local lookup = nn.LookupTable(#trainset.ivocab, opt.inputsize)
 lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
 if opt.dropout > 0 and not opt.gru then  -- gru has a dropout option
@@ -74,7 +82,7 @@ lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 
 -- rnn layers
 local stepmodule = nn.Sequential() -- applied at each time-step
-local inputsize = opt.hiddensize[1]
+local inputsize = opt.inputsize
 for i,hiddensize in ipairs(opt.hiddensize) do 
    local rnn
    
@@ -83,6 +91,7 @@ for i,hiddensize in ipairs(opt.hiddensize) do
    elseif opt.lstm then -- Long Short Term Memory units
       require 'nngraph'
       nn.FastLSTM.usenngraph = true -- faster
+      nn.FastLSTM.bn = opt.bn
       rnn = nn.FastLSTM(inputsize, hiddensize)
    else -- simple recurrent neural network
       local rm =  nn.Sequential() -- input is {x[t], h[t-1]}
@@ -141,8 +150,6 @@ local criterion = nn.SequencerCriterion(crit)
 --[[ CUDA ]]--
 
 if opt.cuda then
-   require 'cunn'
-   cutorch.setDevice(opt.device)
    lm:cuda()
    criterion:cuda()
    targetmodule:cuda()
@@ -158,7 +165,6 @@ xplog.vocab = trainset.vocab
 -- will only serialize params
 xplog.model = nn.Serial(lm)
 xplog.model:mediumSerial()
---xplog.model = lm
 xplog.criterion = criterion
 xplog.targetmodule = targetmodule
 -- keep a log of NLL for each epoch
@@ -251,6 +257,9 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    end
 
    local ppl = torch.exp(sumErr/opt.validsize)
+   -- Note :
+   -- Perplexity = exp( sum ( NLL ) / #w)
+   -- Bits Per Word = log2(Perplexity)
    print("Validation PPL : "..ppl)
 
    xplog.valppl[epoch] = ppl
@@ -275,4 +284,4 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    epoch = epoch + 1
 end
 print("Evaluate model using : ")
-print("th scripts/evaluate-rnnlm.lua --xplogpath "..paths.concat(opt.savepath, opt.id..'.t7')..(opt.cuda and '--cuda' or ''))
+print("th scripts/evaluate-rnnlm.lua --xplogpath "..paths.concat(opt.savepath, opt.id..'.t7')..(opt.cuda and ' --cuda' or ''))

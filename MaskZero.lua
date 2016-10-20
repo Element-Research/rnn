@@ -37,9 +37,9 @@ function MaskZero:recursiveMask(output, input, mask)
       assert(torch.isTensor(input))
       output = torch.isTensor(output) and output or input.new()
       
-      -- make sure mask has the same dimenion as the input tensor
+      -- make sure mask has the same dimension as the input tensor
       local inputSize = input:size():fill(1)
-      if input:dim() - 1 == self.nInputDim then
+      if self.batchmode then
          inputSize[1] = input:size(1)
       end
       mask:resize(inputSize)
@@ -55,8 +55,10 @@ function MaskZero:updateOutput(input)
    -- recurrent module input is always the first one
    local rmi = self:recursiveGetFirst(input):contiguous()
    if rmi:dim() == self.nInputDim then
+      self.batchmode = false
       rmi = rmi:view(-1) -- collapse dims
    elseif rmi:dim() - 1 == self.nInputDim then
+      self.batchmode = true
       rmi = rmi:view(rmi:size(1), -1) -- collapse non-batch dims
    else
       error("nInputDim error: "..rmi:dim()..", "..self.nInputDim)
@@ -66,7 +68,11 @@ function MaskZero:updateOutput(input)
    local vectorDim = rmi:dim() 
    self._zeroMask = self._zeroMask or rmi.new()
    self._zeroMask:norm(rmi, 2, vectorDim)
-   self.zeroMask = self.zeroMask or ((torch.type(rmi) == 'torch.CudaTensor') and torch.CudaTensor() or torch.ByteTensor())
+   self.zeroMask = self.zeroMask or (
+       (torch.type(rmi) == 'torch.CudaTensor') and torch.CudaByteTensor()
+       or (torch.type(rmi) == 'torch.ClTensor') and torch.ClTensor()
+       or torch.ByteTensor()
+    )
    self._zeroMask.eq(self.zeroMask, self._zeroMask, 0)
    
    -- forward through decorated module
@@ -87,6 +93,7 @@ end
 function MaskZero:type(type, ...)
    self.zeroMask = nil
    self._zeroMask = nil
-   
+   self._maskbyte = nil
+   self._maskindices = nil
    return parent.type(self, type, ...)
 end

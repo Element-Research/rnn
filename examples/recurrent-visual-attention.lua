@@ -15,6 +15,7 @@ cmd:text('Train a Recurrent Model for Visual Attention')
 cmd:text('Example:')
 cmd:text('$> th rnn-visual-attention.lua > results.txt')
 cmd:text('Options:')
+cmd:option('--xpPath', '/path/to/saved_model.dat', 'path to a previously saved model')
 cmd:option('--learningRate', 0.01, 'learning rate at t=0')
 cmd:option('--minLR', 0.00001, 'minimum learning rate')
 cmd:option('--saturateEpoch', 800, 'epoch at which linear decayed LR will reach minLR')
@@ -28,7 +29,6 @@ cmd:option('--maxEpoch', 2000, 'maximum number of epochs to run')
 cmd:option('--maxTries', 100, 'maximum number of epochs to try to find a better local minima for early-stopping')
 cmd:option('--transfer', 'ReLU', 'activation function')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
-cmd:option('--xpPath', '', 'path to a previously saved model')
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'dont print anything to stdout')
 
@@ -64,11 +64,6 @@ if not opt.silent then
    table.print(opt)
 end
 
-if opt.xpPath ~= '' then
-   -- check that saved model exists
-   assert(paths.filep(opt.xpPath), opt.xpPath..' does not exist')
-end
-
 --[[data]]--
 if opt.dataset == 'TranslatedMnist' then
    ds = torch.checkpoint(
@@ -80,93 +75,91 @@ else
    ds = dp[opt.dataset]()
 end
 
---[[Saved experiment]]--
-if opt.xpPath ~= '' then
-   if opt.cuda then
-      require 'optim'
-      require 'cunn'
-      cutorch.setDevice(opt.useDevice)
-   end
-   xp = torch.load(opt.xpPath)
-   if opt.cuda then
-      xp:cuda()
-   else
-      xp:float()
-   end
-   print"running"
-   xp:run(ds)
-   os.exit()
-end
-
 --[[Model]]--
+if opt.xpPath ~= '' then
+     assert(paths.filep(opt.xpPath), opt.xpPath..' does not exist')
 
--- glimpse network (rnn input layer)
-locationSensor = nn.Sequential()
-locationSensor:add(nn.SelectTable(2))
-locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
-locationSensor:add(nn[opt.transfer]())
+    if opt.cuda then
+        require 'cunn'
+        require 'optim'
+        cutorch.setDevice(opt.useDevice)
+    end
 
-glimpseSensor = nn.Sequential()
-glimpseSensor:add(nn.DontCast(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale):float(),true))
-glimpseSensor:add(nn.Collapse(3))
-glimpseSensor:add(nn.Linear(ds:imageSize('c')*(opt.glimpsePatchSize^2)*opt.glimpseDepth, opt.glimpseHiddenSize))
-glimpseSensor:add(nn[opt.transfer]())
-
-glimpse = nn.Sequential()
-glimpse:add(nn.ConcatTable():add(locationSensor):add(glimpseSensor))
-glimpse:add(nn.JoinTable(1,1))
-glimpse:add(nn.Linear(opt.glimpseHiddenSize+opt.locatorHiddenSize, opt.imageHiddenSize))
-glimpse:add(nn[opt.transfer]())
-glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
-
--- rnn recurrent layer
-if opt.FastLSTM then
-  recurrent = nn.FastLSTM(opt.hiddenSize, opt.hiddenSize)
+    xp = torch.load(opt.xpPath)
+    agent = xp:model()
+    local checksum = agent:parameters()[1]:sum()
+    xp.opt.progress = opt.progress
+    opt = xp.opt
 else
-  recurrent = nn.Linear(opt.hiddenSize, opt.hiddenSize)
-end
+
+   -- glimpse network (rnn input layer)
+   locationSensor = nn.Sequential()
+   locationSensor:add(nn.SelectTable(2))
+   locationSensor:add(nn.Linear(2, opt.locatorHiddenSize))
+   locationSensor:add(nn[opt.transfer]())
+
+   glimpseSensor = nn.Sequential()
+   glimpseSensor:add(nn.SpatialGlimpse(opt.glimpsePatchSize, opt.glimpseDepth, opt.glimpseScale):float())
+   glimpseSensor:add(nn.Collapse(3))
+   glimpseSensor:add(nn.Linear(ds:imageSize('c')*(opt.glimpsePatchSize^2)*opt.glimpseDepth, opt.glimpseHiddenSize))
+   glimpseSensor:add(nn[opt.transfer]())
+
+   glimpse = nn.Sequential()
+   glimpse:add(nn.ConcatTable():add(locationSensor):add(glimpseSensor))
+   glimpse:add(nn.JoinTable(1,1))
+   glimpse:add(nn.Linear(opt.glimpseHiddenSize+opt.locatorHiddenSize, opt.imageHiddenSize))
+   glimpse:add(nn[opt.transfer]())
+   glimpse:add(nn.Linear(opt.imageHiddenSize, opt.hiddenSize))
+
+   -- rnn recurrent layer
+   if opt.FastLSTM then
+     recurrent = nn.FastLSTM(opt.hiddenSize, opt.hiddenSize)
+   else
+     recurrent = nn.Linear(opt.hiddenSize, opt.hiddenSize)
+   end
 
 
--- recurrent neural network
-rnn = nn.Recurrent(opt.hiddenSize, glimpse, recurrent, nn[opt.transfer](), 99999)
+   -- recurrent neural network
+   rnn = nn.Recurrent(opt.hiddenSize, glimpse, recurrent, nn[opt.transfer](), 99999)
 
-imageSize = ds:imageSize('h')
-assert(ds:imageSize('h') == ds:imageSize('w'))
+   imageSize = ds:imageSize('h')
+   assert(ds:imageSize('h') == ds:imageSize('w'))
 
--- actions (locator)
-locator = nn.Sequential()
-locator:add(nn.Linear(opt.hiddenSize, 2))
-locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
-locator:add(nn.ReinforceNormal(2*opt.locatorStd, opt.stochastic)) -- sample from normal, uses REINFORCE learning rule
-assert(locator:get(3).stochastic == opt.stochastic, "Please update the dpnn package : luarocks install dpnn")
-locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
-locator:add(nn.MulConstant(opt.unitPixels*2/ds:imageSize("h")))
+   -- actions (locator)
+   locator = nn.Sequential()
+   locator:add(nn.Linear(opt.hiddenSize, 2))
+   locator:add(nn.HardTanh()) -- bounds mean between -1 and 1
+   locator:add(nn.ReinforceNormal(2*opt.locatorStd, opt.stochastic)) -- sample from normal, uses REINFORCE learning rule
+   assert(locator:get(3).stochastic == opt.stochastic, "Please update the dpnn package : luarocks install dpnn")
+   locator:add(nn.HardTanh()) -- bounds sample between -1 and 1
+   locator:add(nn.MulConstant(opt.unitPixels*2/ds:imageSize("h")))
 
-attention = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
+   attention = nn.RecurrentAttention(rnn, locator, opt.rho, {opt.hiddenSize})
 
--- model is a reinforcement learning agent
-agent = nn.Sequential()
-agent:add(nn.Convert(ds:ioShapes(), 'bchw'))
-agent:add(attention)
+   -- model is a reinforcement learning agent
+   agent = nn.Sequential()
+   agent:add(nn.Convert(ds:ioShapes(), 'bchw'))
+   agent:add(attention)
 
--- classifier :
-agent:add(nn.SelectTable(-1))
-agent:add(nn.Linear(opt.hiddenSize, #ds:classes()))
-agent:add(nn.LogSoftMax())
+   -- classifier :
+   agent:add(nn.SelectTable(-1))
+   agent:add(nn.Linear(opt.hiddenSize, #ds:classes()))
+   agent:add(nn.LogSoftMax())
 
--- add the baseline reward predictor
-seq = nn.Sequential()
-seq:add(nn.Constant(1,1))
-seq:add(nn.Add(1))
-concat = nn.ConcatTable():add(nn.Identity()):add(seq)
-concat2 = nn.ConcatTable():add(nn.Identity()):add(concat)
+   -- add the baseline reward predictor
+   seq = nn.Sequential()
+   seq:add(nn.Constant(1,1))
+   seq:add(nn.Add(1))
+   concat = nn.ConcatTable():add(nn.Identity()):add(seq)
+   concat2 = nn.ConcatTable():add(nn.Identity()):add(concat)
 
--- output will be : {classpred, {classpred, basereward}}
-agent:add(concat2)
+   -- output will be : {classpred, {classpred, basereward}}
+   agent:add(concat2)
 
-if opt.uniform > 0 then
-   for k,param in ipairs(agent:parameters()) do
-      param:uniform(-opt.uniform, opt.uniform)
+   if opt.uniform > 0 then
+      for k,param in ipairs(agent:parameters()) do
+         param:uniform(-opt.uniform, opt.uniform)
+      end
    end
 end
 
@@ -221,6 +214,7 @@ if not opt.noTest then
 end
 
 --[[Experiment]]--
+
 xp = dp.Experiment{
    model = agent,
    optimizer = train,
@@ -241,10 +235,13 @@ xp = dp.Experiment{
 
 --[[GPU or CPU]]--
 if opt.cuda then
+   print"Using CUDA"
    require 'cutorch'
    require 'cunn'
    cutorch.setDevice(opt.useDevice)
    xp:cuda()
+else
+   xp:float()
 end
 
 xp:verbose(not opt.silent)
@@ -255,4 +252,7 @@ end
 
 xp.opt = opt
 
+if checksum then
+   assert(math.abs(xp:model():parameters()[1]:sum() - checksum) < 0.0001, "Loaded model parameters were changed???")
+end
 xp:run(ds)

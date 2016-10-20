@@ -15,11 +15,6 @@
 -- faster than `MaskZero` only when sentence lengths is costly vary.
 -- In practice, e.g. language model, `TrimZero` is expected to be faster than
 --  `MaskZero` 30%. (You can test with it using `test/test_trimzero.lua`.)
-
--- Zero vectors (i.e. padding) must be at the beginning of the sequence
--- because this decorator will otherwise reset the recurrentModule
--- in the middle or after the sequence
--- TODO add assertion in case padding in uncountered after non padding ?
 ------------------------------------------------------------------------
 local TrimZero, parent = torch.class("nn.TrimZero", "nn.MaskZero")
 
@@ -38,33 +33,49 @@ function TrimZero:recursiveMask(output, input, mask)
    if torch.type(input) == 'table' then
       output = torch.type(output) == 'table' and output or {}
       for k,v in ipairs(input) do
-         output[k] = self:recursiveMask(output[k], v, mask)
+         output[k], mask = self:recursiveMask(output[k], v, mask)
       end
    else
       assert(torch.isTensor(input))
       output = torch.isTensor(output) and output or input.new()
       
-      -- make sure mask has the same dimenion as the input tensor
-      local inputSize = input:size():fill(1)
-      if input:dim() - 1 == self.nInputDim then
-         inputSize[1] = input:size(1)
+      -- make sure mask has the same dimension as the input tensor
+      if torch.type(mask) ~= 'torch.LongTensor' then
+         local inputSize = input:size():fill(1)
+         assert(self.nInputDim)
+         if self.batchmode then
+            inputSize[1] = input:size(1)
+         end
+         mask:resize(inputSize)
       end
-      mask:resize(inputSize)
+      
       -- build mask
-      if input:dim() - 1 == self.nInputDim then
+      if self.batchmode then
          assert(torch.find, 'install torchx package : luarocks install torchx')
-         local indexes = torch.find(mask, 0)
-         if 0 < #indexes then
-            output:index(input, 1, torch.LongTensor(indexes))
+         -- use torch.find to convert mask from onehot to indices
+         if torch.type(mask) ~= 'torch.LongTensor' then
+            if torch.type(mask) == 'torch.CudaTensor' then
+               self._maskbyte = self._maskbyte or torch.ByteTensor()
+               self._maskbyte:resize(mask:size()):copy(mask)
+               mask = self._maskbyte
+            end
+            mask = torch.LongTensor(torch.find(mask, 0))
+         end
+         self._maskindices = mask
+         if mask:dim() > 0 then
+            output:index(input, 1, mask)
          else
             output:index(input, 1, torch.LongTensor{1}):zero()
          end
-      else
-         if mask[1] == 1 then output:resize(input:size()):zero() 
-                         else output:resize(input:size()):copy(input) end
+      else 
+         if mask:dim() == 0 or mask:view(-1)[1] == 1 then 
+            output:resize(input:size()):zero() 
+         else 
+            output:resize(input:size()):copy(input) 
+         end
       end
    end
-   return output
+   return output, mask
 end
 
 function TrimZero:recursiveUnMask(output, input, mask)
@@ -75,26 +86,26 @@ function TrimZero:recursiveUnMask(output, input, mask)
       end
    else
       assert(torch.isTensor(input))
-      local _input = input:clone()
       output = torch.isTensor(output) and output or input.new()
       
       -- make sure output has the same dimension as the mask
       local inputSize = input:size()
-      if input:dim() - 1 == self.nInputDim then
+      if self.batchmode then
          inputSize[1] = mask:size(1)
       end
       output:resize(inputSize):zero()
+      
       -- build mask
-      if input:dim() - 1 == self.nInputDim then
-         assert(torch.find, 'install torchx package : luarocks install torchx')
-         local indexes = torch.find(mask, 0)
-         if 0 < #indexes then
-            for i = 1,#indexes do
-               output[indexes[i]]:copy(_input[i])
-            end
+      if self.batchmode then
+         assert(self._maskindices)
+         mask = self._maskindices
+         if mask:dim() > 0 then
+            output:indexCopy(1, mask, input)
          end
       else
-         if mask[1] == 0 then output:copy(_input) end
+         if mask:view(-1)[1] == 0 then 
+            output:copy(input)
+         end
       end
    end
    return output
@@ -104,8 +115,10 @@ function TrimZero:updateOutput(input)
    -- recurrent module input is always the first one
    local rmi = self:recursiveGetFirst(input):contiguous()
    if rmi:dim() == self.nInputDim then
+      self.batchmode = false
       rmi = rmi:view(-1) -- collapse dims
    elseif rmi:dim() - 1 == self.nInputDim then
+      self.batchmode = true
       rmi = rmi:view(rmi:size(1), -1) -- collapse non-batch dims
    else
       error("nInputDim error: "..rmi:dim()..", "..self.nInputDim)
@@ -130,9 +143,9 @@ function TrimZero:updateGradInput(input, gradOutput)
    self.temp = self:recursiveMask(self.temp, input, self.zeroMask)
    self.gradTemp = self:recursiveMask(self.gradTemp, gradOutput, self.zeroMask)
 
-   self.gradInput = self.module:updateGradInput(self.temp, self.gradTemp)
+   local gradInput = self.module:updateGradInput(self.temp, self.gradTemp)
 
-   self.gradInput = self:recursiveUnMask(self.gradInput, self.gradInput, self.zeroMask)
+   self.gradInput = self:recursiveUnMask(self.gradInput, gradInput, self.zeroMask)
 
    return self.gradInput
 end

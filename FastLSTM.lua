@@ -3,9 +3,15 @@ local FastLSTM, parent = torch.class("nn.FastLSTM", "nn.LSTM")
 -- set this to true to have it use nngraph instead of nn
 -- setting this to true can make your next FastLSTM significantly faster
 FastLSTM.usenngraph = false
+FastLSTM.bn = false
 
-function FastLSTM:__init(inputSize, outputSize, rho)
-   parent.__init(self, inputSize, outputSize, rho, false)
+function FastLSTM:__init(inputSize, outputSize, rho, eps, momentum, affine)
+   --  initialize batch norm variance with 0.1
+   self.eps = eps or 0.1
+   self.momentum = momentum or 0.1 --gamma
+   self.affine = affine == nil and true or affine
+
+   parent.__init(self, inputSize, outputSize, rho) 
 end
 
 function FastLSTM:buildModel()
@@ -16,7 +22,7 @@ function FastLSTM:buildModel()
    self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
    self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
    
-   if self.usenngraph then
+   if self.usenngraph or self.bn then
       require 'nngraph'
       return self:nngraphModel()
    end
@@ -89,10 +95,31 @@ function FastLSTM:nngraphModel()
    table.insert(inputs, nn.Identity()()) -- prev_c[L]
    
    local x, prev_h, prev_c = unpack(inputs)
+
+   local bn_wx, bn_wh, bn_c  
+   local i2h, h2h 
+   if self.bn then  
+      -- apply recurrent batch normalization 
+      -- http://arxiv.org/pdf/1502.03167v3.pdf
+      -- normalize recurrent terms W_h*h_{t-1} and W_x*x_t separately 
+      -- Olalekan Ogunmolu <patlekano@gmail.com>
    
-   -- evaluate the input sums at once for efficiency
-   local i2h = self.i2g(x):annotate{name='i2h'}
-   local h2h = self.o2g(prev_h):annotate{name='h2h'}
+      bn_wx = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
+      bn_wh = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
+      bn_c  = nn.BatchNormalization(self.outputSize, self.eps, self.momentum, self.affine)
+      
+      -- evaluate the input sums at once for efficiency
+      i2h = bn_wx(self.i2g(x):annotate{name='i2h'}):annotate {name='bn_wx'}
+      h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
+      
+      -- add bias after BN as per paper
+      self.o2g:noBias()
+      h2h = nn.Add(4*self.outputSize)(h2h)
+   else
+      -- evaluate the input sums at once for efficiency
+      i2h = self.i2g(x):annotate{name='i2h'}
+      h2h = self.o2g(prev_h):annotate{name='h2h'}
+   end
    local all_input_sums = nn.CAddTable()({i2h, h2h})
 
    local reshaped = nn.Reshape(4, self.outputSize)(all_input_sums)
@@ -108,10 +135,18 @@ function FastLSTM:nngraphModel()
      nn.CMulTable()({forget_gate, prev_c}),
      nn.CMulTable()({in_gate,     in_transform})
    })
-   -- gated cells form the output
-   local next_h = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
+   local next_h
+   if self.bn then
+      -- gated cells form the output
+      next_h = nn.CMulTable()({out_gate, nn.Tanh()(bn_c(next_c):annotate {name = 'bn_c'}) })
+   else
+      -- gated cells form the output
+      next_h = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
+   end
 
    local outputs = {next_h, next_c}
+
+   nngraph.annotateNodes()
    
    return nn.gModule(inputs, outputs)
 end

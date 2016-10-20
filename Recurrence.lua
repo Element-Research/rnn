@@ -7,6 +7,7 @@
 -- The recurrentModule should output Tensor or table : output(t) 
 -- given input table : {input(t), output(t-1)}
 ------------------------------------------------------------------------
+local _ = require 'moses'
 local Recurrence, parent = torch.class('nn.Recurrence', 'nn.AbstractRecurrent')
 
 function Recurrence:__init(recurrentModule, outputSize, nInputDim, rho)
@@ -39,12 +40,12 @@ function Recurrence:recursiveResizeZero(tensor, size, batchSize)
          tensor[k] = self:recursiveResizeZero(tensor[k], v, batchSize)
       end
    elseif torch.type(size) == 'torch.LongStorage'  then
-      local size_ = torch.LongStorage():totable()
+      local size_ = size:totable()
       tensor = torch.isTensor(tensor) and tensor or self.typeTensor.new()
       if batchSize then
          tensor:resize(batchSize, unpack(size_))
       else
-         tensor:resize(unpack(size))
+         tensor:resize(unpack(size_))
       end
       tensor:zero()
    elseif isTable and torch.type(size[1]) == 'number' then

@@ -11,6 +11,7 @@ function AbstractRecurrent:__init(rho)
    self.rho = rho or 99999 --the maximum number of time steps to BPTT
    
    self.outputs = {}
+   self.gradInputs = {}
    self._gradOutputs = {}
 
    self.step = 1
@@ -22,6 +23,7 @@ function AbstractRecurrent:__init(rho)
 end
 
 function AbstractRecurrent:getStepModule(step)
+   local _ = require 'moses'
    assert(step, "expecting step at arg 1")
    local recurrentModule = self.sharedClones[step]
    if not recurrentModule then
@@ -35,6 +37,7 @@ end
 function AbstractRecurrent:maskZero(nInputDim)
    self.recurrentModule = nn.MaskZero(self.recurrentModule, nInputDim, true)
    self.sharedClones = {self.recurrentModule}
+   self.modules[1] = self.recurrentModule
    return self
 end
 
@@ -44,6 +47,7 @@ function AbstractRecurrent:trimZero(nInputDim)
    end
    self.recurrentModule = nn.TrimZero(self.recurrentModule, nInputDim, true)
    self.sharedClones = {self.recurrentModule}
+   self.modules[1] = self.recurrentModule
    return self
 end
 
@@ -52,9 +56,10 @@ function AbstractRecurrent:updateGradInput(input, gradOutput)
    self.updateGradInputStep = self.updateGradInputStep or self.step
    
    -- BPTT for one time-step
-   self.gradInput = self:_updateGradInput(input, gradOutput, self.updateGradInputStep)
+   self.gradInput = self:_updateGradInput(input, gradOutput)
    
    self.updateGradInputStep = self.updateGradInputStep - 1
+   self.gradInputs[self.updateGradInputStep] = self.gradInput
    return self.gradInput
 end
 
@@ -64,7 +69,6 @@ function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
    self.accGradParametersStep = self.accGradParametersStep or self.step
    
    -- BPTT for one time-step 
-   local step = self.accGradParametersStep - 1
    self:_accGradParameters(input, gradOutput, scale)
    
    self.accGradParametersStep = self.accGradParametersStep - 1
@@ -76,31 +80,44 @@ function AbstractRecurrent:recycle(offset)
    -- offset can be used to skip initialModule (if any)
    offset = offset or 0
    
+   local _ = require 'moses'
    self.nSharedClone = self.nSharedClone or _.size(self.sharedClones) 
 
    local rho = math.max(self.rho + 1, self.nSharedClone)
    if self.sharedClones[self.step] == nil then
       self.sharedClones[self.step] = self.sharedClones[self.step-rho]
       self.sharedClones[self.step-rho] = nil
-      assert(self._gradOutputs[self.step] == nil)
       self._gradOutputs[self.step] = self._gradOutputs[self.step-rho]
       self._gradOutputs[self.step-rho] = nil
    end
    
    self.outputs[self.step-rho-1] = nil
+   self.gradInputs[self.step-rho-1] = nil
    
    return self
 end
 
+function nn.AbstractRecurrent:clearState()
+   self:forget()
+   -- keep the first two sharedClones
+   nn.utils.clear(self, '_input', '_gradOutput', '_gradOutputs', 'gradPrevOutput', 'cell', 'cells', 'gradCells', 'outputs', 'gradInputs')
+   for i, clone in ipairs(self.sharedClones) do
+      clone:clearState()
+   end
+   self.recurrentModule:clearState()
+   return parent.clearState(self)
+end
+
 -- this method brings all the memory back to the start
 function AbstractRecurrent:forget()
-   
    -- the recurrentModule may contain an AbstractRecurrent instance (issue 107)
    parent.forget(self) 
+   local _ = require 'moses'
    
     -- bring all states back to the start of the sequence buffers
    if self.train ~= false then
       self.outputs = {}
+      self.gradInputs = {}
       self.sharedClones = _.compact(self.sharedClones)
       self._gradOutputs = _.compact(self._gradOutputs)
    end
@@ -151,10 +168,9 @@ function AbstractRecurrent:includingSharedClones(f)
 end
 
 function AbstractRecurrent:type(type, tensorcache)
-   self:includingSharedClones(function()
+   return self:includingSharedClones(function()
       return parent.type(self, type, tensorcache)
    end)
-   return self
 end
 
 function AbstractRecurrent:training()
@@ -190,6 +206,7 @@ end
 function AbstractRecurrent:setOutputStep(step)
    self.output = self.outputs[step] --or self:getStepModule(step).output
    assert(self.output, "no output for step "..step)
+   self.gradInput = self.gradInputs[step]
 end
 
 function AbstractRecurrent:maxBPTTstep(rho)
