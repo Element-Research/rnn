@@ -22,8 +22,8 @@ require 'torchx'
 
 function TrimZero:__init(module, nInputDim, silent)
    parent.__init(self, module, nInputDim, silent)
-   if torch.typename(module)=='nn.GRU' and module.p ~= 0 then
-      assert(module.mono, 'TrimZero + BGRUs needs `mono` option!')
+   if (torch.typename(module)=='nn.GRU' or torch.typename(module)=='nn.LSTM' or torch.typename(module)=='nn.FastLSTM') and module.p ~= 0 then
+      assert(module.mono, 'TrimZero + Bayesian RNN needs `mono` option!')
    end
    self.temp = torch.Tensor()
    self.gradTemp = torch.Tensor()

@@ -1,3 +1,18 @@
+------------------------------------------------------------------------
+--[[ LSTM ]]--
+-- Long Short Term Memory architecture.
+-- Ref. A.: http://arxiv.org/pdf/1303.5778v1 (blueprint for this module)
+-- B. http://web.eecs.utk.edu/~itamar/courses/ECE-692/Bobby_paper1.pdf
+-- C. http://arxiv.org/pdf/1503.04069v1.pdf
+-- D. https://github.com/wojzaremba/lstm
+-- Expects 1D or 2D input.
+-- The first input in sequence uses zero value for cell and hidden state
+
+-- For p > 0, it becomes Bayesian GRUs [Gal, 2015].
+-- In this case, please do not dropout on input as BGRUs handle the input with 
+-- its own dropouts. First, try 0.25 for p as Gal (2016) suggested, 
+-- presumably, because of summations of two parts in GRUs connections. 
+------------------------------------------------------------------------
 local FastLSTM, parent = torch.class("nn.FastLSTM", "nn.LSTM")
 
 -- set this to true to have it use nngraph instead of nn
@@ -5,11 +20,16 @@ local FastLSTM, parent = torch.class("nn.FastLSTM", "nn.LSTM")
 FastLSTM.usenngraph = false
 FastLSTM.bn = false
 
-function FastLSTM:__init(inputSize, outputSize, rho, eps, momentum, affine)
+function FastLSTM:__init(inputSize, outputSize, rho, eps, momentum, affine, p, mono)
    --  initialize batch norm variance with 0.1
    self.eps = eps or 0.1
    self.momentum = momentum or 0.1 --gamma
    self.affine = affine == nil and true or affine
+   self.p = p or 0
+   if p and p ~= 0 then
+      assert(nn.Dropout(p,false,false,true).lazy, 'only work with Lazy Dropout!')
+   end
+   self.mono = mono or false
 
    parent.__init(self, inputSize, outputSize, rho) 
 end
@@ -19,9 +39,36 @@ function FastLSTM:buildModel()
    -- output : {output, cell}
    
    -- Calculate all four gates in one go : input, hidden, forget, output
-   self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
-   self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
-   
+   if self.p ~= 0 then
+      self.i2g = nn.Sequential()
+                     :add(nn.ConcatTable()
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono)))
+                     :add(nn.ParallelTable()
+                        :add(nn.Linear(self.inputSize, self.outputSize))
+                        :add(nn.Linear(self.inputSize, self.outputSize))
+                        :add(nn.Linear(self.inputSize, self.outputSize))
+                        :add(nn.Linear(self.inputSize, self.outputSize)))
+                     :add(nn.JoinTable(2))
+      self.o2g = nn.Sequential()
+                     :add(nn.ConcatTable()
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono))
+                        :add(nn.Dropout(self.p,false,false,true,self.mono)))
+                     :add(nn.ParallelTable()
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize))
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize))
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize))
+                        :add(nn.LinearNoBias(self.outputSize, self.outputSize)))
+                     :add(nn.JoinTable(2))
+   else
+      self.i2g = nn.Linear(self.inputSize, 4*self.outputSize)
+      self.o2g = nn.LinearNoBias(self.outputSize, 4*self.outputSize)
+   end
+
    if self.usenngraph or self.bn then
       require 'nngraph'
       return self:nngraphModel()
