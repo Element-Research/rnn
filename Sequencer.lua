@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------
 --[[ Sequencer ]]--
--- Encapsulates a Module. 
+-- Encapsulates a Module.
 -- Input is a sequence (a table) of tensors.
 -- Output is a sequence (a table) of tensors of the same length.
 -- Applies the module to each element in the sequence.
@@ -17,16 +17,16 @@ function Sequencer:__init(module)
    if not torch.isTypeOf(module, 'nn.Module') then
       error"Sequencer: expecting nn.Module instance at arg 1"
    end
-   
+
    -- we can decorate the module with a Recursor to make it AbstractRecurrent
    self.module = (not torch.isTypeOf(module, 'nn.AbstractRecurrent')) and nn.Recursor(module) or module
    -- backprop through time (BPTT) will be done online (in reverse order of forward)
    self.modules = {self.module}
-   
+
    self.output = {}
    self.tableoutput = {}
    self.tablegradInput = {}
-   
+
    -- table of buffers used for evaluation
    self._output = {}
    -- so that these buffers aren't serialized :
@@ -48,17 +48,17 @@ function Sequencer:updateOutput(input)
 
    -- Note that the Sequencer hijacks the rho attribute of the rnn
    self.module:maxBPTTstep(nStep)
-   if self.train ~= false then 
+   if self.train ~= false then
       -- TRAINING
       if not (self._remember == 'train' or self._remember == 'both') then
          self.module:forget()
       end
-      
+
       self.tableoutput = {}
       for step=1,nStep do
          self.tableoutput[step] = self.module:updateOutput(input[step])
       end
-      
+
       if torch.isTensor(input) then
          self.output = torch.isTensor(self.output) and self.output or self.tableoutput[1].new()
          self.output:resize(nStep, unpack(self.tableoutput[1]:size():totable()))
@@ -68,7 +68,7 @@ function Sequencer:updateOutput(input)
       else
          self.output = self.tableoutput
       end
-   else 
+   else
       -- EVALUATION
       if not (self._remember == 'eval' or self._remember == 'both') then
          self.module:forget()
@@ -87,7 +87,7 @@ function Sequencer:updateOutput(input)
       else
          for step=1,nStep do
             self.tableoutput[step] = nn.rnn.recursiveCopy(
-               self.tableoutput[step] or table.remove(self._output, 1), 
+               self.tableoutput[step] or table.remove(self._output, 1),
                self.module:updateOutput(input[step])
             )
          end
@@ -99,7 +99,7 @@ function Sequencer:updateOutput(input)
          self.output = self.tableoutput
       end
    end
-   
+
    return self.output
 end
 
@@ -114,13 +114,13 @@ function Sequencer:updateGradInput(input, gradOutput)
       assert(#gradOutput == #input, "gradOutput should have as many elements as input")
       nStep = #input
    end
-   
+
    -- back-propagate through time
    self.tablegradinput = {}
    for step=nStep,1,-1 do
       self.tablegradinput[step] = self.module:updateGradInput(input[step], gradOutput[step])
    end
-   
+
    if torch.isTensor(input) then
       self.gradInput = torch.isTensor(self.gradInput) and self.gradInput or self.tablegradinput[1].new()
       self.gradInput:resize(nStep, unpack(self.tablegradinput[1]:size():totable()))
@@ -145,29 +145,15 @@ function Sequencer:accGradParameters(input, gradOutput, scale)
       assert(#gradOutput == #input, "gradOutput should have as many elements as input")
       nStep = #input
    end
-   
-   -- back-propagate through time 
+
+   -- back-propagate through time
    for step=nStep,1,-1 do
       self.module:accGradParameters(input[step], gradOutput[step], scale)
-   end   
+   end
 end
 
 function Sequencer:accUpdateGradParameters(inputTable, gradOutputTable, lr)
-   error"Not Implemented"  
-end
-
--- Toggle to feed long sequences using multiple forwards.
--- 'eval' only affects evaluation (recommended for RNNs)
--- 'train' only affects training
--- 'neither' affects neither training nor evaluation
--- 'both' affects both training and evaluation (recommended for LSTMs)
--- Essentially, forget() isn't called on rnn module when remember is on
-function Sequencer:remember(remember)
-   self._remember = (remember == nil) and 'both' or remember
-   local _ = require 'moses'
-   assert(_.contains({'both','eval','train','neither'}, self._remember), 
-      "Sequencer : unrecognized value for remember : "..self._remember)
-   return self
+   error"Not Implemented"
 end
 
 function Sequencer:training()

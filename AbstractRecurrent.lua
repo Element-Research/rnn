@@ -7,18 +7,18 @@ AbstractRecurrent.dpnn_stepclone = true
 
 function AbstractRecurrent:__init(rho)
    parent.__init(self)
-   
+
    self.rho = rho or 99999 --the maximum number of time steps to BPTT
-   
+
    self.outputs = {}
    self.gradInputs = {}
    self._gradOutputs = {}
 
    self.step = 1
-   
+
    -- stores internal states of Modules at different time-steps
    self.sharedClones = {}
-   
+
    self:reset()
 end
 
@@ -51,13 +51,13 @@ function AbstractRecurrent:trimZero(nInputDim)
    return self
 end
 
-function AbstractRecurrent:updateGradInput(input, gradOutput)  
+function AbstractRecurrent:updateGradInput(input, gradOutput)
    -- updateGradInput should be called in reverse order of time
    self.updateGradInputStep = self.updateGradInputStep or self.step
-   
+
    -- BPTT for one time-step
    self.gradInput = self:_updateGradInput(input, gradOutput)
-   
+
    self.updateGradInputStep = self.updateGradInputStep - 1
    self.gradInputs[self.updateGradInputStep] = self.gradInput
    return self.gradInput
@@ -67,10 +67,10 @@ function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
    -- accGradParameters should be called in reverse order of time
    assert(self.updateGradInputStep < self.step, "Missing updateGradInput")
    self.accGradParametersStep = self.accGradParametersStep or self.step
-   
-   -- BPTT for one time-step 
+
+   -- BPTT for one time-step
    self:_accGradParameters(input, gradOutput, scale)
-   
+
    self.accGradParametersStep = self.accGradParametersStep - 1
 end
 
@@ -79,9 +79,9 @@ end
 function AbstractRecurrent:recycle(offset)
    -- offset can be used to skip initialModule (if any)
    offset = offset or 0
-   
+
    local _ = require 'moses'
-   self.nSharedClone = self.nSharedClone or _.size(self.sharedClones) 
+   self.nSharedClone = self.nSharedClone or _.size(self.sharedClones)
 
    local rho = math.max(self.rho + 1, self.nSharedClone)
    if self.sharedClones[self.step] == nil then
@@ -90,10 +90,10 @@ function AbstractRecurrent:recycle(offset)
       self._gradOutputs[self.step] = self._gradOutputs[self.step-rho]
       self._gradOutputs[self.step-rho] = nil
    end
-   
+
    self.outputs[self.step-rho-1] = nil
    self.gradInputs[self.step-rho-1] = nil
-   
+
    return self
 end
 
@@ -111,9 +111,9 @@ end
 -- this method brings all the memory back to the start
 function AbstractRecurrent:forget()
    -- the recurrentModule may contain an AbstractRecurrent instance (issue 107)
-   parent.forget(self) 
+   parent.forget(self)
    local _ = require 'moses'
-   
+
     -- bring all states back to the start of the sequence buffers
    if self.train ~= false then
       self.outputs = {}
@@ -121,15 +121,15 @@ function AbstractRecurrent:forget()
       self.sharedClones = _.compact(self.sharedClones)
       self._gradOutputs = _.compact(self._gradOutputs)
    end
-   
+
    -- forget the past inputs; restart from first step
    self.step = 1
-   
-   
+
+
   if not self.rmInSharedClones then
       -- Asserts that issue 129 is solved. In forget as it is often called.
       -- Asserts that self.recurrentModule is part of the sharedClones.
-      -- Since its used for evaluation, it should be used for training. 
+      -- Since its used for evaluation, it should be used for training.
       local nClone, maxIdx = 0, 1
       for k,v in pairs(self.sharedClones) do -- to prevent odd bugs
          if torch.pointer(v) == torch.pointer(self.recurrentModule) then
@@ -192,6 +192,12 @@ function AbstractRecurrent:reinforce(reward)
       for step, reward in ipairs(rewards) do
          local sm = self:getStepModule(step)
          sm:reinforce(reward)
+      end
+   elseif torch.isTensor(reward) and reward:dim() >= 2 then
+      -- multiple rewards, one per time-step
+      for step=1,reward:size(1) do
+         local sm = self:getStepModule(step)
+         sm:reinforce(reward[step])
       end
    else
       -- one reward broadcast to all time-steps
