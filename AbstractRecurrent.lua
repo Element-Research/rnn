@@ -186,18 +186,24 @@ function AbstractRecurrent:evaluate()
 end
 
 function AbstractRecurrent:reinforce(reward)
+   local a = torch.Timer()
    if torch.type(reward) == 'table' then
       -- multiple rewards, one per time-step
-      local rewards = reward
-      for step, reward in ipairs(rewards) do
+      local rstep = #reward
+      assert(self.step > rstep)
+      for step=self.step-1,self.step-#reward,-1 do
          local sm = self:getStepModule(step)
-         sm:reinforce(reward)
+         sm:reinforce(reward[rstep])
+         rstep = rstep - 1
       end
    elseif torch.isTensor(reward) and reward:dim() >= 2 then
       -- multiple rewards, one per time-step
-      for step=1,reward:size(1) do
+      local rstep = reward:size(1)
+      assert(self.step > rstep)
+      for step=self.step-1,self.step-reward:size(1),-1 do
          local sm = self:getStepModule(step)
-         sm:reinforce(reward[step])
+         sm:reinforce(reward[rstep])
+         rstep = rstep - 1
       end
    else
       -- one reward broadcast to all time-steps
