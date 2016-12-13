@@ -27,3 +27,14 @@ function AbstractSequencer:remember(remember)
    return self
 end
 
+function AbstractSequencer:hasMemory()
+   local _ = require 'moses'
+   if (self.train ~= false) and _.contains({'both','train'}, self._remember) then -- train (defaults to nil...)
+      return true
+   elseif (self.train == false) and _.contains({'both','eval'}, self._remember) then -- evaluate
+      return true
+   else
+      return false
+   end
+end
+

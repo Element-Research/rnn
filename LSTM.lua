@@ -20,11 +20,11 @@ function LSTM:__init(inputSize, outputSize, rho, cell2gate)
    self.recurrentModule = self:buildModel()
    -- make it work with nn.Container
    self.modules[1] = self.recurrentModule
-   self.sharedClones[1] = self.recurrentModule 
-   
+   self.sharedClones[1] = self.recurrentModule
+
    -- for output(0), cell(0) and gradCell(T)
-   self.zeroTensor = torch.Tensor() 
-   
+   self.zeroTensor = torch.Tensor()
+
    self.cells = {}
    self.gradCells = {}
 end
@@ -39,7 +39,7 @@ function LSTM:buildGate()
    local input2gate = nn.Linear(self.inputSize, self.outputSize)
    local output2gate = nn.LinearNoBias(self.outputSize, self.outputSize)
    local para = nn.ParallelTable()
-   para:add(input2gate):add(output2gate) 
+   para:add(input2gate):add(output2gate)
    if self.cell2gate then
       para:add(nn.CMul(self.outputSize)) -- diagonal cell to gate weight matrix
    end
@@ -76,7 +76,7 @@ end
 
 function LSTM:buildCell()
    -- build
-   self.inputGate = self:buildInputGate() 
+   self.inputGate = self:buildInputGate()
    self.forgetGate = self:buildForgetGate()
    self.hiddenLayer = self:buildHidden()
    -- forget = forgetGate{input, output(t-1), cell(t-1)} * cell(t-1)
@@ -99,8 +99,8 @@ function LSTM:buildCell()
    cell:add(nn.CAddTable())
    self.cellLayer = cell
    return cell
-end   
-   
+end
+
 function LSTM:buildOutputGate()
    self.outputGate = self:buildGate()
    return self.outputGate
@@ -108,7 +108,7 @@ end
 
 -- cell(t) = cellLayer{input, output(t-1), cell(t-1)}
 -- output(t) = outputGate{input, output(t-1), cell(t)}*tanh(cell(t))
--- output of Model is table : {output(t), cell(t)} 
+-- output of Model is table : {output(t), cell(t)}
 function LSTM:buildModel()
    -- build components
    self.cellLayer = self:buildCell()
@@ -118,7 +118,7 @@ function LSTM:buildModel()
    concat:add(nn.NarrowTable(1,2)):add(self.cellLayer)
    local model = nn.Sequential()
    model:add(concat)
-   -- output of concat is {{input, output}, cell(t)}, 
+   -- output of concat is {{input, output}, cell(t)},
    -- so flatten to {input, output, cell(t)}
    model:add(nn.FlattenTable())
    local cellAct = nn.Sequential()
@@ -152,7 +152,7 @@ function LSTM:updateOutput(input)
       prevOutput = self.outputs[self.step-1]
       prevCell = self.cells[self.step-1]
    end
-   
+
    -- output(t), cell(t) = lstm{input(t), output(t-1), cell(t-1)}
    local output, cell
    if self.train ~= false then
@@ -163,13 +163,13 @@ function LSTM:updateOutput(input)
    else
       output, cell = unpack(self.recurrentModule:updateOutput{input, prevOutput, prevCell})
    end
-   
+
    self.outputs[self.step] = output
    self.cells[self.step] = cell
-   
+
    self.output = output
    self.cell = cell
-   
+
    self.step = self.step + 1
    self.gradPrevOutput = nil
    self.updateGradInputStep = nil
@@ -182,40 +182,40 @@ function LSTM:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
    local step = self.updateGradInputStep - 1
    assert(step >= 1)
-   
+
    -- set the output/gradOutput states of current Module
    local recurrentModule = self:getStepModule(step)
-   
+
    -- backward propagate through this step
    if self.gradPrevOutput then
       self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
       nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
       gradOutput = self._gradOutputs[step]
    end
-   
+
    local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
    local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
    local inputTable = {input, output, cell}
    local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
-   
+
    local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
-   
+
    local gradInput
    gradInput, self.gradPrevOutput, gradCell = unpack(gradInputTable)
    self.gradCells[step-1] = gradCell
    if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
    if self.userPrevCell then self.userGradPrevCell = gradCell end
-   
+
    return gradInput
 end
 
 function LSTM:_accGradParameters(input, gradOutput, scale)
    local step = self.accGradParametersStep - 1
    assert(step >= 1)
-   
+
    -- set the output/gradOutput states of current Module
    local recurrentModule = self:getStepModule(step)
-   
+
    -- backward propagate through this step
    local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
    local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
@@ -226,3 +226,16 @@ function LSTM:_accGradParameters(input, gradOutput, scale)
    recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
 end
 
+function LSTM:clearState()
+   self.zeroTensor:set()
+   return parent.clearState(self)
+end
+
+function LSTM:type(type, ...)
+   if type then
+      self:forget()
+      self:clearState()
+      self.zeroTensor = self.zeroTensor:type(type)
+   end
+   return parent.type(self, type, ...)
+end
