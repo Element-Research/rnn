@@ -257,9 +257,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    end
 
    local ppl = torch.exp(sumErr/opt.validsize)
-   -- Note :
    -- Perplexity = exp( sum ( NLL ) / #w)
-   -- Bits Per Word = log2(Perplexity)
    print("Validation PPL : "..ppl)
 
    xplog.valppl[epoch] = ppl
