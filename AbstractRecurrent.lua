@@ -225,6 +225,15 @@ function AbstractRecurrent:maxBPTTstep(rho)
    self.rho = rho
 end
 
+-- get hidden state: h[t]
+function AbstractRecurrent:getHiddenState(step, input)
+   error"Not Implemented"
+end
+
+function AbstractRecurrent:setHiddenState(step, hiddenState)
+   error"Not Implemented"
+end
+
 -- backwards compatibility
 AbstractRecurrent.recursiveResizeAs = rnn.recursiveResizeAs
 AbstractRecurrent.recursiveSet = rnn.recursiveSet

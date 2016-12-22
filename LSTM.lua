@@ -136,22 +136,29 @@ function LSTM:buildModel()
    return model
 end
 
-------------------------- forward backward -----------------------------
-function LSTM:updateOutput(input)
+function LSTM:getHiddenState(step, input)
    local prevOutput, prevCell
-   if self.step == 1 then
+   if step == 0 then
       prevOutput = self.userPrevOutput or self.zeroTensor
       prevCell = self.userPrevCell or self.zeroTensor
-      if input:dim() == 2 then
-         self.zeroTensor:resize(input:size(1), self.outputSize):zero()
-      else
-         self.zeroTensor:resize(self.outputSize):zero()
+      if input then
+         if input:dim() == 2 then
+            self.zeroTensor:resize(input:size(1), self.outputSize):zero()
+         else
+            self.zeroTensor:resize(self.outputSize):zero()
+         end
       end
    else
       -- previous output and cell of this module
-      prevOutput = self.outputs[self.step-1]
-      prevCell = self.cells[self.step-1]
+      prevOutput = self.outputs[step]
+      prevCell = self.cells[step]
    end
+   return {prevOutput, prevCell}
+end
+
+------------------------- forward backward -----------------------------
+function LSTM:updateOutput(input)
+   local prevOutput, prevCell = unpack(self:getHiddenState(self.step-1, input))
 
    -- output(t), cell(t) = lstm{input(t), output(t-1), cell(t-1)}
    local output, cell

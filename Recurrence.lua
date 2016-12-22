@@ -2,9 +2,9 @@
 --[[ Recurrence ]]--
 -- A general container for implementing a recurrence.
 -- Unlike Recurrent, this module doesn't manage a separate input layer,
--- nor does it have a startModule. Instead for the first step, it 
+-- nor does it have a startModule. Instead for the first step, it
 -- just forwards a zero tensor through the recurrent layer (like LSTM).
--- The recurrentModule should output Tensor or table : output(t) 
+-- The recurrentModule should output Tensor or table : output(t)
 -- given input table : {input(t), output(t-1)}
 ------------------------------------------------------------------------
 local _ = require 'moses'
@@ -12,7 +12,7 @@ local Recurrence, parent = torch.class('nn.Recurrence', 'nn.AbstractRecurrent')
 
 function Recurrence:__init(recurrentModule, outputSize, nInputDim, rho)
    parent.__init(self, rho or 9999)
-   
+
    assert(_.contains({'table','torch.LongStorage','number'}, torch.type(outputSize)), "Unsupported size type")
    self.outputSize = torch.type(outputSize) == 'number' and {outputSize} or outputSize
    -- for table outputs, this is the number of dimensions in the first (left) tensor (depth-first).
@@ -20,14 +20,14 @@ function Recurrence:__init(recurrentModule, outputSize, nInputDim, rho)
    self.nInputDim = nInputDim
    assert(torch.isTypeOf(recurrentModule, 'nn.Module'), "Expecting recurrenModule nn.Module for arg 3")
    self.recurrentModule = recurrentModule
-   
+
    -- make it work with nn.Container and nn.Decorator
    self.module = self.recurrentModule
    self.modules[1] = self.recurrentModule
-   self.sharedClones[1] = self.recurrentModule 
-   
+   self.sharedClones[1] = self.recurrentModule
+
    -- just so we can know the type of this module
-   self.typeTensor = torch.Tensor() 
+   self.typeTensor = torch.Tensor()
 end
 
 -- recursively creates a zero tensor (or table thereof) (or table thereof).
@@ -62,7 +62,7 @@ function Recurrence:recursiveResizeZero(tensor, size, batchSize)
    return tensor
 end
 
--- get the batch size. 
+-- get the batch size.
 -- When input is a table, we use the first tensor (depth first).
 function Recurrence:getBatchSize(input, nInputDim)
    local nInputDim = nInputDim or self.nInputDim
@@ -72,7 +72,7 @@ function Recurrence:getBatchSize(input, nInputDim)
       assert(torch.isTensor(input))
       if input:dim() == nInputDim then
          return nil
-      elseif input:dim() - 1 == nInputDim then 
+      elseif input:dim() - 1 == nInputDim then
          return input:size(1)
       else
          error("inconsitent tensor dims "..input:dim())
@@ -80,23 +80,30 @@ function Recurrence:getBatchSize(input, nInputDim)
    end
 end
 
-function Recurrence:updateOutput(input)
+function Recurrence:getHiddenState(step, input)
    local prevOutput
-   if self.step == 1 then
+   if step == 0 then
       if self.userPrevOutput then
          -- user provided previous output
-         prevOutput = self.userPrevOutput 
-      else
+         prevOutput = self.userPrevOutput
+      elseif input then
          -- first previous output is zeros
          local batchSize = self:getBatchSize(input)
          self.zeroTensor = self:recursiveResizeZero(self.zeroTensor, self.outputSize, batchSize)
          prevOutput = self.zeroTensor
+      else
+         prevOutput = self.zeroTensor
       end
    else
       -- previous output of this module
-      prevOutput = self.outputs[self.step-1]
+      prevOutput = self.outputs[step]
    end
-      
+   return prevOutput
+end
+
+function Recurrence:updateOutput(input)
+   local prevOutput = self:getHiddenState(self.step-1, input)
+
    -- output(t) = recurrentModule{input(t), output(t-1)}
    local output
    if self.train ~= false then
@@ -107,16 +114,16 @@ function Recurrence:updateOutput(input)
    else
       output = self.recurrentModule:updateOutput{input, prevOutput}
    end
-   
+
    self.outputs[self.step] = output
-   
+
    self.output = output
-   
+
    self.step = self.step + 1
    self.gradPrevOutput = nil
    self.updateGradInputStep = nil
    self.accGradParametersStep = nil
-   
+
    return self.output
 end
 
@@ -124,24 +131,24 @@ function Recurrence:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
    local step = self.updateGradInputStep - 1
    assert(step >= 1)
-   
+
    local gradInput
 
    -- set the output/gradOutput states of current Module
    local recurrentModule = self:getStepModule(step)
-   
+
    -- backward propagate through this step
    if self.gradPrevOutput then
       self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
       nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
       gradOutput = self._gradOutputs[step]
    end
-   
+
    local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
    local gradInputTable = recurrentModule:updateGradInput({input, output}, gradOutput)
    gradInput, self.gradPrevOutput = unpack(gradInputTable)
    if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
-   
+
    return gradInput
 end
 
@@ -150,11 +157,11 @@ function Recurrence:_accGradParameters(input, gradOutput, scale)
    assert(step >= 1)
 
    local recurrentModule = self:getStepModule(step)
-   
+
    local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
    local gradOutput = (step == self.step-1) and gradOutput or self._gradOutputs[step]
    recurrentModule:accGradParameters({input, output}, gradOutput, scale)
-   
+
    return gradInput
 end
 
