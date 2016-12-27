@@ -113,7 +113,6 @@ function FastLSTM:nngraphModel()
       h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
       
       -- add bias after BN as per paper
-      self.o2g:noBias()
       h2h = nn.Add(4*self.outputSize)(h2h)
    else
       -- evaluate the input sums at once for efficiency
