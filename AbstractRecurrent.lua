@@ -13,6 +13,7 @@ function AbstractRecurrent:__init(rho)
    self.outputs = {}
    self.gradInputs = {}
    self._gradOutputs = {}
+   self.gradOutputs = {}
 
    self.step = 1
 
@@ -100,7 +101,7 @@ end
 function nn.AbstractRecurrent:clearState()
    self:forget()
    -- keep the first two sharedClones
-   nn.utils.clear(self, '_input', '_gradOutput', '_gradOutputs', 'gradPrevOutput', 'cell', 'cells', 'gradCells', 'outputs', 'gradInputs')
+   nn.utils.clear(self, '_input', '_gradOutput', '_gradOutputs', 'gradPrevOutput', 'cell', 'cells', 'gradCells', 'outputs', 'gradInputs', 'gradOutputs')
    for i, clone in ipairs(self.sharedClones) do
       clone:clearState()
    end
@@ -120,13 +121,17 @@ function AbstractRecurrent:forget()
       self.gradInputs = {}
       self.sharedClones = _.compact(self.sharedClones)
       self._gradOutputs = _.compact(self._gradOutputs)
+      self.gradOutputs = {}
+      if self.cells then
+         self.cells = {}
+         self.gradCells = {}
+      end
    end
 
    -- forget the past inputs; restart from first step
    self.step = 1
 
-
-  if not self.rmInSharedClones then
+   if not self.rmInSharedClones then
       -- Asserts that issue 129 is solved. In forget as it is often called.
       -- Asserts that self.recurrentModule is part of the sharedClones.
       -- Since its used for evaluation, it should be used for training.
@@ -225,11 +230,12 @@ function AbstractRecurrent:maxBPTTstep(rho)
    self.rho = rho
 end
 
--- get hidden state: h[t]
+-- get stored hidden state: h[t] where h[t] = f(x[t], h[t-1])
 function AbstractRecurrent:getHiddenState(step, input)
    error"Not Implemented"
 end
 
+-- set stored hidden state
 function AbstractRecurrent:setHiddenState(step, hiddenState)
    error"Not Implemented"
 end

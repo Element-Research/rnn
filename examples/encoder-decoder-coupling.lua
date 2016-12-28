@@ -6,7 +6,7 @@ Example of "coupled" separate encoder and decoder networks, e.g. for sequence-to
 
 require 'rnn'
 
-version = 1.3 -- Added multiple layers and merged with seqLSTM example
+version = 1.4 -- Uses [get,set]GradHiddenState for LSTM
 
 local opt = {}
 opt.learningRate = 0.1
@@ -37,8 +37,7 @@ function backwardConnect(enc, dec)
          enc.lstmLayers[i].userNextGradCell = dec.lstmLayers[i].userGradPrevCell
          enc.lstmLayers[i].gradPrevOutput = dec.lstmLayers[i].userGradPrevOutput
       else
-         enc.lstmLayers[i].userNextGradCell = nn.rnn.recursiveCopy(enc.lstmLayers[i].userNextGradCell, dec.lstmLayers[i].userGradPrevCell)
-         enc.lstmLayers[i].gradPrevOutput = nn.rnn.recursiveCopy(enc.lstmLayers[i].gradPrevOutput, dec.lstmLayers[i].userGradPrevOutput)
+         enc:setGradHiddenState(opt.seqLen, dec:getGradHiddenState(0))
       end
    end
 end
@@ -101,7 +100,7 @@ for i=1,opt.niter do
    local decOut = dec:forward(decInSeq)
    --print(decOut)
    local err = criterion:forward(decOut, decOutSeq)
-   
+
    print(string.format("Iteration %d ; NLL err = %f ", i, err))
 
    -- Backward pass

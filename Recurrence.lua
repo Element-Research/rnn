@@ -98,11 +98,29 @@ function Recurrence:getHiddenState(step, input)
       -- previous output of this module
       prevOutput = self.outputs[step]
    end
-   return prevOutput
+   assert(prevOutput, "Missing hiddenState at step "..step)
+   -- call getHiddenState on recurrentModule as they may contain AbstractRecurrent instances...
+   return {prevOutput, nn.Module.getHiddenState(self, step)}
+end
+
+function Recurrence:setHiddenState(step, hiddenState)
+   assert(torch.type(hiddenState) == 'table')
+   assert(#hiddenState >= 1)
+   if step == 0 then
+      self.userPrevOutput = hiddenState[1]
+   else
+      -- previous output of this module
+      self.outputs[step] = hiddenState[1]
+   end
+   if hiddenState[2] then
+      -- call setHiddenState on recurrentModule as they may contain AbstractRecurrent instances...
+      nn.Module.setHiddenState(self, step, hiddenState[2])
+   end
 end
 
 function Recurrence:updateOutput(input)
-   local prevOutput = self:getHiddenState(self.step-1, input)
+   -- output(t-1)
+   local prevOutput = self:getHiddenState(self.step-1, input)[1]
 
    -- output(t) = recurrentModule{input(t), output(t-1)}
    local output

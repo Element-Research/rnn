@@ -139,8 +139,8 @@ end
 function LSTM:getHiddenState(step, input)
    local prevOutput, prevCell
    if step == 0 then
-      prevOutput = self.userPrevOutput or self.zeroTensor
-      prevCell = self.userPrevCell or self.zeroTensor
+      prevOutput = self.userPrevOutput or self.outputs[step] or self.zeroTensor
+      prevCell = self.userPrevCell or self.cells[step] or self.zeroTensor
       if input then
          if input:dim() == 2 then
             self.zeroTensor:resize(input:size(1), self.outputSize):zero()
@@ -154,6 +154,15 @@ function LSTM:getHiddenState(step, input)
       prevCell = self.cells[step]
    end
    return {prevOutput, prevCell}
+end
+
+function LSTM:setHiddenState(step, hiddenState)
+   assert(torch.type(hiddenState) == 'table')
+   assert(#hiddenState == 2)
+
+   -- previous output of this module
+   self.outputs[step] = hiddenState[1]
+   self.cells[step] = hiddenState[2]
 end
 
 ------------------------- forward backward -----------------------------
@@ -185,6 +194,26 @@ function LSTM:updateOutput(input)
    return self.output
 end
 
+function LSTM:getGradHiddenState(step)
+   local gradOutput, gradCell
+   if step == self.step-1 then
+      gradOutput = self.userNextGradOutput or self.gradOutputs[step] or self.zeroTensor
+      gradCell = self.userNextGradCell or self.gradCells[step] or self.zeroTensor
+   else
+      gradOutput = self.gradOutputs[step]
+      gradCell = self.gradCells[step]
+   end
+   return {gradOutput, gradCell}
+end
+
+function LSTM:setGradHiddenState(step, gradHiddenState)
+   assert(torch.type(gradHiddenState) == 'table')
+   assert(#gradHiddenState == 2)
+
+   self.gradOutputs[step] = gradHiddenState[1]
+   self.gradCells[step] = gradHiddenState[2]
+end
+
 function LSTM:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
    local step = self.updateGradInputStep - 1
@@ -194,24 +223,23 @@ function LSTM:_updateGradInput(input, gradOutput)
    local recurrentModule = self:getStepModule(step)
 
    -- backward propagate through this step
-   if self.gradPrevOutput then
-      self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
+   local gradHiddenState = self:getGradHiddenState(step)
+   local _gradOutput, gradCell = gradHiddenState[1], gradHiddenState[2]
+   assert(_gradOutput and gradCell)
+
+   if _gradOutput then
+      self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], _gradOutput)
       nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
       gradOutput = self._gradOutputs[step]
    end
 
-   local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
-   local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
-   local inputTable = {input, output, cell}
-   local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
+   local inputTable = self:getHiddenState(step-1)
+   table.insert(inputTable, 1, input)
 
    local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
 
-   local gradInput
-   gradInput, self.gradPrevOutput, gradCell = unpack(gradInputTable)
-   self.gradCells[step-1] = gradCell
-   if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
-   if self.userPrevCell then self.userGradPrevCell = gradCell end
+   local gradInput = table.remove(gradInputTable, 1)
+   self:setGradHiddenState(step-1, gradInputTable)
 
    return gradInput
 end
@@ -224,17 +252,19 @@ function LSTM:_accGradParameters(input, gradOutput, scale)
    local recurrentModule = self:getStepModule(step)
 
    -- backward propagate through this step
-   local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
-   local cell = (step == 1) and (self.userPrevCell or self.zeroTensor) or self.cells[step-1]
-   local inputTable = {input, output, cell}
-   local gradOutput = (step == self.step-1) and gradOutput or self._gradOutputs[step]
-   local gradCell = (step == self.step-1) and (self.userNextGradCell or self.zeroTensor) or self.gradCells[step]
-   local gradOutputTable = {gradOutput, gradCell}
+   local inputTable = self:getHiddenState(step-1)
+   table.insert(inputTable, 1, input)
+   local gradOutputTable = self:getGradHiddenState(step)
+   gradOutputTable[1] = self._gradOutputs[step] or gradOutputTable[1]
    recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
 end
 
 function LSTM:clearState()
    self.zeroTensor:set()
+   if self.userPrevOutput then self.userPrevOutput:set() end
+   if self.userPrevCell then self.userPrevCell:set() end
+   if self.userGradPrevOutput then self.userGradPrevOutput:set() end
+   if self.userGradPrevCell then self.userGradPrevCell:set() end
    return parent.clearState(self)
 end
 
