@@ -60,9 +60,28 @@ end
 
 function Module:setHiddenState(step, hiddenState)
    if self.modules then
-      tc.checktab(hiddenState, 2)
+      assert(torch.type(hiddenState) == 'table')
       for i, module in ipairs(self.modules) do
          module:setHiddenState(step, hiddenState[i])
+      end
+   end
+end
+
+function Module:getGradHiddenState(step)
+   if self.modules then
+      local gradHiddenState = {}
+      for i, module in ipairs(self.modules) do
+         gradHiddenState[i] = module:getGradHiddenState(step)
+      end
+      return gradHiddenState
+   end
+end
+
+function Module:setGradHiddenState(step, gradHiddenState)
+   if self.modules then
+      assert(torch.type(gradHiddenState) == 'table')
+      for i, module in ipairs(self.modules) do
+         module:setGradHiddenState(step, gradHiddenState[i])
       end
    end
 end

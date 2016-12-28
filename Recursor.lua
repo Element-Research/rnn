@@ -1,8 +1,8 @@
 ------------------------------------------------------------------------
 --[[ Recursor ]]--
 -- Decorates module to be used within an AbstractSequencer.
--- It does this by making the decorated module conform to the 
--- AbstractRecurrent interface (which is inherited by LSTM/Recurrent) 
+-- It does this by making the decorated module conform to the
+-- AbstractRecurrent interface (which is inherited by LSTM/Recurrent)
 ------------------------------------------------------------------------
 local Recursor, parent = torch.class('nn.Recursor', 'nn.AbstractRecurrent')
 
@@ -10,7 +10,7 @@ function Recursor:__init(module, rho)
    parent.__init(self, rho or 9999999)
 
    self.recurrentModule = module
-   
+
    self.module = module
    self.modules = {module}
    self.sharedClones[1] = self.recurrentModule
@@ -26,7 +26,7 @@ function Recursor:updateOutput(input)
    else
       output = self.recurrentModule:updateOutput(input)
    end
-   
+
    self.outputs[self.step] = output
    self.output = output
    self.step = self.step + 1
@@ -39,18 +39,18 @@ function Recursor:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
    local step = self.updateGradInputStep - 1
    assert(step >= 1)
-   
+
    local recurrentModule = self:getStepModule(step)
    recurrentModule:setOutputStep(step)
    local gradInput = recurrentModule:updateGradInput(input, gradOutput)
-   
+
    return gradInput
 end
 
 function Recursor:_accGradParameters(input, gradOutput, scale)
    local step = self.accGradParametersStep - 1
    assert(step >= 1)
-   
+
    local recurrentModule = self:getStepModule(step)
    recurrentModule:setOutputStep(step)
    recurrentModule:accGradParameters(input, gradOutput, scale)
@@ -82,5 +82,10 @@ function Recursor:maxBPTTstep(rho)
    self.rho = rho
    nn.Module.maxBPTTstep(self, rho)
 end
+
+Recursor.getHiddenState = nn.Container.getHiddenState
+Recursor.setHiddenState = nn.Container.setHiddenState
+Recursor.getGradHiddenState = nn.Container.getGradHiddenState
+Recursor.setGradHiddenState = nn.Container.setGradHiddenState
 
 Recursor.__tostring__ = nn.Decorator.__tostring__

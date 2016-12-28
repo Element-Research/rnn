@@ -240,6 +240,16 @@ function AbstractRecurrent:setHiddenState(step, hiddenState)
    error"Not Implemented"
 end
 
+-- get stored grad hidden state: grad(h[t])
+function AbstractRecurrent:getGradHiddenState(step, input)
+   error"Not Implemented"
+end
+
+-- set stored grad hidden state
+function AbstractRecurrent:setGradHiddenState(step, hiddenState)
+   error"Not Implemented"
+end
+
 -- backwards compatibility
 AbstractRecurrent.recursiveResizeAs = rnn.recursiveResizeAs
 AbstractRecurrent.recursiveSet = rnn.recursiveSet

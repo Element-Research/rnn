@@ -6685,7 +6685,7 @@ function rnntest.LSTM_GRU_hiddenState()
    local input = torch.randn(seqlen*2, batchsize, inputsize)
    local gradOutput = torch.randn(seqlen*2, batchsize, outputsize)
 
-   local function testHiddenState(lstm)
+   local function testHiddenState(lstm, recurrence)
       local lstm2 = lstm:clone()
 
       -- test forward
@@ -6696,7 +6696,7 @@ function rnntest.LSTM_GRU_hiddenState()
       for step=1,seqlen do
          local hiddenState = lstm2:getHiddenState(seqlen+step-1)
          if torch.type(hiddenState) == 'table' then
-            mytester:assert(#hiddenState == 2)
+            mytester:assert(#hiddenState >= 1)
          else
             mytester:assert(torch.isTensor(hiddenState))
          end
@@ -6716,8 +6716,13 @@ function rnntest.LSTM_GRU_hiddenState()
          local hs = lstm:getHiddenState(step)
          local hs2 = lstm2:getHiddenState(step)
          if torch.type(hs) == 'table' then
-            mytester:assertTensorEq(hs[1], hs2[1], 0.0000001)
-            mytester:assertTensorEq(hs[2], hs2[2], 0.0000001)
+            if recurrence then
+               hs = hs[1][1]
+               hs2 = hs2[1][1]
+            end
+            for i=1,#hs do
+               mytester:assertTensorEq(hs[i], hs2[i], 0.0000001)
+            end
          else
             mytester:assertTensorEq(hs, hs2, 0.0000001)
          end
@@ -6732,7 +6737,7 @@ function rnntest.LSTM_GRU_hiddenState()
       for step=seqlen,1,-1 do
          local gradHiddenState = lstm2:getGradHiddenState(step)
          if torch.type(gradHiddenState) == 'table' then
-            mytester:assert(#gradHiddenState == 2)
+            mytester:assert(#gradHiddenState >= 1)
          else
             mytester:assert(torch.isTensor(gradHiddenState))
          end
@@ -6750,8 +6755,16 @@ function rnntest.LSTM_GRU_hiddenState()
       end
    end
 
-   testHiddenState(nn.LSTM(inputsize, outputsize))
+   local lstm = nn.LSTM(inputsize, outputsize)
+   testHiddenState(lstm)
    testHiddenState(nn.GRU(inputsize, outputsize))
+
+   local rm = lstm.recurrentModule:clone()
+
+   rm:insert(nn.FlattenTable(), 1)
+   local recurrence = nn.Recurrence(rm, {{outputsize}, {outputsize}}, 1)
+   local lstm = nn.Sequential():add(recurrence):add(nn.SelectTable(1))
+   testHiddenState(lstm, true)
 end
 
 function rnn.test(tests, benchmark_)
