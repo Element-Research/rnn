@@ -6679,7 +6679,7 @@ function rnntest.inplaceBackward()
    end
 end
 
-function rnntest.LSTM_GRU_hiddenState()
+function rnntest.getHiddenState()
    local seqlen, batchsize = 7, 3
    local inputsize, outputsize = 4, 5
    local input = torch.randn(seqlen*2, batchsize, inputsize)
@@ -6757,7 +6757,12 @@ function rnntest.LSTM_GRU_hiddenState()
 
    local lstm = nn.LSTM(inputsize, outputsize)
    testHiddenState(lstm)
-   testHiddenState(nn.GRU(inputsize, outputsize))
+
+   local gru = nn.GRU(inputsize, outputsize)
+   testHiddenState(gru)
+
+   gru:forget()
+   testHiddenState(nn.Recursor(gru), false)
 
    local rm = lstm.recurrentModule:clone()
 

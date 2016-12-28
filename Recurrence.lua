@@ -171,10 +171,10 @@ function Recurrence:_updateGradInput(input, gradOutput)
 
    local gradInputTable = recurrentModule:updateGradInput({input, self:getHiddenState(step-1)[1]}, gradOutput)
 
-   local gradInput = table.remove(gradInputTable, 1)
-   self:setGradHiddenState(step-1, gradInputTable)
+   local _ = require 'moses'
+   self:setGradHiddenState(step-1, _.slice(gradInputTable, 2, #gradInputTable))
 
-   return gradInput
+   return gradInputTable[1]
 end
 
 function Recurrence:_accGradParameters(input, gradOutput, scale)

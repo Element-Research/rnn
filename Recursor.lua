@@ -83,9 +83,20 @@ function Recursor:maxBPTTstep(rho)
    nn.Module.maxBPTTstep(self, rho)
 end
 
-Recursor.getHiddenState = nn.Container.getHiddenState
-Recursor.setHiddenState = nn.Container.setHiddenState
-Recursor.getGradHiddenState = nn.Container.getGradHiddenState
-Recursor.setGradHiddenState = nn.Container.setGradHiddenState
+function Recursor:getHiddenState(...)
+   return self.modules[1]:getHiddenState(...)
+end
+
+function Recursor:setHiddenState(...)
+   return self.modules[1]:setHiddenState(...)
+end
+
+function Recursor:getGradHiddenState(...)
+   return self.modules[1]:getGradHiddenState(...)
+end
+
+function Recursor:setGradHiddenState(...)
+   return self.modules[1]:setGradHiddenState(...)
+end
 
 Recursor.__tostring__ = nn.Decorator.__tostring__

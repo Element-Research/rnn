@@ -6,6 +6,7 @@ assert(dpnn.version > 1, "Please update dpnn : luarocks install dpnn")
 -- create global rnn table:
 rnn = {}
 rnn.version = 2
+rnn.version = 2.1 -- [get,set][Grad]HiddenState(step)
 
 unpack = unpack or table.unpack
 

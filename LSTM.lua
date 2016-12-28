@@ -137,6 +137,7 @@ function LSTM:buildModel()
 end
 
 function LSTM:getHiddenState(step, input)
+   step = step == nil and (self.step - 1) or (step < 0) and (self.step - step - 1) or step
    local prevOutput, prevCell
    if step == 0 then
       prevOutput = self.userPrevOutput or self.outputs[step] or self.zeroTensor
@@ -157,6 +158,7 @@ function LSTM:getHiddenState(step, input)
 end
 
 function LSTM:setHiddenState(step, hiddenState)
+   step = step == nil and (self.step - 1) or (step < 0) and (self.step - step - 1) or step
    assert(torch.type(hiddenState) == 'table')
    assert(#hiddenState == 2)
 
@@ -195,6 +197,10 @@ function LSTM:updateOutput(input)
 end
 
 function LSTM:getGradHiddenState(step)
+   self.gradOutputs = self.gradOutputs or {}
+   self.gradCells = self.gradCells or {}
+   local _step = self.updateGradInputStep or self.step
+   step = step == nil and (_step - 1) or (step < 0) and (_step - step - 1) or step
    local gradOutput, gradCell
    if step == self.step-1 then
       gradOutput = self.userNextGradOutput or self.gradOutputs[step] or self.zeroTensor
@@ -207,6 +213,8 @@ function LSTM:getGradHiddenState(step)
 end
 
 function LSTM:setGradHiddenState(step, gradHiddenState)
+   local _step = self.updateGradInputStep or self.step
+   step = step == nil and (_step - 1) or (step < 0) and (_step - step - 1) or step
    assert(torch.type(gradHiddenState) == 'table')
    assert(#gradHiddenState == 2)
 
@@ -236,10 +244,10 @@ function LSTM:_updateGradInput(input, gradOutput)
 
    local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})
 
-   local gradInput = table.remove(gradInputTable, 1)
-   self:setGradHiddenState(step-1, gradInputTable)
+   local _ = require 'moses'
+   self:setGradHiddenState(step-1, _.slice(gradInputTable, 2, 3))
 
-   return gradInput
+   return gradInputTable[1]
 end
 
 function LSTM:_accGradParameters(input, gradOutput, scale)
