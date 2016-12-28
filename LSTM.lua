@@ -227,11 +227,9 @@ function LSTM:_updateGradInput(input, gradOutput)
    local _gradOutput, gradCell = gradHiddenState[1], gradHiddenState[2]
    assert(_gradOutput and gradCell)
 
-   if _gradOutput then
-      self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], _gradOutput)
-      nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
-      gradOutput = self._gradOutputs[step]
-   end
+   self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], _gradOutput)
+   nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
+   gradOutput = self._gradOutputs[step]
 
    local inputTable = self:getHiddenState(step-1)
    table.insert(inputTable, 1, input)

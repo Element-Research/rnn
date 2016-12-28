@@ -6679,63 +6679,79 @@ function rnntest.inplaceBackward()
    end
 end
 
-function rnntest.LSTM_hiddenState()
+function rnntest.LSTM_GRU_hiddenState()
    local seqlen, batchsize = 7, 3
    local inputsize, outputsize = 4, 5
-   local lstm = nn.LSTM(inputsize, outputsize)
    local input = torch.randn(seqlen*2, batchsize, inputsize)
    local gradOutput = torch.randn(seqlen*2, batchsize, outputsize)
-   local lstm2 = lstm:clone()
 
-   -- test forward
-   for step=1,seqlen do -- initialize lstm2 hidden state
-      lstm2:forward(input[step])
+   local function testHiddenState(lstm)
+      local lstm2 = lstm:clone()
+
+      -- test forward
+      for step=1,seqlen do -- initialize lstm2 hidden state
+         lstm2:forward(input[step])
+      end
+
+      for step=1,seqlen do
+         local hiddenState = lstm2:getHiddenState(seqlen+step-1)
+         if torch.type(hiddenState) == 'table' then
+            mytester:assert(#hiddenState == 2)
+         else
+            mytester:assert(torch.isTensor(hiddenState))
+         end
+         lstm:setHiddenState(step-1, hiddenState)
+         local output = lstm:forward(input[seqlen+step])
+         local output2 = lstm2:forward(input[seqlen+step])
+         mytester:assertTensorEq(output, output2, 0.0000001, "error in step "..step)
+      end
+
+      -- test backward
+      lstm:zeroGradParameters()
+      lstm2:zeroGradParameters()
+      lstm:forget()
+
+      for step=1,seqlen do
+         lstm:forward(input[step])
+         local hs = lstm:getHiddenState(step)
+         local hs2 = lstm2:getHiddenState(step)
+         if torch.type(hs) == 'table' then
+            mytester:assertTensorEq(hs[1], hs2[1], 0.0000001)
+            mytester:assertTensorEq(hs[2], hs2[2], 0.0000001)
+         else
+            mytester:assertTensorEq(hs, hs2, 0.0000001)
+         end
+      end
+
+      for step=seqlen*2,seqlen+1,-1 do
+         lstm2:backward(input[step], gradOutput[step])
+      end
+
+      lstm2:zeroGradParameters()
+
+      for step=seqlen,1,-1 do
+         local gradHiddenState = lstm2:getGradHiddenState(step)
+         if torch.type(gradHiddenState) == 'table' then
+            mytester:assert(#gradHiddenState == 2)
+         else
+            mytester:assert(torch.isTensor(gradHiddenState))
+         end
+         lstm:setGradHiddenState(step, gradHiddenState)
+         local gradInput = lstm:backward(input[step], gradOutput[step])
+         local gradInput2 = lstm2:backward(input[step], gradOutput[step])
+         mytester:assertTensorEq(gradInput, gradInput2, 0.0000001)
+      end
+
+      local params, gradParams = lstm:parameters()
+      local params2, gradParams2 = lstm2:parameters()
+
+      for i=1,#params do
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00000001)
+      end
    end
 
-   for step=1,seqlen do
-      local hiddenState = lstm2:getHiddenState(seqlen+step-1)
-      mytester:assert(#hiddenState == 2)
-      lstm:setHiddenState(step-1, hiddenState)
-      local output = lstm:forward(input[seqlen+step])
-      local output2 = lstm2:forward(input[seqlen+step])
-      mytester:assertTensorEq(output, output2, 0.0000001)
-   end
-
-   -- test backward
-   lstm:zeroGradParameters()
-   lstm2:zeroGradParameters()
-   lstm:forget()
-
-   for step=1,seqlen do
-      lstm:forward(input[step])
-      local hs = lstm:getHiddenState(step)
-      local hs2 = lstm2:getHiddenState(step)
-      mytester:assertTensorEq(hs[1], hs2[1], 0.0000001)
-      mytester:assertTensorEq(hs[2], hs2[2], 0.0000001)
-   end
-
-   for step=seqlen*2,seqlen+1,-1 do
-      lstm2:backward(input[step], gradOutput[step])
-   end
-
-   lstm2:zeroGradParameters()
-
-   for step=seqlen,1,-1 do
-      local gradHiddenState = lstm2:getGradHiddenState(step)
-      mytester:assert(#gradHiddenState == 2)
-      lstm:setGradHiddenState(step, gradHiddenState)
-      local gradInput = lstm:backward(input[step], gradOutput[step])
-      local gradInput2 = lstm2:backward(input[step], gradOutput[step])
-      mytester:assertTensorEq(gradInput, gradInput2, 0.0000001)
-   end
-
-   local params, gradParams = lstm:parameters()
-   local params2, gradParams2 = lstm2:parameters()
-
-   for i=1,#params do
-      mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00000001)
-   end
-
+   testHiddenState(nn.LSTM(inputsize, outputsize))
+   testHiddenState(nn.GRU(inputsize, outputsize))
 end
 
 function rnn.test(tests, benchmark_)

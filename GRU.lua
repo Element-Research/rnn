@@ -132,7 +132,7 @@ end
 function GRU:getHiddenState(step, input)
    local prevOutput
    if step == 0 then
-      prevOutput = self.userPrevOutput or self.zeroTensor
+      prevOutput = self.userPrevOutput or self.outputs[step] or self.zeroTensor
       if input then
          if input:dim() == 2 then
             self.zeroTensor:resize(input:size(1), self.outputSize):zero()
@@ -145,6 +145,12 @@ function GRU:getHiddenState(step, input)
       prevOutput = self.outputs[step]
    end
    return prevOutput
+end
+
+
+function GRU:setHiddenState(step, hiddenState)
+   assert(torch.isTensor(hiddenState))
+   self.outputs[step] = hiddenState
 end
 
 ------------------------- forward backward -----------------------------
@@ -174,29 +180,42 @@ function GRU:updateOutput(input)
    return self.output
 end
 
+
+function GRU:getGradHiddenState(step)
+   local gradOutput
+   if step == self.step-1 then
+      gradOutput = self.userNextGradOutput or self.gradOutputs[step] or self.zeroTensor
+   else
+      gradOutput = self.gradOutputs[step]
+   end
+   return gradOutput
+end
+
+function GRU:setGradHiddenState(step, gradHiddenState)
+   assert(torch.isTensor(gradHiddenState))
+   self.gradOutputs[step] = gradHiddenState
+end
+
 function GRU:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
    local step = self.updateGradInputStep - 1
    assert(step >= 1)
 
-   local gradInput
    -- set the output/gradOutput states of current Module
    local recurrentModule = self:getStepModule(step)
 
    -- backward propagate through this step
-   if self.gradPrevOutput then
-      self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
-      nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
-      gradOutput = self._gradOutputs[step]
-   end
+   local _gradOutput = self:getGradHiddenState(step)
+   assert(_gradOutput)
+   self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], _gradOutput)
+   nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
+   gradOutput = self._gradOutputs[step]
 
-   local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
-   local inputTable = {input, output}
-   local gradInputTable = recurrentModule:updateGradInput(inputTable, gradOutput)
-   gradInput, self.gradPrevOutput = unpack(gradInputTable)
-   if self.userPrevOutput then self.userGradPrevOutput = self.gradPrevOutput end
+   local gradInputTable = recurrentModule:updateGradInput({input, self:getHiddenState(step-1)}, gradOutput)
 
-   return gradInput
+   self:setGradHiddenState(step-1, gradInputTable[2])
+
+   return gradInputTable[1]
 end
 
 function GRU:_accGradParameters(input, gradOutput, scale)
@@ -207,11 +226,8 @@ function GRU:_accGradParameters(input, gradOutput, scale)
    local recurrentModule = self:getStepModule(step)
 
    -- backward propagate through this step
-   local output = (step == 1) and (self.userPrevOutput or self.zeroTensor) or self.outputs[step-1]
-   local inputTable = {input, output}
-   local gradOutput = (step == self.step-1) and gradOutput or self._gradOutputs[step]
-   recurrentModule:accGradParameters(inputTable, gradOutput, scale)
-   return gradInput
+   local gradOutput = self._gradOutputs[step] or self:getGradHiddenState(step)
+   recurrentModule:accGradParameters({input, self:getHiddenState(step-1)}, gradOutput, scale)
 end
 
 function GRU:__tostring__()
