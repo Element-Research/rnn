@@ -6,9 +6,8 @@ FastLSTM.usenngraph = false
 FastLSTM.bn = false
 
 function FastLSTM:__init(inputSize, outputSize, rho, eps, momentum, affine)
-   --  initialize batch norm variance with 0.1
-   self.eps = eps or 0.1
-   self.momentum = momentum or 0.1 --gamma
+   self.eps = eps
+   self.momentum = momentum
    self.affine = affine == nil and true or affine
 
    parent.__init(self, inputSize, outputSize, rho) 
@@ -108,12 +107,16 @@ function FastLSTM:nngraphModel()
       bn_wh = nn.BatchNormalization(4*self.outputSize, self.eps, self.momentum, self.affine)
       bn_c  = nn.BatchNormalization(self.outputSize, self.eps, self.momentum, self.affine)
       
+      -- initialize gamma (the weight) to the recommended value
+      bn_wx.weight:fill(0.1)
+      bn_wh.weight:fill(0.1)
+      bn_c.weight:fill(0.1)
+      
       -- evaluate the input sums at once for efficiency
       i2h = bn_wx(self.i2g(x):annotate{name='i2h'}):annotate {name='bn_wx'}
       h2h = bn_wh(self.o2g(prev_h):annotate{name='h2h'}):annotate {name = 'bn_wh'}
       
       -- add bias after BN as per paper
-      self.o2g:noBias()
       h2h = nn.Add(4*self.outputSize)(h2h)
    else
       -- evaluate the input sums at once for efficiency
