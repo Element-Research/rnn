@@ -10,6 +10,7 @@
 -- Note : you shouldn't stack these for language modeling. 
 -- Instead, stack each fwd/bwd seqs and encapsulate these.
 ------------------------------------------------------------------------
+local _ = require 'moses'
 local BiSequencerLM, parent = torch.class('nn.BiSequencerLM', 'nn.AbstractSequencer')
 
 function BiSequencerLM:__init(forward, backward, merge)

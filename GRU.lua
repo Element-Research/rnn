@@ -15,13 +15,13 @@
 ------------------------------------------------------------------------
 local GRU, parent = torch.class('nn.GRU', 'nn.AbstractRecurrent')
 
-function GRU:__init(inputSize, outputSize, rho, p)
+function GRU:__init(inputSize, outputSize, rho, p, mono)
    parent.__init(self, rho or 9999)
    self.p = p or 0
    if p and p ~= 0 then
       assert(nn.Dropout(p,false,false,true).lazy, 'only work with Lazy Dropout!')
    end
-   self.mono = p ~= 0
+   self.mono = mono or false
    self.inputSize = inputSize
    self.outputSize = outputSize   
    -- build the model

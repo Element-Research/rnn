@@ -8,7 +8,7 @@
 ------------------------------------------------------------------------
 local SequencerCriterion, parent = torch.class('nn.SequencerCriterion', 'nn.Criterion')
 
-function SequencerCriterion:__init(criterion)
+function SequencerCriterion:__init(criterion, sizeAverage)
    parent.__init(self)
    self.criterion = criterion
    if torch.isTypeOf(criterion, 'nn.ModuleCriterion') then
@@ -16,6 +16,11 @@ function SequencerCriterion:__init(criterion)
          "Instead, try the other way around : "..
          "ModuleCriterion decorates a SequencerCriterion. "..
          "Its modules can also be similarly decorated with a Sequencer.")
+   end
+   if sizeAverage ~= nil then
+      self.sizeAverage = sizeAverage
+   else
+      self.sizeAverage = false
    end
    self.clones = {}
    self.gradInput = {}
@@ -31,23 +36,63 @@ function SequencerCriterion:getStepCriterion(step)
    return criterion
 end
 
-function SequencerCriterion:updateOutput(inputTable, targetTable)
+function SequencerCriterion:updateOutput(input, target)
    self.output = 0
+   local nStep
+   if torch.isTensor(input) then
+      assert(torch.isTensor(target), "expecting target Tensor since input is a Tensor")
+      assert(target:size(1) == input:size(1), "target should have as many elements as input")
+      nStep = input:size(1)
+   else
+      assert(torch.type(target) == 'table', "expecting target table")
+      assert(#target == #input, "target should have as many elements as input")
+      nStep = #input
+   end
+
    
-   for i,input in ipairs(inputTable) do
+   for i=1,nStep do
       local criterion = self:getStepCriterion(i)
-      self.output = self.output + criterion:forward(input, targetTable[i])
+      self.output = self.output + criterion:forward(input[i], target[i])
    end
    
+   if self.sizeAverage then
+      self.output = self.output / nStep
+   end
+
    return self.output
 end
 
-function SequencerCriterion:updateGradInput(inputTable, targetTable)
+function SequencerCriterion:updateGradInput(input, target)
    self.gradInput = {}
+   local nStep
+   if torch.isTensor(input) then
+      assert(torch.isTensor(target), "expecting target Tensor since input is a Tensor")
+      assert(target:size(1) == input:size(1), "target should have as many elements as input")
+      nStep = input:size(1)
+   else
+      assert(torch.type(target) == 'table', "expecting gradOutput table")
+      assert(#target == #input, "target should have as many elements as input")
+      nStep = #input
+   end
    
-   for i,input in ipairs(inputTable) do
+   local tableGradInput = {}
+   for i=1,nStep do
       local criterion = self:getStepCriterion(i)
-      self.gradInput[i] = criterion:backward(input, targetTable[i])
+      tableGradInput[i] = criterion:backward(input[i], target[i])
+      
+      if self.sizeAverage then
+         tableGradInput[i]:div(nStep)
+      end
+   end
+   
+   if torch.isTensor(input) then
+      self.gradInput = tableGradInput[1].new()
+      self.gradInput:resize(nStep, unpack(tableGradInput[1]:size():totable()))
+      for step=1,nStep do
+         self.gradInput[step]:copy(tableGradInput[step])
+      end
+   else
+      self.gradInput = tableGradInput
    end
    
    return self.gradInput

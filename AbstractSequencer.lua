@@ -13,9 +13,3 @@ end
 function AbstractSequencer:maxBPTTstep(rho)
 end
 
-AbstractSequencer.includingSharedClones = nn.AbstractRecurrent.includingSharedClones
-AbstractSequencer.type = nn.AbstractRecurrent.type
-AbstractSequencer.training = nn.AbstractRecurrent.training
-AbstractSequencer.evaluate = nn.AbstractRecurrent.evaluate
-AbstractSequencer.reinforce = nn.AbstractRecurrent.reinforce
-
