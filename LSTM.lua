@@ -7,12 +7,22 @@
 -- D. https://github.com/wojzaremba/lstm
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
+
+-- For p > 0, it becomes Bayesian GRUs [Gal, 2015].
+-- In this case, please do not dropout on input as BGRUs handle the input with 
+-- its own dropouts. First, try 0.25 for p as Gal (2016) suggested, 
+-- presumably, because of summations of two parts in GRUs connections. 
 ------------------------------------------------------------------------
 assert(not nn.LSTM, "update nnx package : luarocks install nnx")
 local LSTM, parent = torch.class('nn.LSTM', 'nn.AbstractRecurrent')
 
-function LSTM:__init(inputSize, outputSize, rho, cell2gate)
+function LSTM:__init(inputSize, outputSize, rho, cell2gate, p, mono)
    parent.__init(self, rho or 9999)
+   self.p = p or 0
+   if p and p ~= 0 then
+      assert(nn.Dropout(p,false,false,true).lazy, 'only work with Lazy Dropout!')
+   end
+   self.mono = mono or false
    self.inputSize = inputSize
    self.outputSize = outputSize or inputSize
    -- build the model
@@ -36,8 +46,12 @@ function LSTM:buildGate()
    if not self.cell2gate then
       gate:add(nn.NarrowTable(1,2))
    end
-   local input2gate = nn.Linear(self.inputSize, self.outputSize)
-   local output2gate = nn.LinearNoBias(self.outputSize, self.outputSize)
+   local input2gate = nn.Sequential()
+         :add(nn.Dropout(self.p,false,false,true,self.mono))
+         :add(nn.Linear(self.inputSize, self.outputSize))
+   local output2gate = nn.Sequential()
+         :add(nn.Dropout(self.p,false,false,true,self.mono))
+         :add(nn.LinearNoBias(self.outputSize, self.outputSize))
    local para = nn.ParallelTable()
    para:add(input2gate):add(output2gate)
    if self.cell2gate then
@@ -63,8 +77,12 @@ function LSTM:buildHidden()
    local hidden = nn.Sequential()
    -- input is {input, output(t-1), cell(t-1)}, but we only need {input, output(t-1)}
    hidden:add(nn.NarrowTable(1,2))
-   local input2hidden = nn.Linear(self.inputSize, self.outputSize)
-   local output2hidden = nn.LinearNoBias(self.outputSize, self.outputSize)
+   local input2hidden = nn.Sequential()
+         :add(nn.Dropout(self.p,false,false,true,self.mono))
+         :add(nn.Linear(self.inputSize, self.outputSize))
+   local output2hidden = nn.Sequential()
+         :add(nn.Dropout(self.p,false,false,true,self.mono))
+         :add(nn.LinearNoBias(self.outputSize, self.outputSize))
    local para = nn.ParallelTable()
    para:add(input2hidden):add(output2hidden)
    hidden:add(para)
