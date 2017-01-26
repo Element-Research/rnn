@@ -2,16 +2,16 @@
 --[[ Recurrent ]]--
 -- Ref. A.: http://goo.gl/vtVGkO (Mikolov et al.)
 -- B. http://goo.gl/hu1Lqm
--- Processes the sequence one timestep (forward/backward) at a time. 
+-- Processes the sequence one timestep (forward/backward) at a time.
 -- A call to backward only keeps a log of the gradOutputs and scales.
 -- Back-Propagation Through Time (BPTT) is done when updateParameters
--- is called. The Module keeps a list of all previous representations 
+-- is called. The Module keeps a list of all previous representations
 -- (Module.outputs), including intermediate ones for BPTT.
--- To use this module with batches, we suggest using different 
--- sequences of the same size within a batch and calling 
--- updateParameters() at the end of the Sequence. 
+-- To use this module with batches, we suggest using different
+-- sequences of the same size within a batch and calling
+-- updateParameters() at the end of the Sequence.
 -- Note that this won't work with modules that use more than the
--- output attribute to keep track of their internal state between 
+-- output attribute to keep track of their internal state between
 -- forward and backward.
 ------------------------------------------------------------------------
 assert(not nn.Recurrent, "update nnx package : luarocks install nnx")
@@ -19,7 +19,7 @@ local Recurrent, parent = torch.class('nn.Recurrent', 'nn.AbstractRecurrent')
 
 function Recurrent:__init(start, input, feedback, transfer, rho, merge)
    parent.__init(self, rho)
-   
+
    local ts = torch.type(start)
    if ts == 'torch.LongStorage' or ts == 'number' then
       start = nn.Add(start)
@@ -28,18 +28,18 @@ function Recurrent:__init(start, input, feedback, transfer, rho, merge)
    elseif not torch.isTypeOf(start, 'nn.Module') then
       error"Recurrent : expecting arg 1 of type nn.Module, torch.LongStorage, number or table"
    end
-   
+
    self.startModule = start
    self.inputModule = input
    self.feedbackModule = feedback
    self.transferModule = transfer or nn.Sigmoid()
    self.mergeModule = merge or nn.CAddTable()
-   
+
    self.modules = {self.startModule, self.inputModule, self.feedbackModule, self.transferModule, self.mergeModule}
-   
+
    self:buildInitialModule()
    self:buildRecurrentModule()
-   self.sharedClones[2] = self.recurrentModule 
+   self.sharedClones[2] = self.recurrentModule
 end
 
 -- build module used for the first step (steps == 1)
@@ -78,7 +78,7 @@ function Recurrent:updateOutput(input)
          output = self.recurrentModule:updateOutput{input, self.outputs[self.step-1]}
       end
    end
-   
+
    self.outputs[self.step] = output
    self.output = output
    self.step = self.step + 1
@@ -91,34 +91,34 @@ end
 function Recurrent:_updateGradInput(input, gradOutput)
    assert(self.step > 1, "expecting at least one updateOutput")
    local step = self.updateGradInputStep - 1
-   
+
    local gradInput
-   
+
    if self.gradPrevOutput then
       self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
       nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
       gradOutput = self._gradOutputs[step]
    end
-   
+
    local output = self.outputs[step-1]
    if step > 1 then
       local recurrentModule = self:getStepModule(step)
       gradInput, self.gradPrevOutput = unpack(recurrentModule:updateGradInput({input, output}, gradOutput))
-   elseif step == 1 then      
+   elseif step == 1 then
       gradInput = self.initialModule:updateGradInput(input, gradOutput)
    else
       error"non-positive time-step"
    end
-   
+
    return gradInput
 end
 
 function Recurrent:_accGradParameters(input, gradOutput, scale)
    local step = self.accGradParametersStep - 1
-   
+
    local gradOutput = (step == self.step-1) and gradOutput or self._gradOutputs[step]
    local output = self.outputs[step-1]
-   
+
    if step > 1 then
       local recurrentModule = self:getStepModule(step)
       recurrentModule:accGradParameters({input, output}, gradOutput, scale)
@@ -152,7 +152,7 @@ function Recurrent:includingSharedClones(f)
    local r = f()
    self.modules = modules
    self.sharedClones = sharedClones
-   self.initialModule = initModule 
+   self.initialModule = initModule
    return r
 end
 
@@ -196,7 +196,7 @@ function Recurrent:__tostring__()
       str = str .. next .. '(' .. i .. ')'
    end
    str = str .. next .. 'output(t)]'
-   
+
    local tab = '  '
    local line = '\n  '
    local next = '  |`-> '

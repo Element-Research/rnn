@@ -1,4 +1,4 @@
-local Module = nn.Module 
+local Module = nn.Module
 
 -- You can use this to manually forget past memories in AbstractRecurrent instances
 function Module:forget()
@@ -44,6 +44,44 @@ function Module:maxBPTTstep(rho)
    if self.modules then
       for i, module in ipairs(self.modules) do
          module:maxBPTTstep(rho)
+      end
+   end
+end
+
+function Module:getHiddenState(step)
+   if self.modules then
+      local hiddenState = {}
+      for i, module in ipairs(self.modules) do
+         hiddenState[i] = module:getHiddenState(step)
+      end
+      return hiddenState
+   end
+end
+
+function Module:setHiddenState(step, hiddenState)
+   if self.modules then
+      assert(torch.type(hiddenState) == 'table')
+      for i, module in ipairs(self.modules) do
+         module:setHiddenState(step, hiddenState[i])
+      end
+   end
+end
+
+function Module:getGradHiddenState(step)
+   if self.modules then
+      local gradHiddenState = {}
+      for i, module in ipairs(self.modules) do
+         gradHiddenState[i] = module:getGradHiddenState(step)
+      end
+      return gradHiddenState
+   end
+end
+
+function Module:setGradHiddenState(step, gradHiddenState)
+   if self.modules then
+      assert(torch.type(gradHiddenState) == 'table')
+      for i, module in ipairs(self.modules) do
+         module:setGradHiddenState(step, gradHiddenState[i])
       end
    end
 end

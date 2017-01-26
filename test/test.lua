@@ -4878,14 +4878,13 @@ function rnntest.encoderdecoder()
 
    --[[ Forward coupling: Copy encoder cell and output to decoder LSTM ]]--
    local function forwardConnect(encLSTM, decLSTM)
-     decLSTM.userPrevOutput = nn.rnn.recursiveCopy(decLSTM.userPrevOutput, encLSTM.outputs[opt.inputSeqLen])
-     decLSTM.userPrevCell = nn.rnn.recursiveCopy(decLSTM.userPrevCell, encLSTM.cells[opt.inputSeqLen])
+      decLSTM.userPrevOutput = nn.rnn.recursiveCopy(decLSTM.userPrevOutput, encLSTM.outputs[opt.inputSeqLen])
+      decLSTM.userPrevCell = nn.rnn.recursiveCopy(decLSTM.userPrevCell, encLSTM.cells[opt.inputSeqLen])
    end
 
    --[[ Backward coupling: Copy decoder gradients to encoder LSTM ]]--
    local function backwardConnect(encLSTM, decLSTM)
-     encLSTM.userNextGradCell = nn.rnn.recursiveCopy(encLSTM.userNextGradCell, decLSTM.userGradPrevCell)
-     encLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encLSTM.gradPrevOutput, decLSTM.userGradPrevOutput)
+      encLSTM:setGradHiddenState(opt.inputSeqLen, decLSTM:getGradHiddenState(0))
    end
 
    -- Encoder
@@ -6678,6 +6677,99 @@ function rnntest.inplaceBackward()
    for i=1,#params do
       mytester:assertTensorEq(params[i], params2[i], 0.000001, "error in params "..i..": "..tostring(params[i]:size()))
    end
+end
+
+function rnntest.getHiddenState()
+   local seqlen, batchsize = 7, 3
+   local inputsize, outputsize = 4, 5
+   local input = torch.randn(seqlen*2, batchsize, inputsize)
+   local gradOutput = torch.randn(seqlen*2, batchsize, outputsize)
+
+   local function testHiddenState(lstm, recurrence)
+      local lstm2 = lstm:clone()
+
+      -- test forward
+      for step=1,seqlen do -- initialize lstm2 hidden state
+         lstm2:forward(input[step])
+      end
+
+      for step=1,seqlen do
+         local hiddenState = lstm2:getHiddenState(seqlen+step-1)
+         if torch.type(hiddenState) == 'table' then
+            mytester:assert(#hiddenState >= 1)
+         else
+            mytester:assert(torch.isTensor(hiddenState))
+         end
+         lstm:setHiddenState(step-1, hiddenState)
+         local output = lstm:forward(input[seqlen+step])
+         local output2 = lstm2:forward(input[seqlen+step])
+         mytester:assertTensorEq(output, output2, 0.0000001, "error in step "..step)
+      end
+
+      -- test backward
+      lstm:zeroGradParameters()
+      lstm2:zeroGradParameters()
+      lstm:forget()
+
+      for step=1,seqlen do
+         lstm:forward(input[step])
+         local hs = lstm:getHiddenState(step)
+         local hs2 = lstm2:getHiddenState(step)
+         if torch.type(hs) == 'table' then
+            if recurrence then
+               hs = hs[1][1]
+               hs2 = hs2[1][1]
+            end
+            for i=1,#hs do
+               mytester:assertTensorEq(hs[i], hs2[i], 0.0000001)
+            end
+         else
+            mytester:assertTensorEq(hs, hs2, 0.0000001)
+         end
+      end
+
+      for step=seqlen*2,seqlen+1,-1 do
+         lstm2:backward(input[step], gradOutput[step])
+      end
+
+      lstm2:zeroGradParameters()
+
+      for step=seqlen,1,-1 do
+         local gradHiddenState = lstm2:getGradHiddenState(step)
+         if torch.type(gradHiddenState) == 'table' then
+            mytester:assert(#gradHiddenState >= 1)
+         else
+            mytester:assert(torch.isTensor(gradHiddenState))
+         end
+         lstm:setGradHiddenState(step, gradHiddenState)
+         local gradInput = lstm:backward(input[step], gradOutput[step])
+         local gradInput2 = lstm2:backward(input[step], gradOutput[step])
+         mytester:assertTensorEq(gradInput, gradInput2, 0.0000001)
+      end
+
+      local params, gradParams = lstm:parameters()
+      local params2, gradParams2 = lstm2:parameters()
+
+      for i=1,#params do
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00000001)
+      end
+   end
+
+   local lstm = nn.LSTM(inputsize, outputsize)
+   testHiddenState(lstm)
+
+   local gru = nn.GRU(inputsize, outputsize)
+   testHiddenState(gru)
+
+   gru:forget()
+   testHiddenState(nn.Recursor(gru), false)
+
+   local rm = lstm.recurrentModule:clone()
+
+   rm:insert(nn.FlattenTable(), 1)
+   local recurrence = nn.Recurrence(rm, {{outputsize}, {outputsize}}, 1)
+   local lstm = nn.Sequential():add(recurrence):add(nn.SelectTable(1))
+   testHiddenState(lstm, true)
 end
 
 function rnn.test(tests, benchmark_)
