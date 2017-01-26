@@ -448,6 +448,20 @@ As Yarin Gal (Ref. F) mentioned, it is recommended that one may use `p = 0.25` f
 
 ![GRU-BENCHMARK](doc/image/bgru-benchmark.png)
 
+### SAdd
+
+To implement `GRU`, a simple module is added, which cannot be possible to build only using `nn` modules.
+
+```lua
+module = nn.SAdd(addend, negate)
+```
+Applies a single scalar addition to the incoming data, i.e. y_i = x_i + b, then negate all components if `negate` is true. Which is used to implement `s[t] = (1-z[t])h[t] + z[t]s[t-1]` of `GRU` (see above Equation (4)).
+
+```lua
+nn.SAdd(-1, true)
+```
+Here, if the incoming data is `z[t]`, then the output becomes `-(z[t]-1)=1-z[t]`. Notice that `nn.Mul()` multiplies a scalar which is a learnable parameter.
+
 <a name='rnn.Recursor'></a>
 ## Recursor ##
 
