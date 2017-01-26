@@ -34,7 +34,7 @@ end
 -- This zero Tensor is forwarded as output(t=0).
 function Recurrence:recursiveResizeZero(tensor, size, batchSize)
    local isTable = torch.type(size) == 'table'
-   if isTable and torch.type(size[1]) == 'table' then
+   if isTable and torch.type(size[1]) ~= 'number' then
       tensor = (torch.type(tensor) == 'table') and tensor or {}
       for k,v in ipairs(size) do
          tensor[k] = self:recursiveResizeZero(tensor[k], v, batchSize)

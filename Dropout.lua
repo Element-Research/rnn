@@ -44,7 +44,7 @@ function Dropout:updateOutput(input)
             self.flag = false
          end
          if self.mono and self.noise:size(1) ~= input:size(1) then
-            self.noise = self.noise:expandAs(input)
+            self.noise = self.noise:narrow(1,1,1):expandAs(input)
          end
          self.output:cmul(self.noise)
       elseif not self.v2 then
