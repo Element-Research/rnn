@@ -1,4 +1,4 @@
-ExpandAs, parent = torch.class('nn.ExpandAs', 'nn.Module')
+local ExpandAs, parent = torch.class('nn.ExpandAs', 'nn.Module')
 -- expands the second input to match the first
 
 function ExpandAs:__init()
