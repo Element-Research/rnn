@@ -4,7 +4,7 @@
 -- License: LICENSE.2nd.txt
 
 -- Gated Recurrent Units architecture.
--- http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-gruGRU-rnn-with-python-and-theano/
+-- http://www.wildml.com/2015/10/recurrent-neural-network-tutorial-part-4-implementing-a-grulstm-rnn-with-python-and-theano/
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for cell and hidden state
 --
