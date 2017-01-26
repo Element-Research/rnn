@@ -81,7 +81,16 @@ function SequencerCriterion:updateGradInput(input, target)
       tableGradInput[i] = criterion:backward(input[i], target[i])
       
       if self.sizeAverage then
-         tableGradInput[i]:div(nStep)
+         local function table_div(output, scalar)
+            if torch.type(output) == 'table' then
+               for j=1,#output do
+                  table_div(output[j], scalar)
+               end
+            else
+               output:div(scalar)
+            end
+         end
+         table_div(tableGradInput[i], nStep)
       end
    end
    
