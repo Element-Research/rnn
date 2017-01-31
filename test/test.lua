@@ -6531,6 +6531,60 @@ function rnntest.FastLSTM_batchNorm()
    nn.FastLSTM.bn = false
 end
 
+function checkgrad(opfunc, x, eps)
+    -- compute true gradient:
+    local _,dC = opfunc(x)
+    dC:resize(x:size())
+    dC = dC:clone()
+
+    -- compute numeric approximations to gradient:
+    local eps = eps or 1e-7
+    local dC_est = torch.DoubleTensor(dC:size())
+    for i = 1,dC:size(1) do
+      x[i] = x[i] + eps
+      local C1 = opfunc(x)
+      x[i] = x[i] - 2 * eps
+      local C2 = opfunc(x)
+      x[i] = x[i] + eps
+      dC_est[i] = (C1 - C2) / (2 * eps)
+    end
+
+    -- estimate error of gradient:
+    local diff = torch.norm(dC - dC_est) / torch.norm(dC + dC_est)
+    return diff,dC,dC_est
+end
+
+function rnntest.MufuruGradients()
+   local batchSize = torch.random(1,2)
+   local inputSize = torch.random(1,3)
+   local outputSize = torch.random(1,4)
+   local seqlen = torch.random(1,5)
+
+   local rnn = nn.MuFuRu(inputSize, outputSize)
+   local module = nn.Sequencer(rnn)
+   local w,dw = module:getParameters()
+   local crit = nn.CrossEntropyCriterion()
+
+   local input = torch.randn(seqlen, batchSize, inputSize)
+   local target = torch.LongTensor(seqlen, batchSize)
+   for i=1,seqlen do
+      for j=1,batchSize do
+          target[i][j] = torch.random(1, outputSize)
+      end
+   end
+   local function feval(x)
+      if w ~= x then w:copy(x) end
+      module:zeroGradParameters()
+      local out = module:forward(input)
+      local err = crit:forward(out, target)
+      local gradOutput = crit:backward(out, target)
+      module:backward(input, gradOutput)
+      return err, dw
+   end
+   local err = checkgrad(feval, w:clone())
+   mytester:assertlt(err, precision, "error in computing grad parameters")
+end
+
 function rnntest.inplaceBackward()
    -- not implemented (work was started, but never finished, sorry)
    if true then return end
