@@ -10,6 +10,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
   * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM) with optional support for batch normalization;
  * [GRU](#rnn.GRU) : Gated Recurrent Units module;
+ * [MuFuRu](#rnn.MuFuRu) : [Multi-function Recurrent Unit](https://arxiv.org/abs/1606.03002) module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
  * [Recurrence](#rnn.Recurrence) : decorates a module that outputs `output(t)` given `{input(t), output(t-1)}`;
  * [NormStabilizer](#rnn.NormStabilizer) : implements [norm-stabilization](http://arxiv.org/abs/1511.08400) criterion (add this module between RNNs);
@@ -461,6 +462,53 @@ Applies a single scalar addition to the incoming data, i.e. y_i = x_i + b, then 
 nn.SAdd(-1, true)
 ```
 Here, if the incoming data is `z[t]`, then the output becomes `-(z[t]-1)=1-z[t]`. Notice that `nn.Mul()` multiplies a scalar which is a learnable parameter.
+
+<a name='rnn.MuFuRu'></a>
+## MuFuRu ##
+
+References :
+ * A. [MuFuRU: The Multi-Function Recurrent Unit.](https://arxiv.org/abs/1606.03002)
+ * B. [Tensorflow Implementation of the Multi-Function Recurrent Unit](https://github.com/dirkweissenborn/mufuru)
+
+This is an implementation of the Multi-Function Recurrent Unit module. 
+
+The `nn.MuFuRu(inputSize, outputSize [,ops [,rho]])` constructor takes 2 required arguments, plus optional arguments:
+ * `inputSize` : a number specifying the dimension of the input;
+ * `outputSize` : a number specifying the dimension of the output;
+ * `ops`: a table of strings, representing which composition operations should be used. The table can be any subset of `{'keep', 'replace', 'mul', 'diff', 'forget', 'sqrt_diff', 'max', 'min'}`. By default, all composition operations are enabled.
+ * `rho` : the maximum amount of backpropagation steps to take back in time. Limits the number of previous steps kept in memory. Defaults to 9999;
+
+The Multi-Function Recurrent Unit generalizes the GRU by allowing weightings of arbitrary composition operators to be learned. As in the GRU, the reset gate is computed based on the current input and previous hidden state, and used to compute a new feature vector:
+
+```lua
+r[t] = σ(W[x->r]x[t] + W[s->r]s[t−1] + b[1->r])            (1)
+v[t] = tanh(W[x->v]x[t] + W[sr->v](s[t−1]r[t]) + b[1->v])  (2)
+```
+
+where `W[a->b]` denotes the weight matrix from activation `a` to `b`, `t` denotes the time step, `b[1->a]` is the bias for activation `a`, and `s[t-1]r[t]` is the element-wise multiplication of the two vectors.
+
+Unlike in the GRU, rather than computing a single update gate (`z[t]` in [GRU](#rnn.GRU)), MuFuRU computes a weighting over an arbitrary number of composition operators.
+
+A composition operator is any differentiable operator which takes two vectors of the same size, the previous hidden state, and a new feature vector, and returns a new vector representing the new hidden state. The GRU implicitly defines two such operations, `keep` and `replace`, defined as `keep(s[t-1], v[t]) = s[t-1]` and `replace(s[t-1], v[t]) = v[t]`.
+
+[Ref. A](https://arxiv.org/abs/1606.03002) proposes 6 additional operators, which all operate element-wise:
+
+* `mul(x,y) = x * y`
+* `diff(x,y) = x - y`
+* `forget(x,y) = 0`
+* `sqrt_diff(x,y) = 0.25 * sqrt(|x - y|)`
+* `max(x,y)`
+* `min(x,y)`
+
+The weightings of each operation are computed via a softmax from the current input and previous hidden state, similar to the update gate in the GRU. The produced hidden state is then the element-wise weighted sum of the output of each operation.
+```lua
+
+p^[t][j] = W[x->pj]x[t] + W[s->pj]s[t−1] + b[1->pj])         (3)
+(p[t][1], ... p[t][J])  = softmax (p^[t][1], ..., p^[t][J])  (4)
+s[t] = sum(p[t][j] * op[j](s[t-1], v[t]))                    (5)
+```
+
+where `p[t][j]` is the weightings for operation `j` at time step `t`, and `sum` in equation 5 is over all operators `J`.
 
 <a name='rnn.Recursor'></a>
 ## Recursor ##
