@@ -2715,6 +2715,7 @@ function rnntest.RepeaterCriterion()
 end
 
 function rnntest.RecurrentAttention()
+   if not pcall(function() require 'nnx' end) then return end
    -- so basically, I know that this works because I used it to
    -- reproduce a paper's results. So all future RecurrentAttention
    -- versions should match the behavior of this RATest class.
