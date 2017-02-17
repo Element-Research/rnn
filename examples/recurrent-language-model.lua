@@ -32,7 +32,7 @@ cmd:option('--earlystop', 50, 'maximum number of epochs to wait to find a better
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
--- rnn layer 
+-- rnn layer
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
 cmd:option('--bn', false, 'use batch normalization. Only supported with --lstm')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
@@ -44,7 +44,7 @@ cmd:option('--dropout', 0, 'apply dropout with this probability after each rnn l
 -- data
 cmd:option('--batchsize', 32, 'number of examples per batch')
 cmd:option('--trainsize', -1, 'number of train examples seen between each epoch')
-cmd:option('--validsize', -1, 'number of valid examples used for early stopping and cross-validation') 
+cmd:option('--validsize', -1, 'number of valid examples used for early stopping and cross-validation')
 cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'rnnlm'), 'path to directory where experiment log (includes model) will be saved')
 cmd:option('--id', '', 'id string of this experiment (used to name output file) (defaults to a unique id)')
 
@@ -67,8 +67,8 @@ end
 --[[ data set ]]--
 
 local trainset, validset, testset = dl.loadPTB({opt.batchsize,1,1})
-if not opt.silent then 
-   print("Vocabulary size : "..#trainset.ivocab) 
+if not opt.silent then
+   print("Vocabulary size : "..#trainset.ivocab)
    print("Train set split into "..opt.batchsize.." sequences of length "..trainset:size())
 end
 
@@ -78,7 +78,7 @@ local lm = nn.Sequential()
 
 -- input layer (i.e. word embedding space)
 local lookup = nn.LookupTable(#trainset.ivocab, opt.inputsize)
-lookup.maxNorm = -1 -- prevent weird maxnormout behaviour
+lookup.maxOutNorm = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
 if opt.dropout > 0 and not opt.gru then  -- gru has a dropout option
    lm:add(nn.Dropout(opt.dropout))
@@ -88,9 +88,9 @@ lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 -- rnn layers
 local stepmodule = nn.Sequential() -- applied at each time-step
 local inputsize = opt.inputsize
-for i,hiddensize in ipairs(opt.hiddensize) do 
+for i,hiddensize in ipairs(opt.hiddensize) do
    local rnn
-   
+
    if opt.gru then -- Gated Recurrent Units
       rnn = nn.GRU(inputsize, hiddensize, nil, opt.dropout/2)
    elseif opt.lstm then -- Long Short Term Memory units
@@ -111,11 +111,11 @@ for i,hiddensize in ipairs(opt.hiddensize) do
    end
 
    stepmodule:add(rnn)
-   
+
    if opt.dropout > 0 then
       stepmodule:add(nn.Dropout(opt.dropout))
    end
-   
+
    inputsize = hiddensize
 end
 
@@ -151,7 +151,7 @@ if opt.cuda then
       :add(nn.Convert())
       :add(targetmodule)
 end
- 
+
 local criterion = nn.SequencerCriterion(crit)
 
 --[[ CUDA ]]--
@@ -253,7 +253,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       end
 
    end
-   
+
    -- learning rate decay
    if opt.schedule then
       opt.lr = opt.schedule[epoch] or opt.lr
@@ -261,7 +261,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       opt.lr = opt.lr + (opt.minlr - opt.startlr)/opt.saturate
    end
    opt.lr = math.max(opt.minlr, opt.lr)
-   
+
    if not opt.silent then
       print("learning rate", opt.lr)
       if opt.meanNorm then
@@ -300,7 +300,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    if ppl < xplog.minvalppl then
       -- save best version of model
       xplog.minvalppl = ppl
-      xplog.epoch = epoch 
+      xplog.epoch = epoch
       local filename = paths.concat(opt.savepath, opt.id..'.t7')
       print("Found new minima. Saving to "..filename)
       torch.save(filename, xplog)
