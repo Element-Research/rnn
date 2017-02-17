@@ -78,7 +78,7 @@ local lm = nn.Sequential()
 
 -- input layer (i.e. word embedding space)
 local lookup = nn.LookupTable(#trainset.ivocab, opt.inputsize)
-lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+lookup.maxNorm = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
 if opt.dropout > 0 and not opt.gru then  -- gru has a dropout option
    lm:add(nn.Dropout(opt.dropout))
