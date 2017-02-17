@@ -1,5 +1,6 @@
 require 'paths'
 require 'rnn'
+require 'optim'
 local dl = require 'dataload'
 
 version = 2
@@ -19,6 +20,8 @@ cmd:option('--minlr', 0.00001, 'minimum learning rate')
 cmd:option('--saturate', 400, 'epoch at which linear decayed LR will reach minlr')
 cmd:option('--schedule', '', 'learning rate schedule. e.g. {[5] = 0.004, [6] = 0.001}')
 cmd:option('--momentum', 0.9, 'momentum')
+cmd:option('--adam', false, 'use ADAM instead of SGD as optimizer')
+cmd:option('--adamconfig', '{0, 0.999}', 'ADAM hyperparameters beta1 and beta2')
 cmd:option('--maxnormout', -1, 'max l2-norm of each layer\'s output neuron weights')
 cmd:option('--cutoff', -1, 'max l2-norm of concatenation of all gradParam tensors')
 cmd:option('--batchSize', 32, 'number of examples per batch')
@@ -33,6 +36,7 @@ cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution b
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
 cmd:option('--bn', false, 'use batch normalization. Only supported with --lstm')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
+cmd:option('--mfru', false, 'use Multi-function Recurrent Unit (nn.MuFuRu instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
 cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
@@ -48,6 +52,7 @@ cmd:text()
 local opt = cmd:parse(arg or {})
 opt.hiddensize = loadstring(" return "..opt.hiddensize)()
 opt.schedule = loadstring(" return "..opt.schedule)()
+opt.adamconfig = loadstring(" return "..opt.adamconfig)()
 opt.inputsize = opt.inputsize == -1 and opt.hiddensize[1] or opt.inputsize
 if not opt.silent then
    table.print(opt)
@@ -93,6 +98,8 @@ for i,hiddensize in ipairs(opt.hiddensize) do
       nn.FastLSTM.usenngraph = true -- faster
       nn.FastLSTM.bn = opt.bn
       rnn = nn.FastLSTM(inputsize, hiddensize)
+   elseif opt.mfru then -- Multi Function Recurrent Unit
+      rnn = nn.MuFuRu(inputsize, hiddensize)
    else -- simple recurrent neural network
       local rm =  nn.Sequential() -- input is {x[t], h[t-1]}
          :add(nn.ParallelTable()
@@ -120,7 +127,7 @@ stepmodule:add(nn.LogSoftMax())
 lm:add(nn.Sequencer(stepmodule))
 
 -- remember previous state between batches
-lm:remember((opt.lstm or opt.gru) and 'both' or 'eval')
+lm:remember((opt.lstm or opt.gru or opt.mfru) and 'both' or 'eval')
 
 if not opt.silent then
    print"Language Model:"
@@ -173,6 +180,14 @@ xplog.valppl = {}
 -- will be used for early-stopping
 xplog.minvalppl = 99999999
 xplog.epoch = 0
+
+local params, grad_params = lm:getParameters()
+
+local adamconfig = {
+   beta1 = opt.adamconfig[1],
+   beta2 = opt.adamconfig[2],
+}
+
 local ntrial = 0
 paths.mkdir(opt.savepath)
 
@@ -185,31 +200,49 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    print("Epoch #"..epoch.." :")
 
    -- 1. training
-   
+   sgdconfig = {
+      learningRate = opt.lr,
+      momentum = opt.momentum
+   }
+
    local a = torch.Timer()
    lm:training()
    local sumErr = 0
+   -- local sumErr = 0
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
-      targets = targetmodule:forward(targets)
-      
-      -- forward
-      local outputs = lm:forward(inputs)
-      local err = criterion:forward(outputs, targets)
-      sumErr = sumErr + err
-      
-      -- backward 
-      local gradOutputs = criterion:backward(outputs, targets)
-      lm:zeroGradParameters()
-      lm:backward(inputs, gradOutputs)
-      
-      -- update
-      if opt.cutoff > 0 then
-         local norm = lm:gradParamClip(opt.cutoff) -- affects gradParams
-         opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
+      local curTargets = targetmodule:forward(targets)
+      local curInputs = inputs
+
+      local function feval(x)
+         if x ~= params then
+            params:copy(x)
+         end
+         grad_params:zero()
+
+         -- forward
+         local outputs = lm:forward(curInputs)
+         local err = criterion:forward(outputs, curTargets)
+         sumErr = sumErr + err
+
+         -- backward
+         local gradOutputs = criterion:backward(outputs, curTargets)
+         lm:zeroGradParameters()
+         lm:backward(curInputs, gradOutputs)
+
+         -- gradient clipping
+         if opt.cutoff > 0 then
+            local norm = lm:gradParamClip(opt.cutoff) -- affects gradParams
+            opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
+         end
+
+         return err, grad_params
       end
-      lm:updateGradParameters(opt.momentum) -- affects gradParams
-      lm:updateParameters(opt.lr) -- affects params
-      lm:maxParamNorm(opt.maxnormout) -- affects params
+
+      if opt.adam then
+         local _, loss = optim.adam(feval, params, adamconfig)
+      else
+         local _, loss = optim.sgd(feval, params, sgdconfig)
+      end
 
       if opt.progress then
          xlua.progress(math.min(i + opt.seqlen, opt.trainsize), opt.trainsize)
