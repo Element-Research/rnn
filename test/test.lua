@@ -6827,10 +6827,26 @@ function rnntest.getHiddenState()
    testHiddenState(lstm, true)
 end
 
-function rnn.test(tests, benchmark_)
+function rnn.test(tests, benchmark_, exclude)
    mytester = torch.Tester()
-   benchmark = benchmark_
    mytester:add(rnntest)
    math.randomseed(os.time())
+   if exclude then
+      local excludes = {}
+      assert(tests)
+      tests = torch.type(tests) == 'table' and tests or {tests}
+      for i,test in ipairs(tests) do
+         assert(torch.type(test) == 'string')
+         excludes[test] = true
+      end
+      tests = {}
+      for testname, testfunc in pairs(rnntest.__tests) do
+         if not excludes[testname] then
+            table.insert(tests, testname)
+         else
+            print("excluding test: "..testname)
+         end
+      end
+   end
    mytester:run(tests)
 end
