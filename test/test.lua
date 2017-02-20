@@ -4188,7 +4188,7 @@ local function firstElement(a)
    return torch.type(a) == 'table' and a[1] or a
 end
 
-function rnntest.MaskZero()
+function rnntest.MaskZero_main()
    local recurrents = {['recurrent'] = recurrentModule(), ['lstm'] = lstmModule()}
    -- Note we use lstmModule input signature and firstElement to prevent duplicate code
    for name, recurrent in pairs(recurrents) do
@@ -4290,7 +4290,7 @@ function rnntest.MaskZero()
    end
 end
 
-function rnntest.TrimZero()
+function rnntest.TrimZero_main()
    local recurrents = {['recurrent'] = recurrentModule(), ['lstm'] = lstmModule()}
    -- Note we use lstmModule input signature and firstElement to prevent duplicate code
    for name, recurrent in pairs(recurrents) do
