@@ -640,6 +640,17 @@ function rnntest.Recurrent_old()
    mytester:assert(err < 0.0001, "Recurrent optim.checkgrad error")
 end
 
+function rnntest.RecurrentErrorOnExtraBackward()
+    local model = nn.Recurrent(
+        nn.Identity(), nn.Identity(), nil, nil, 1 --[[rho]])
+    local input = torch.rand(1)
+    model:training()
+    for i = 1, 3 do model:forward(input) end
+    for j = 1, 2 do model:backward(input, input) end
+    mytester:assertErrorPattern(function() model:backward(input, input) end,
+                                'Called backward more than rho%+1=2 times')
+end
+
 function rnntest.Recurrent()
    local batchSize = 4
    local dictSize = 100
