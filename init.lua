@@ -6,6 +6,7 @@ assert(dpnn.version > 1, "Please update dpnn : luarocks install dpnn")
 -- create global rnn table:
 rnn = {}
 rnn.version = 2
+rnn.version = 2.1 -- [get,set][Grad]HiddenState(step)
 
 unpack = unpack or table.unpack
 
@@ -36,6 +37,7 @@ torch.include('rnn', 'Recurrent.lua')
 torch.include('rnn', 'LSTM.lua')
 torch.include('rnn', 'FastLSTM.lua')
 torch.include('rnn', 'GRU.lua')
+torch.include('rnn', 'Mufuru.lua')
 torch.include('rnn', 'Recursor.lua')
 torch.include('rnn', 'Recurrence.lua')
 torch.include('rnn', 'NormStabilizer.lua')

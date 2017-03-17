@@ -1,5 +1,6 @@
 require 'paths'
 require 'rnn'
+require 'optim'
 local dl = require 'dataload'
 
 version = 2
@@ -19,6 +20,8 @@ cmd:option('--minlr', 0.00001, 'minimum learning rate')
 cmd:option('--saturate', 400, 'epoch at which linear decayed LR will reach minlr')
 cmd:option('--schedule', '', 'learning rate schedule. e.g. {[5] = 0.004, [6] = 0.001}')
 cmd:option('--momentum', 0.9, 'momentum')
+cmd:option('--adam', false, 'use ADAM instead of SGD as optimizer')
+cmd:option('--adamconfig', '{0, 0.999}', 'ADAM hyperparameters beta1 and beta2')
 cmd:option('--maxnormout', -1, 'max l2-norm of each layer\'s output neuron weights')
 cmd:option('--cutoff', -1, 'max l2-norm of concatenation of all gradParam tensors')
 cmd:option('--batchSize', 32, 'number of examples per batch')
@@ -29,10 +32,11 @@ cmd:option('--earlystop', 50, 'maximum number of epochs to wait to find a better
 cmd:option('--progress', false, 'print progress bar')
 cmd:option('--silent', false, 'don\'t print anything to stdout')
 cmd:option('--uniform', 0.1, 'initialize parameters using uniform distribution between -uniform and uniform. -1 means default initialization')
--- rnn layer 
+-- rnn layer
 cmd:option('--lstm', false, 'use Long Short Term Memory (nn.LSTM instead of nn.Recurrent)')
 cmd:option('--bn', false, 'use batch normalization. Only supported with --lstm')
 cmd:option('--gru', false, 'use Gated Recurrent Units (nn.GRU instead of nn.Recurrent)')
+cmd:option('--mfru', false, 'use Multi-function Recurrent Unit (nn.MuFuRu instead of nn.Recurrent)')
 cmd:option('--seqlen', 5, 'sequence length : back-propagate through time (BPTT) for this many time-steps')
 cmd:option('--inputsize', -1, 'size of lookup table embeddings. -1 defaults to hiddensize[1]')
 cmd:option('--hiddensize', '{200}', 'number of hidden units used at output of each recurrent layer. When more than one is specified, RNN/LSTMs/GRUs are stacked')
@@ -40,7 +44,7 @@ cmd:option('--dropout', 0, 'apply dropout with this probability after each rnn l
 -- data
 cmd:option('--batchsize', 32, 'number of examples per batch')
 cmd:option('--trainsize', -1, 'number of train examples seen between each epoch')
-cmd:option('--validsize', -1, 'number of valid examples used for early stopping and cross-validation') 
+cmd:option('--validsize', -1, 'number of valid examples used for early stopping and cross-validation')
 cmd:option('--savepath', paths.concat(dl.SAVE_PATH, 'rnnlm'), 'path to directory where experiment log (includes model) will be saved')
 cmd:option('--id', '', 'id string of this experiment (used to name output file) (defaults to a unique id)')
 
@@ -48,6 +52,7 @@ cmd:text()
 local opt = cmd:parse(arg or {})
 opt.hiddensize = loadstring(" return "..opt.hiddensize)()
 opt.schedule = loadstring(" return "..opt.schedule)()
+opt.adamconfig = loadstring(" return "..opt.adamconfig)()
 opt.inputsize = opt.inputsize == -1 and opt.hiddensize[1] or opt.inputsize
 if not opt.silent then
    table.print(opt)
@@ -62,8 +67,8 @@ end
 --[[ data set ]]--
 
 local trainset, validset, testset = dl.loadPTB({opt.batchsize,1,1})
-if not opt.silent then 
-   print("Vocabulary size : "..#trainset.ivocab) 
+if not opt.silent then
+   print("Vocabulary size : "..#trainset.ivocab)
    print("Train set split into "..opt.batchsize.." sequences of length "..trainset:size())
 end
 
@@ -73,7 +78,7 @@ local lm = nn.Sequential()
 
 -- input layer (i.e. word embedding space)
 local lookup = nn.LookupTable(#trainset.ivocab, opt.inputsize)
-lookup.maxnormout = -1 -- prevent weird maxnormout behaviour
+lookup.maxOutNorm = -1 -- prevent weird maxnormout behaviour
 lm:add(lookup) -- input is seqlen x batchsize
 if opt.dropout > 0 and not opt.gru then  -- gru has a dropout option
    lm:add(nn.Dropout(opt.dropout))
@@ -83,9 +88,9 @@ lm:add(nn.SplitTable(1)) -- tensor to table of tensors
 -- rnn layers
 local stepmodule = nn.Sequential() -- applied at each time-step
 local inputsize = opt.inputsize
-for i,hiddensize in ipairs(opt.hiddensize) do 
+for i,hiddensize in ipairs(opt.hiddensize) do
    local rnn
-   
+
    if opt.gru then -- Gated Recurrent Units
       rnn = nn.GRU(inputsize, hiddensize, nil, opt.dropout/2)
    elseif opt.lstm then -- Long Short Term Memory units
@@ -93,6 +98,8 @@ for i,hiddensize in ipairs(opt.hiddensize) do
       nn.FastLSTM.usenngraph = true -- faster
       nn.FastLSTM.bn = opt.bn
       rnn = nn.FastLSTM(inputsize, hiddensize)
+   elseif opt.mfru then -- Multi Function Recurrent Unit
+      rnn = nn.MuFuRu(inputsize, hiddensize)
    else -- simple recurrent neural network
       local rm =  nn.Sequential() -- input is {x[t], h[t-1]}
          :add(nn.ParallelTable()
@@ -104,11 +111,11 @@ for i,hiddensize in ipairs(opt.hiddensize) do
    end
 
    stepmodule:add(rnn)
-   
+
    if opt.dropout > 0 then
       stepmodule:add(nn.Dropout(opt.dropout))
    end
-   
+
    inputsize = hiddensize
 end
 
@@ -120,7 +127,7 @@ stepmodule:add(nn.LogSoftMax())
 lm:add(nn.Sequencer(stepmodule))
 
 -- remember previous state between batches
-lm:remember((opt.lstm or opt.gru) and 'both' or 'eval')
+lm:remember((opt.lstm or opt.gru or opt.mfru) and 'both' or 'eval')
 
 if not opt.silent then
    print"Language Model:"
@@ -144,7 +151,7 @@ if opt.cuda then
       :add(nn.Convert())
       :add(targetmodule)
 end
- 
+
 local criterion = nn.SequencerCriterion(crit)
 
 --[[ CUDA ]]--
@@ -173,6 +180,14 @@ xplog.valppl = {}
 -- will be used for early-stopping
 xplog.minvalppl = 99999999
 xplog.epoch = 0
+
+local params, grad_params = lm:getParameters()
+
+local adamconfig = {
+   beta1 = opt.adamconfig[1],
+   beta2 = opt.adamconfig[2],
+}
+
 local ntrial = 0
 paths.mkdir(opt.savepath)
 
@@ -185,31 +200,49 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    print("Epoch #"..epoch.." :")
 
    -- 1. training
-   
+   sgdconfig = {
+      learningRate = opt.lr,
+      momentum = opt.momentum
+   }
+
    local a = torch.Timer()
    lm:training()
    local sumErr = 0
+   -- local sumErr = 0
    for i, inputs, targets in trainset:subiter(opt.seqlen, opt.trainsize) do
-      targets = targetmodule:forward(targets)
-      
-      -- forward
-      local outputs = lm:forward(inputs)
-      local err = criterion:forward(outputs, targets)
-      sumErr = sumErr + err
-      
-      -- backward 
-      local gradOutputs = criterion:backward(outputs, targets)
-      lm:zeroGradParameters()
-      lm:backward(inputs, gradOutputs)
-      
-      -- update
-      if opt.cutoff > 0 then
-         local norm = lm:gradParamClip(opt.cutoff) -- affects gradParams
-         opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
+      local curTargets = targetmodule:forward(targets)
+      local curInputs = inputs
+
+      local function feval(x)
+         if x ~= params then
+            params:copy(x)
+         end
+         grad_params:zero()
+
+         -- forward
+         local outputs = lm:forward(curInputs)
+         local err = criterion:forward(outputs, curTargets)
+         sumErr = sumErr + err
+
+         -- backward
+         local gradOutputs = criterion:backward(outputs, curTargets)
+         lm:zeroGradParameters()
+         lm:backward(curInputs, gradOutputs)
+
+         -- gradient clipping
+         if opt.cutoff > 0 then
+            local norm = lm:gradParamClip(opt.cutoff) -- affects gradParams
+            opt.meanNorm = opt.meanNorm and (opt.meanNorm*0.9 + norm*0.1) or norm
+         end
+
+         return err, grad_params
       end
-      lm:updateGradParameters(opt.momentum) -- affects gradParams
-      lm:updateParameters(opt.lr) -- affects params
-      lm:maxParamNorm(opt.maxnormout) -- affects params
+
+      if opt.adam then
+         local _, loss = optim.adam(feval, params, adamconfig)
+      else
+         local _, loss = optim.sgd(feval, params, sgdconfig)
+      end
 
       if opt.progress then
          xlua.progress(math.min(i + opt.seqlen, opt.trainsize), opt.trainsize)
@@ -220,7 +253,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       end
 
    end
-   
+
    -- learning rate decay
    if opt.schedule then
       opt.lr = opt.schedule[epoch] or opt.lr
@@ -228,7 +261,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
       opt.lr = opt.lr + (opt.minlr - opt.startlr)/opt.saturate
    end
    opt.lr = math.max(opt.minlr, opt.lr)
-   
+
    if not opt.silent then
       print("learning rate", opt.lr)
       if opt.meanNorm then
@@ -267,7 +300,7 @@ while opt.maxepoch <= 0 or epoch <= opt.maxepoch do
    if ppl < xplog.minvalppl then
       -- save best version of model
       xplog.minvalppl = ppl
-      xplog.epoch = epoch 
+      xplog.epoch = epoch
       local filename = paths.concat(opt.savepath, opt.id..'.t7')
       print("Found new minima. Saving to "..filename)
       torch.save(filename, xplog)

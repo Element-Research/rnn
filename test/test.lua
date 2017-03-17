@@ -2715,6 +2715,7 @@ function rnntest.RepeaterCriterion()
 end
 
 function rnntest.RecurrentAttention()
+   if not pcall(function() require 'nnx' end) then return end
    -- so basically, I know that this works because I used it to
    -- reproduce a paper's results. So all future RecurrentAttention
    -- versions should match the behavior of this RATest class.
@@ -4187,7 +4188,7 @@ local function firstElement(a)
    return torch.type(a) == 'table' and a[1] or a
 end
 
-function rnntest.MaskZero()
+function rnntest.MaskZero_main()
    local recurrents = {['recurrent'] = recurrentModule(), ['lstm'] = lstmModule()}
    -- Note we use lstmModule input signature and firstElement to prevent duplicate code
    for name, recurrent in pairs(recurrents) do
@@ -4289,7 +4290,7 @@ function rnntest.MaskZero()
    end
 end
 
-function rnntest.TrimZero()
+function rnntest.TrimZero_main()
    local recurrents = {['recurrent'] = recurrentModule(), ['lstm'] = lstmModule()}
    -- Note we use lstmModule input signature and firstElement to prevent duplicate code
    for name, recurrent in pairs(recurrents) do
@@ -4878,14 +4879,13 @@ function rnntest.encoderdecoder()
 
    --[[ Forward coupling: Copy encoder cell and output to decoder LSTM ]]--
    local function forwardConnect(encLSTM, decLSTM)
-     decLSTM.userPrevOutput = nn.rnn.recursiveCopy(decLSTM.userPrevOutput, encLSTM.outputs[opt.inputSeqLen])
-     decLSTM.userPrevCell = nn.rnn.recursiveCopy(decLSTM.userPrevCell, encLSTM.cells[opt.inputSeqLen])
+      decLSTM.userPrevOutput = nn.rnn.recursiveCopy(decLSTM.userPrevOutput, encLSTM.outputs[opt.inputSeqLen])
+      decLSTM.userPrevCell = nn.rnn.recursiveCopy(decLSTM.userPrevCell, encLSTM.cells[opt.inputSeqLen])
    end
 
    --[[ Backward coupling: Copy decoder gradients to encoder LSTM ]]--
    local function backwardConnect(encLSTM, decLSTM)
-     encLSTM.userNextGradCell = nn.rnn.recursiveCopy(encLSTM.userNextGradCell, decLSTM.userGradPrevCell)
-     encLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encLSTM.gradPrevOutput, decLSTM.userGradPrevOutput)
+      encLSTM:setGradHiddenState(opt.inputSeqLen, decLSTM:getGradHiddenState(0))
    end
 
    -- Encoder
@@ -6532,6 +6532,60 @@ function rnntest.FastLSTM_batchNorm()
    nn.FastLSTM.bn = false
 end
 
+function checkgrad(opfunc, x, eps)
+    -- compute true gradient:
+    local _,dC = opfunc(x)
+    dC:resize(x:size())
+    dC = dC:clone()
+
+    -- compute numeric approximations to gradient:
+    local eps = eps or 1e-7
+    local dC_est = torch.DoubleTensor(dC:size())
+    for i = 1,dC:size(1) do
+      x[i] = x[i] + eps
+      local C1 = opfunc(x)
+      x[i] = x[i] - 2 * eps
+      local C2 = opfunc(x)
+      x[i] = x[i] + eps
+      dC_est[i] = (C1 - C2) / (2 * eps)
+    end
+
+    -- estimate error of gradient:
+    local diff = torch.norm(dC - dC_est) / torch.norm(dC + dC_est)
+    return diff,dC,dC_est
+end
+
+function rnntest.MufuruGradients()
+   local batchSize = torch.random(1,2)
+   local inputSize = torch.random(1,3)
+   local outputSize = torch.random(1,4)
+   local seqlen = torch.random(1,5)
+
+   local rnn = nn.MuFuRu(inputSize, outputSize)
+   local module = nn.Sequencer(rnn)
+   local w,dw = module:getParameters()
+   local crit = nn.CrossEntropyCriterion()
+
+   local input = torch.randn(seqlen, batchSize, inputSize)
+   local target = torch.LongTensor(seqlen, batchSize)
+   for i=1,seqlen do
+      for j=1,batchSize do
+          target[i][j] = torch.random(1, outputSize)
+      end
+   end
+   local function feval(x)
+      if w ~= x then w:copy(x) end
+      module:zeroGradParameters()
+      local out = module:forward(input)
+      local err = crit:forward(out, target)
+      local gradOutput = crit:backward(out, target)
+      module:backward(input, gradOutput)
+      return err, dw
+   end
+   local err = checkgrad(feval, w:clone())
+   mytester:assertlt(err, precision, "error in computing grad parameters")
+end
+
 function rnntest.inplaceBackward()
    -- not implemented (work was started, but never finished, sorry)
    if true then return end
@@ -6680,10 +6734,119 @@ function rnntest.inplaceBackward()
    end
 end
 
-function rnn.test(tests, benchmark_)
+function rnntest.getHiddenState()
+   local seqlen, batchsize = 7, 3
+   local inputsize, outputsize = 4, 5
+   local input = torch.randn(seqlen*2, batchsize, inputsize)
+   local gradOutput = torch.randn(seqlen*2, batchsize, outputsize)
+
+   local function testHiddenState(lstm, recurrence)
+      local lstm2 = lstm:clone()
+
+      -- test forward
+      for step=1,seqlen do -- initialize lstm2 hidden state
+         lstm2:forward(input[step])
+      end
+
+      for step=1,seqlen do
+         local hiddenState = lstm2:getHiddenState(seqlen+step-1)
+         if torch.type(hiddenState) == 'table' then
+            mytester:assert(#hiddenState >= 1)
+         else
+            mytester:assert(torch.isTensor(hiddenState))
+         end
+         lstm:setHiddenState(step-1, hiddenState)
+         local output = lstm:forward(input[seqlen+step])
+         local output2 = lstm2:forward(input[seqlen+step])
+         mytester:assertTensorEq(output, output2, 0.0000001, "error in step "..step)
+      end
+
+      -- test backward
+      lstm:zeroGradParameters()
+      lstm2:zeroGradParameters()
+      lstm:forget()
+
+      for step=1,seqlen do
+         lstm:forward(input[step])
+         local hs = lstm:getHiddenState(step)
+         local hs2 = lstm2:getHiddenState(step)
+         if torch.type(hs) == 'table' then
+            if recurrence then
+               hs = hs[1][1]
+               hs2 = hs2[1][1]
+            end
+            for i=1,#hs do
+               mytester:assertTensorEq(hs[i], hs2[i], 0.0000001)
+            end
+         else
+            mytester:assertTensorEq(hs, hs2, 0.0000001)
+         end
+      end
+
+      for step=seqlen*2,seqlen+1,-1 do
+         lstm2:backward(input[step], gradOutput[step])
+      end
+
+      lstm2:zeroGradParameters()
+
+      for step=seqlen,1,-1 do
+         local gradHiddenState = lstm2:getGradHiddenState(step)
+         if torch.type(gradHiddenState) == 'table' then
+            mytester:assert(#gradHiddenState >= 1)
+         else
+            mytester:assert(torch.isTensor(gradHiddenState))
+         end
+         lstm:setGradHiddenState(step, gradHiddenState)
+         local gradInput = lstm:backward(input[step], gradOutput[step])
+         local gradInput2 = lstm2:backward(input[step], gradOutput[step])
+         mytester:assertTensorEq(gradInput, gradInput2, 0.0000001)
+      end
+
+      local params, gradParams = lstm:parameters()
+      local params2, gradParams2 = lstm2:parameters()
+
+      for i=1,#params do
+         mytester:assertTensorEq(gradParams[i], gradParams2[i], 0.00000001)
+      end
+   end
+
+   local lstm = nn.LSTM(inputsize, outputsize)
+   testHiddenState(lstm)
+
+   local gru = nn.GRU(inputsize, outputsize)
+   testHiddenState(gru)
+
+   gru:forget()
+   testHiddenState(nn.Recursor(gru), false)
+
+   local rm = lstm.recurrentModule:clone()
+
+   rm:insert(nn.FlattenTable(), 1)
+   local recurrence = nn.Recurrence(rm, {{outputsize}, {outputsize}}, 1)
+   local lstm = nn.Sequential():add(recurrence):add(nn.SelectTable(1))
+   testHiddenState(lstm, true)
+end
+
+function rnn.test(tests, benchmark_, exclude)
    mytester = torch.Tester()
-   benchmark = benchmark_
    mytester:add(rnntest)
    math.randomseed(os.time())
+   if exclude then
+      local excludes = {}
+      assert(tests)
+      tests = torch.type(tests) == 'table' and tests or {tests}
+      for i,test in ipairs(tests) do
+         assert(torch.type(test) == 'string')
+         excludes[test] = true
+      end
+      tests = {}
+      for testname, testfunc in pairs(rnntest.__tests) do
+         if not excludes[testname] then
+            table.insert(tests, testname)
+         else
+            print("excluding test: "..testname)
+         end
+      end
+   end
    mytester:run(tests)
 end
