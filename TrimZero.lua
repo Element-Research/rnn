@@ -133,7 +133,7 @@ function TrimZero:updateOutput(input)
    
    -- forward through decorated module
    self.temp = self:recursiveMask(self.temp, input, self.zeroMask)
-   output = self.module:updateOutput(self.temp)
+   output = self.modules[1]:updateOutput(self.temp)
    self.output = self:recursiveUnMask(self.output, output, self.zeroMask, true)
 
    return self.output
@@ -143,7 +143,7 @@ function TrimZero:updateGradInput(input, gradOutput)
    self.temp = self:recursiveMask(self.temp, input, self.zeroMask)
    self.gradTemp = self:recursiveMask(self.gradTemp, gradOutput, self.zeroMask)
 
-   local gradInput = self.module:updateGradInput(self.temp, self.gradTemp)
+   local gradInput = self.modules[1]:updateGradInput(self.temp, self.gradTemp)
 
    self.gradInput = self:recursiveUnMask(self.gradInput, gradInput, self.zeroMask)
 
@@ -152,5 +152,5 @@ end
 
 function TrimZero:accGradParameters(input, gradOutput, scale)
    self.temp = self:recursiveMask(self.temp, input, self.zeroMask)
-   self.module:accGradParameters(self.temp, gradOutput, scale)
+   self.modules[1]:accGradParameters(self.temp, gradOutput, scale)
 end
