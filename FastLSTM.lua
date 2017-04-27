@@ -31,7 +31,7 @@ function FastLSTM:__init(inputSize, outputSize, rho, eps, momentum, affine, p, m
    end
    self.mono = mono or false
 
-   parent.__init(self, inputSize, outputSize, rho)
+   parent.__init(self, inputSize, outputSize, rho, nil, p, mono)
 end
 
 function FastLSTM:buildModel()
