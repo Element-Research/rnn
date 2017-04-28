@@ -83,3 +83,11 @@ end
 function Dropout:__tostring__()
    return string.format('%s(%.1f, %s)', torch.type(self), self.p, self.lazy and 'lazy' or 'busy')
 end
+
+function Dropout:clearState()
+   if self.noise then
+      self.noise:set()
+   end
+   self.flag = true
+   return Parent.clearState(self)
+end
