@@ -8,7 +8,7 @@ Modules that consider successive calls to `forward` as different time-steps in a
  * [AbstractRecurrent](#rnn.AbstractRecurrent) : an abstract class inherited by Recurrent and LSTM;
  * [Recurrent](#rnn.Recurrent) : a generalized recurrent neural network container;
  * [LSTM](#rnn.LSTM) : a vanilla Long-Short Term Memory module;
-  * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM) with optional support for batch normalization;
+ * [FastLSTM](#rnn.FastLSTM) : a faster [LSTM](#rnn.LSTM) with optional support for batch normalization;
  * [GRU](#rnn.GRU) : Gated Recurrent Units module;
  * [MuFuRu](#rnn.MuFuRu) : [Multi-function Recurrent Unit](https://arxiv.org/abs/1606.03002) module;
  * [Recursor](#rnn.Recursor) : decorates a module to make it conform to the [AbstractRecurrent](#rnn.AbstractRecurrent) interface;
@@ -19,8 +19,11 @@ Modules that `forward` entire sequences through a decorated `AbstractRecurrent` 
  * [AbstractSequencer](#rnn.AbstractSequencer) : an abstract class inherited by Sequencer, Repeater, RecurrentAttention, etc.;
  * [Sequencer](#rnn.Sequencer) : applies an encapsulated module to all elements in an input sequence  (Tensor or Table);
  * [SeqLSTM](#rnn.SeqLSTM) : a very fast version of `nn.Sequencer(nn.FastLSTM)` where the `input` and `output` are tensors;
-  * [SeqLSTMP](#rnn.SeqLSTMP) : `SeqLSTM` with a projection layer;
+ * [SeqLSTM_WN](#rnn.SeqLSTM) : a weight-normalized version of `nn.SeqLSTM`;
+ * [SeqLSTMP](#rnn.SeqLSTMP) : `SeqLSTM` with a projection layer;
+ * [SeqLSTMP_WN](#rnn.SeqLSTMP) : a weight-normalized version of `nn.SeqLSTMP`;
  * [SeqGRU](#rnn.SeqGRU) : a very fast version of `nn.Sequencer(nn.GRU)` where the `input` and `output` are tensors;
+ * [SeqGRU_WN](#rnn.SeqGRU) : a weight-normalized version of `nn.SeqGRU`;
  * [SeqBRNN](#rnn.SeqBRNN) : Bidirectional RNN based on SeqLSTM;
  * [BiSequencer](#rnn.BiSequencer) : used for implementing Bidirectional RNNs and LSTMs;
  * [BiSequencerLM](#rnn.BiSequencerLM) : used for implementing Bidirectional RNNs and LSTMs for language models;
