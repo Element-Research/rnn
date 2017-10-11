@@ -1,5 +1,7 @@
 # rnn: recurrent neural networks #
 
+Note: this repository is deprecated in favor of https://github.com/torch/rnn.
+
 This is a Recurrent Neural Network library that extends Torch's nn. 
 You can use it to build RNNs, LSTMs, GRUs, BRNNs, BLSTMs, and so forth and so on.
 This library includes documentation for the following objects:
@@ -38,6 +40,13 @@ Criterions used for handling sequential inputs and targets :
  * [SequencerCriterion](#rnn.SequencerCriterion) : sequentially applies the same criterion to a sequence of inputs and targets (Tensor or Table).
  * [RepeaterCriterion](#rnn.RepeaterCriterion) : repeatedly applies the same criterion with the same target on a sequence.
 
+To install this repository:
+```
+git clone git@github.com:Element-Research/rnn.git
+cd rnn
+luarocks make rocks/rnn-scm-1.rockspec
+```
+Note that `luarocks intall rnn` now installs https://github.com/torch/rnn instead.
 
 <a name='rnn.examples'></a>
 ## Examples ##
@@ -94,7 +103,9 @@ luarocks install cunnx
 
 And don't forget to update this package :
 ```bash
-luarocks install rnn
+git clone git@github.com:Element-Research/rnn.git
+cd rnn
+luarocks make rocks/rnn-scm-1.rockspec
 ```
 
 If that doesn't fix it, open and issue on github.
