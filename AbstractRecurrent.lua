@@ -55,6 +55,8 @@ end
 function AbstractRecurrent:updateGradInput(input, gradOutput)
    -- updateGradInput should be called in reverse order of time
    self.updateGradInputStep = self.updateGradInputStep or self.step
+   assert(self.updateGradInputStep >= self.step - self.rho,
+          string.format('Called backward more than rho+1=%d times', self.rho+1))
 
    -- BPTT for one time-step
    self.gradInput = self:_updateGradInput(input, gradOutput)
@@ -68,6 +70,8 @@ function AbstractRecurrent:accGradParameters(input, gradOutput, scale)
    -- accGradParameters should be called in reverse order of time
    assert(self.updateGradInputStep < self.step, "Missing updateGradInput")
    self.accGradParametersStep = self.accGradParametersStep or self.step
+   assert(self.accGradParametersStep >= self.step - self.rho,
+          string.format('Called backward more than rho+1=%d times', self.rho+1))
 
    -- BPTT for one time-step
    self:_accGradParameters(input, gradOutput, scale)
