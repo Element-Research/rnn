@@ -36,6 +36,8 @@ torch.include('rnn', 'AbstractRecurrent.lua')
 torch.include('rnn', 'Recurrent.lua')
 torch.include('rnn', 'LSTM.lua')
 torch.include('rnn', 'FastLSTM.lua')
+torch.include('rnn', 'Grid2DLSTM.lua')
+
 torch.include('rnn', 'GRU.lua')
 torch.include('rnn', 'Mufuru.lua')
 torch.include('rnn', 'Recursor.lua')
