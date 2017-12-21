@@ -91,6 +91,7 @@ Most issues can be resolved by updating the various dependencies:
 luarocks install torch
 luarocks install nn
 luarocks install dpnn
+luarocks install dataload
 luarocks install torchx
 ```
 
